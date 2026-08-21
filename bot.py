@@ -5,10 +5,11 @@ import logging
 
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
+from aiogram.types import FSInputFile, Message
 
 import config
 from claude_client import ask_claude, reset_history
+from composio_instagram import InstagramNotConnected
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -24,7 +25,9 @@ async def cmd_start(message: Message) -> None:
     reset_history(message.chat.id)
     await message.answer(
         "Привет! Я AI-ассистент на базе Claude. Просто напишите мне сообщение — "
-        "и я отвечу.\n\nКоманда /reset очищает историю диалога."
+        "и я отвечу.\n\n"
+        "Команда /reset очищает историю диалога.\n"
+        "Команда /audit готовит Instagram-аудит вашего аккаунта (PDF)."
     )
 
 
@@ -32,6 +35,45 @@ async def cmd_start(message: Message) -> None:
 async def cmd_reset(message: Message) -> None:
     reset_history(message.chat.id)
     await message.answer("История диалога очищена.")
+
+
+@dp.message(Command("audit"))
+async def cmd_audit(message: Message) -> None:
+    if not config.COMPOSIO_API_KEY:
+        await message.answer(
+            "Команда /audit не настроена: в .env не задан COMPOSIO_API_KEY. "
+            "Инструкция — в README.md."
+        )
+        return
+
+    status_message = await message.answer(
+        "Собираю данные Instagram и готовлю аудит — это займёт около минуты…"
+    )
+    await bot.send_chat_action(message.chat.id, "upload_document")
+
+    # Тяжёлые импорты — только когда команда реально используется.
+    from instagram_audit import run_audit
+    from report_pdf import render_pdf
+
+    try:
+        snapshot, audit = await asyncio.to_thread(run_audit)
+        pdf_path = f"/tmp/instagram_audit_{message.chat.id}.pdf"
+        await asyncio.to_thread(render_pdf, snapshot, audit, pdf_path)
+    except InstagramNotConnected as e:
+        await status_message.edit_text(str(e))
+        return
+    except Exception:
+        logger.exception("Ошибка при подготовке Instagram-аудита")
+        await status_message.edit_text(
+            "Не получилось подготовить аудит. Попробуйте ещё раз чуть позже, "
+            "или проверьте логи бота (journalctl -u telegram-bot)."
+        )
+        return
+
+    await status_message.delete()
+    await message.answer_document(
+        FSInputFile(pdf_path), caption="Ваш Instagram-аудит готов 📊"
+    )
 
 
 @dp.message(F.text)

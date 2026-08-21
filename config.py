@@ -39,3 +39,8 @@ MAX_HISTORY_MESSAGES = int(os.getenv("MAX_HISTORY_MESSAGES", "20"))
 
 # Максимальная длина ответа модели в токенах.
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2048"))
+
+# API-ключ Composio (app.composio.dev -> Settings -> API Keys).
+# Нужен только для команды /audit (Instagram-аудит). Если не задан —
+# остальной бот работает как обычно, просто /audit сообщит, что не настроен.
+COMPOSIO_API_KEY = os.getenv("COMPOSIO_API_KEY")
