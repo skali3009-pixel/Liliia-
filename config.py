@@ -34,6 +34,10 @@ SYSTEM_PROMPT = os.getenv(
     "если пользователь не просит подробностей.",
 )
 
+# Модель для распознавания еды по фото (vision). По умолчанию — та же Opus 5.
+# Можно поставить более дешёвую/быструю, например "claude-sonnet-5".
+VISION_MODEL = os.getenv("VISION_MODEL", "claude-opus-5")
+
 # Сколько последних сообщений из истории диалога отправлять модели.
 MAX_HISTORY_MESSAGES = int(os.getenv("MAX_HISTORY_MESSAGES", "20"))
 

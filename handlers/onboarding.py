@@ -20,6 +20,7 @@ from keyboards.onboarding import (
 from models import ActivityLevelEnum, DietTypeEnum, GenderEnum, GoalEnum, User
 from states.onboarding import OnboardingStates
 from utils.formulas import ActivityLevel, Gender, Goal, calculate_macros, daily_water_ml
+from utils.parsing import parse_float, parse_int
 
 logger = logging.getLogger(__name__)
 router = Router(name="onboarding")
@@ -29,20 +30,6 @@ MIN_HEIGHT_CM, MAX_HEIGHT_CM = 100.0, 250.0
 MIN_WEIGHT_KG, MAX_WEIGHT_KG = 30.0, 300.0
 
 GENDER_RU = {GenderEnum.MALE.value: "мужской", GenderEnum.FEMALE.value: "женский"}
-
-
-def _parse_int(text: str) -> int | None:
-    try:
-        return int(text.strip())
-    except (TypeError, ValueError):
-        return None
-
-
-def _parse_float(text: str) -> float | None:
-    try:
-        return float(text.strip().replace(",", "."))
-    except (TypeError, ValueError):
-        return None
 
 
 @router.message(CommandStart())
@@ -79,7 +66,7 @@ async def process_gender(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.message(OnboardingStates.age, F.text)
 async def process_age(message: Message, state: FSMContext) -> None:
-    age = _parse_int(message.text)
+    age = parse_int(message.text)
     if age is None or not (MIN_AGE <= age <= MAX_AGE):
         await message.answer(f"Введи возраст числом от {MIN_AGE} до {MAX_AGE}, например: 28")
         return
@@ -90,7 +77,7 @@ async def process_age(message: Message, state: FSMContext) -> None:
 
 @router.message(OnboardingStates.height, F.text)
 async def process_height(message: Message, state: FSMContext) -> None:
-    height = _parse_float(message.text)
+    height = parse_float(message.text)
     if height is None or not (MIN_HEIGHT_CM <= height <= MAX_HEIGHT_CM):
         await message.answer(
             f"Введи рост числом от {MIN_HEIGHT_CM:.0f} до {MAX_HEIGHT_CM:.0f} см, например: 172"
@@ -103,7 +90,7 @@ async def process_height(message: Message, state: FSMContext) -> None:
 
 @router.message(OnboardingStates.current_weight, F.text)
 async def process_current_weight(message: Message, state: FSMContext) -> None:
-    weight = _parse_float(message.text)
+    weight = parse_float(message.text)
     if weight is None or not (MIN_WEIGHT_KG <= weight <= MAX_WEIGHT_KG):
         await message.answer(
             f"Введи вес числом от {MIN_WEIGHT_KG:.0f} до {MAX_WEIGHT_KG:.0f} кг, например: 68.5"
@@ -116,7 +103,7 @@ async def process_current_weight(message: Message, state: FSMContext) -> None:
 
 @router.message(OnboardingStates.target_weight, F.text)
 async def process_target_weight(message: Message, state: FSMContext) -> None:
-    weight = _parse_float(message.text)
+    weight = parse_float(message.text)
     if weight is None or not (MIN_WEIGHT_KG <= weight <= MAX_WEIGHT_KG):
         await message.answer(
             f"Введи вес числом от {MIN_WEIGHT_KG:.0f} до {MAX_WEIGHT_KG:.0f} кг, например: 62"
