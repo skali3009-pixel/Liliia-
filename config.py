@@ -44,3 +44,9 @@ MAX_TOKENS = int(os.getenv("MAX_TOKENS", "2048"))
 # Нужен только для команды /audit (Instagram-аудит). Если не задан —
 # остальной бот работает как обычно, просто /audit сообщит, что не настроен.
 COMPOSIO_API_KEY = os.getenv("COMPOSIO_API_KEY")
+
+# Строка подключения к PostgreSQL (профиль пользователя, питание,
+# тренировки, прогресс). Формат — SQLAlchemy + asyncpg.
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql+asyncpg://postgres:postgres@localhost:5432/nutrition_bot"
+)
