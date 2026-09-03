@@ -29,6 +29,13 @@ ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 # Можно поставить более дешёвую/быструю, например "claude-sonnet-5".
 VISION_MODEL = os.getenv("VISION_MODEL", "claude-opus-5")
 
+# Распознавание голосовых сообщений (Whisper). У Anthropic такого API нет,
+# поэтому используется совместимый с OpenAI endpoint. По умолчанию — Groq:
+# у него есть бесплатный уровень. Подойдёт и сам OpenAI (см. VOICE_BASE_URL).
+VOICE_API_KEY = os.getenv("VOICE_API_KEY", "")
+VOICE_BASE_URL = os.getenv("VOICE_BASE_URL", "https://api.groq.com/openai/v1")
+VOICE_MODEL = os.getenv("VOICE_MODEL", "whisper-large-v3")
+
 # Строка подключения к PostgreSQL (профиль пользователя, питание,
 # тренировки, прогресс). Формат — SQLAlchemy + asyncpg.
 DATABASE_URL = os.getenv(

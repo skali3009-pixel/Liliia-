@@ -33,6 +33,7 @@ from services.food_vision import (
     analyze_text,
 )
 from services.meals import get_today_totals, save_meal
+from services.transcription import TranscriptionError, VoiceNotConfigured, transcribe
 from states.food import FoodStates
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.parsing import parse_float
@@ -135,7 +136,7 @@ async def start_adding_food(message: Message, state: FSMContext) -> None:
     await state.set_state(FoodStates.waiting_input)
     await message.answer(
         "Пришли фото блюда 📷 — распознаю и посчитаю КБЖУ.\n"
-        "Или опиши текстом: «омлет из трёх яиц с сыром»."
+        "Или наговори голосовым 🎤, или напиши текстом: «омлет из трёх яиц с сыром»."
     )
 
 
@@ -172,6 +173,44 @@ async def handle_food_photo(message: Message, state: FSMContext) -> None:
 
     await status.delete()
     await _show_card(message, state, analysis, photo_file_id=photo.file_id)
+
+
+@router.message(StateFilter(None, FoodStates), F.voice)
+async def handle_food_voice(message: Message, state: FSMContext) -> None:
+    """Голосовое сообщение: расшифровываем и считаем КБЖУ по тексту."""
+    if await _ensure_onboarded(message) is None:
+        return
+
+    status = await message.answer("🎤 Слушаю…")
+    await message.bot.send_chat_action(message.chat.id, "typing")
+
+    try:
+        buffer = await message.bot.download(message.voice.file_id)
+        if buffer is None:
+            raise TranscriptionError("Не удалось скачать голосовое из Telegram")
+        spoken = await transcribe(buffer.read())
+    except (VoiceNotConfigured, TranscriptionError) as e:
+        await status.edit_text(str(e))
+        return
+    except Exception:
+        logger.exception("Ошибка расшифровки голосового сообщения")
+        await status.edit_text("Не получилось разобрать голосовое. Попробуй ещё раз или напиши текстом.")
+        return
+
+    await status.edit_text(f"🎤 Услышал: {spoken}\n\n🔍 Считаю КБЖУ…")
+
+    try:
+        analysis = await analyze_text(spoken)
+    except (FoodNotRecognized, VisionNotConfigured) as e:
+        await status.edit_text(f"🎤 Услышал: {spoken}\n\n{e}")
+        return
+    except Exception:
+        logger.exception("Ошибка расчёта КБЖУ по голосовому сообщению")
+        await status.edit_text(GENERIC_ERROR)
+        return
+
+    await status.delete()
+    await _show_card(message, state, analysis, photo_file_id=None)
 
 
 @router.message(FoodStates.waiting_input, F.text)
