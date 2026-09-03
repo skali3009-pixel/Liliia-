@@ -18,7 +18,9 @@ import config
 
 logger = logging.getLogger(__name__)
 
-_client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+# Клиент создаётся лениво: без ключа бот должен запускаться и работать
+# (анкета, профиль, меню), просто без распознавания фото.
+_client: anthropic.AsyncAnthropic | None = None
 
 MAX_TOKENS = 1024
 
@@ -101,6 +103,24 @@ class FoodNotRecognized(FoodRecognitionError):
     """На фото/в описании нет еды — показываем пользователю пояснение модели."""
 
 
+class VisionNotConfigured(FoodRecognitionError):
+    """Не задан ключ Anthropic — распознавание недоступно."""
+
+
+def _get_client() -> anthropic.AsyncAnthropic:
+    global _client
+    if _client is not None:
+        return _client
+    if not config.ANTHROPIC_API_KEY:
+        raise VisionNotConfigured(
+            "Распознавание еды по фото пока не настроено: не задан ключ Anthropic.\n\n"
+            "Всё остальное работает — анкета, профиль и норма КБЖУ. "
+            "Как добавишь ключ в .env и перезапустишь бота, фото заработают."
+        )
+    _client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+    return _client
+
+
 @dataclass(frozen=True)
 class FoodAnalysis:
     """Результат распознавания одной порции."""
@@ -155,7 +175,7 @@ def _build_analysis(payload: dict[str, Any]) -> FoodAnalysis:
 
 
 async def _analyze(content: list[dict[str, Any]]) -> FoodAnalysis:
-    response = await _client.messages.create(
+    response = await _get_client().messages.create(
         model=config.VISION_MODEL,
         max_tokens=MAX_TOKENS,
         system=SYSTEM_PROMPT,

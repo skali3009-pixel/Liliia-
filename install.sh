@@ -21,6 +21,18 @@ if [ "$(id -u)" -eq 0 ]; then SUDO=""; else SUDO="sudo"; fi
 APP_USER="$(id -un)"
 
 say()  { printf "\n\033[1;36m%s\033[0m\n" "$*"; }
+
+# Ответы читаем прямо с клавиатуры (/dev/tty), а не из общего потока ввода:
+# иначе строки, вставленные в консоль во время установки, прилетают как ответ
+# на вопрос о токене. Если управляющего терминала нет — обычный ввод.
+if (: </dev/tty) 2>/dev/null; then TTY_IN=/dev/tty; else TTY_IN=/dev/stdin; fi
+
+# Выбрасываем всё, что пользователь успел навставлять, пока шли долгие шаги.
+flush_input() {
+    [ "$TTY_IN" = /dev/tty ] || return 0
+    while read -r -t 0.3 _ </dev/tty 2>/dev/null; do :; done
+}
+ask() { read -r "$1" <"$TTY_IN"; }
 ok()   { printf "\033[1;32m  ✓ %s\033[0m\n" "$*"; }
 fail() { printf "\n\033[1;31m  ✗ %s\033[0m\n" "$*" >&2; exit 1; }
 
@@ -57,9 +69,9 @@ run_as_postgres() {
         sudo -u postgres "$@"
     fi
 }
-psql_su() { run_as_postgres psql -qtAc "$1"; }
+psql_su() { (cd /tmp && run_as_postgres psql -qtAc "$1"); }
 
-run_as_postgres psql -qtAc "SELECT 1" >/dev/null 2>&1 \
+(cd /tmp && run_as_postgres psql -qtAc "SELECT 1") >/dev/null 2>&1 \
     || fail "PostgreSQL не отвечает. Проверь: sudo systemctl status postgresql"
 
 if [ "$(psql_su "SELECT 1 FROM pg_roles WHERE rolname='$DB_USER'")" = "1" ]; then
@@ -76,6 +88,10 @@ ok "база $DB_NAME готова (пароль сгенерирован авт
 # --- 4. Токены ---------------------------------------------------------------
 say "Шаг 4/6. Токены."
 
+# Всё, что успело накопиться в буфере за долгие шаги 1-3 (случайные вставки),
+# выбрасываем — иначе прилетит как ответ на вопрос о токене.
+flush_input
+
 # Если .env уже есть — переиспользуем то, что там лежит, и не спрашиваем заново.
 read_env_value() {
     [ -f "$ENV_FILE" ] || return 0
@@ -90,19 +106,30 @@ case "$ANTHROPIC_API_KEY" in ""|*your-key-here*) ANTHROPIC_API_KEY="";; esac
 
 while ! printf '%s' "$BOT_TOKEN" | grep -qE '^[0-9]{6,}:[A-Za-z0-9_-]{30,}$'; do
     echo "  Вставь токен бота от @BotFather (вид: 8123456789:AAF...) и нажми Enter:"
-    read -r BOT_TOKEN
+    ask BOT_TOKEN
     printf '%s' "$BOT_TOKEN" | grep -qE '^[0-9]{6,}:[A-Za-z0-9_-]{30,}$' \
         || echo "  Не похоже на токен — там цифры, двоеточие и длинный код. Попробуй ещё раз."
 done
 ok "токен бота принят"
 
-while ! printf '%s' "$ANTHROPIC_API_KEY" | grep -qE '^sk-ant-'; do
-    echo "  Вставь ключ Anthropic (вид: sk-ant-api03-...) и нажми Enter:"
-    read -r ANTHROPIC_API_KEY
-    printf '%s' "$ANTHROPIC_API_KEY" | grep -qE '^sk-ant-' \
-        || echo "  Ключ должен начинаться с sk-ant- . Попробуй ещё раз."
+if [ -z "$ANTHROPIC_API_KEY" ]; then
+    echo "  Вставь ключ Anthropic (вид: sk-ant-api03-...) и нажми Enter."
+    echo "  Нет ключа? Просто нажми Enter — бот запустится без распознавания фото."
+    ask ANTHROPIC_API_KEY
+fi
+
+while [ -n "$ANTHROPIC_API_KEY" ] && ! printf '%s' "$ANTHROPIC_API_KEY" | grep -qE '^sk-ant-'; do
+    echo "  Ключ Anthropic должен начинаться с sk-ant- (это не ключ ChatGPT)."
+    echo "  Вставь правильный ключ — либо нажми Enter, чтобы пропустить:"
+    ask ANTHROPIC_API_KEY
 done
-ok "ключ Anthropic принят"
+
+if [ -z "$ANTHROPIC_API_KEY" ]; then
+    echo "  Ключ Anthropic пропущен: анкета, профиль и норма КБЖУ будут работать,"
+    echo "  распознавание еды по фото — нет. Добавишь ключ позже."
+else
+    ok "ключ Anthropic принят"
+fi
 
 umask 077
 cat > "$ENV_FILE" <<ENV
@@ -170,5 +197,9 @@ cat <<INFO
 
   Обновить бота после моих правок:
     cd $APP_DIR && git pull && sudo systemctl restart $SERVICE_NAME
+
+  Добавить ключ Anthropic позже (включит распознавание еды по фото):
+    nano $ENV_FILE          — вписать ключ в строку ANTHROPIC_API_KEY=
+    sudo systemctl restart $SERVICE_NAME
 
 INFO

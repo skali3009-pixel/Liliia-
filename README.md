@@ -48,6 +48,8 @@ Telegram-приложение для питания и тренировок: о�
 
 1. **Токен бота** от [@BotFather](https://t.me/BotFather).
 2. **API-ключ Anthropic** — https://console.anthropic.com/settings/keys
+   (оплачивается отдельно от подписки claude.ai: это разные продукты).
+   Без ключа бот тоже запустится — не будет только распознавания еды по фото.
 3. **PostgreSQL** — хранит профили, приёмы пищи и прогресс.
 4. Python 3.10+.
 
@@ -128,6 +130,7 @@ sudo journalctl -u nutrition-bot -f                    # логи
 
 | Переменная | По умолчанию | Что делает |
 |---|---|---|
+| `ANTHROPIC_API_KEY` | — | Ключ Claude для распознавания еды по фото. Без него работает всё остальное. |
 | `VISION_MODEL` | `claude-opus-5` | Модель для распознавания еды по фото. Дешевле/быстрее — `claude-sonnet-5`. |
 | `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/nutrition_bot` | Строка подключения к PostgreSQL. |
 

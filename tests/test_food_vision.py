@@ -12,6 +12,7 @@ from services.food_vision import (
     FoodAnalysis,
     FoodNotRecognized,
     FoodRecognitionError,
+    VisionNotConfigured,
     _build_analysis,
 )
 from utils.meal_time import guess_meal_type
@@ -76,12 +77,23 @@ class _FakeResponse:
         self.stop_reason = "tool_use"
 
 
-def _mock_claude(monkeypatch, response, captured: dict):
-    async def fake_create(**kwargs):
-        captured.update(kwargs)
-        return response
+class _FakeClient:
+    """Подменяет anthropic-клиент: ловит аргументы запроса и отдаёт ответ."""
 
-    monkeypatch.setattr(food_vision._client.messages, "create", fake_create)
+    def __init__(self, response, captured: dict):
+        outer = self
+
+        class _Messages:
+            async def create(self, **kwargs):
+                captured.update(kwargs)
+                return outer._response
+
+        self._response = response
+        self.messages = _Messages()
+
+
+def _mock_claude(monkeypatch, response, captured: dict):
+    monkeypatch.setattr(food_vision, "_client", _FakeClient(response, captured))
 
 
 IMAGE_BYTES = b"\xff\xd8\xff\xe0fake-jpeg-bytes"
@@ -148,3 +160,12 @@ def test_analyze_raises_when_model_returns_no_tool_call(monkeypatch):
 )
 def test_guess_meal_type_by_hour(hour, expected):
     assert guess_meal_type(datetime(2026, 1, 1, hour, 0)) == expected
+
+
+def test_analysis_requires_api_key(monkeypatch):
+    """Без ключа — понятная ошибка, а не падение бота."""
+    monkeypatch.setattr(food_vision, "_client", None)
+    monkeypatch.setattr(food_vision.config, "ANTHROPIC_API_KEY", "")
+
+    with pytest.raises(VisionNotConfigured, match="не настроено"):
+        asyncio.run(food_vision.analyze_photo(IMAGE_BYTES))

@@ -28,6 +28,7 @@ from services.food_vision import (
     FoodAnalysis,
     FoodNotRecognized,
     FoodRecognitionError,
+    VisionNotConfigured,
     analyze_photo,
     analyze_text,
 )
@@ -161,7 +162,7 @@ async def handle_food_photo(message: Message, state: FSMContext) -> None:
         if buffer is None:
             raise FoodRecognitionError("Не удалось скачать фото из Telegram")
         analysis = await analyze_photo(buffer.read())
-    except FoodNotRecognized as e:
+    except (FoodNotRecognized, VisionNotConfigured) as e:
         await status.edit_text(str(e))
         return
     except Exception:
@@ -180,7 +181,7 @@ async def handle_food_text(message: Message, state: FSMContext) -> None:
 
     try:
         analysis = await analyze_text(message.text)
-    except FoodNotRecognized as e:
+    except (FoodNotRecognized, VisionNotConfigured) as e:
         await status.edit_text(str(e))
         return
     except Exception:
@@ -289,7 +290,7 @@ async def apply_correct_dish(message: Message, state: FSMContext) -> None:
             analysis = await analyze_photo(buffer.read(), hint=hint)
         else:
             analysis = await analyze_text(hint)
-    except FoodNotRecognized as e:
+    except (FoodNotRecognized, VisionNotConfigured) as e:
         await status.edit_text(str(e))
         return
     except Exception:

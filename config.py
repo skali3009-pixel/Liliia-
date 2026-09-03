@@ -21,7 +21,9 @@ def _get_required(name: str) -> str:
 BOT_TOKEN = _get_required("BOT_TOKEN")
 
 # Ключ Anthropic API (console.anthropic.com -> API Keys).
-ANTHROPIC_API_KEY = _get_required("ANTHROPIC_API_KEY")
+# Необязателен: без него бот работает, но распознавание еды по фото
+# недоступно — это единственная функция, которая обращается к Claude.
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 # Модель для распознавания еды по фото (vision). По умолчанию — Opus 5.
 # Можно поставить более дешёвую/быструю, например "claude-sonnet-5".
