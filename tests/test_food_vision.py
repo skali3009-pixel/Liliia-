@@ -169,3 +169,58 @@ def test_analysis_requires_api_key(monkeypatch):
 
     with pytest.raises(VisionNotConfigured, match="не настроено"):
         asyncio.run(food_vision.analyze_photo(IMAGE_BYTES))
+
+
+class _RaisingClient:
+    """Клиент, который падает заданной ошибкой anthropic."""
+
+    def __init__(self, error):
+        outer = self
+
+        class _Messages:
+            async def create(self, **kwargs):
+                raise outer._error
+
+        self._error = error
+        self.messages = _Messages()
+
+
+def _fake_api_error(cls, status_code, message):
+    """Собрать исключение SDK, не делая настоящий HTTP-запрос."""
+    import httpx
+
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    response = httpx.Response(status_code, request=request, json={"error": {"message": message}})
+    return cls(message, response=response, body=None)
+
+
+def test_invalid_key_reported_as_configuration_problem(monkeypatch):
+    import anthropic
+
+    error = _fake_api_error(anthropic.AuthenticationError, 401, "invalid x-api-key")
+    monkeypatch.setattr(food_vision, "_client", _RaisingClient(error))
+
+    with pytest.raises(VisionNotConfigured, match="Ключ Anthropic не принят"):
+        asyncio.run(food_vision.analyze_photo(IMAGE_BYTES))
+
+
+def test_empty_balance_reported_plainly(monkeypatch):
+    import anthropic
+
+    error = _fake_api_error(
+        anthropic.BadRequestError, 400, "Your credit balance is too low to access the API"
+    )
+    monkeypatch.setattr(food_vision, "_client", _RaisingClient(error))
+
+    with pytest.raises(FoodRecognitionError, match="закончились деньги"):
+        asyncio.run(food_vision.analyze_photo(IMAGE_BYTES))
+
+
+def test_rate_limit_reported_plainly(monkeypatch):
+    import anthropic
+
+    error = _fake_api_error(anthropic.RateLimitError, 429, "rate limit")
+    monkeypatch.setattr(food_vision, "_client", _RaisingClient(error))
+
+    with pytest.raises(FoodRecognitionError, match="Слишком много запросов"):
+        asyncio.run(food_vision.analyze_photo(IMAGE_BYTES))

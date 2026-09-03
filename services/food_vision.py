@@ -160,7 +160,9 @@ def _build_analysis(payload: dict[str, Any]) -> FoodAnalysis:
 
     name = str(payload.get("name") or "").strip()
     if not name:
-        raise FoodRecognitionError("Модель не вернула название блюда")
+        raise FoodRecognitionError(
+            "Не получилось разобрать ответ модели. Пришли фото ещё раз."
+        )
 
     return FoodAnalysis(
         name=name[:60],
@@ -175,7 +177,50 @@ def _build_analysis(payload: dict[str, Any]) -> FoodAnalysis:
 
 
 async def _analyze(content: list[dict[str, Any]]) -> FoodAnalysis:
-    response = await _get_client().messages.create(
+    try:
+        response = await _request(content)
+    except anthropic.AuthenticationError:
+        raise VisionNotConfigured(
+            "Ключ Anthropic не принят — он неверный, отозван или скопирован не полностью.\n\n"
+            "Создай новый на console.anthropic.com/settings/keys и пропиши его заново."
+        ) from None
+    except anthropic.PermissionDeniedError:
+        raise VisionNotConfigured(
+            "У ключа нет доступа к модели. Проверь настройки ключа в кабинете Anthropic."
+        ) from None
+    except anthropic.RateLimitError:
+        raise FoodRecognitionError(
+            "Слишком много запросов подряд. Подожди минуту и пришли фото ещё раз."
+        ) from None
+    except anthropic.APIStatusError as e:
+        details = str(getattr(e, "message", "") or e).lower()
+        if "credit" in details or "billing" in details or "quota" in details:
+            raise FoodRecognitionError(
+                "На счёте Anthropic закончились деньги — пополни баланс "
+                "на console.anthropic.com/settings/billing."
+            ) from None
+        logger.warning("Claude ответил %s: %s", e.status_code, details[:300])
+        raise FoodRecognitionError(
+            f"Claude ответил ошибкой ({e.status_code}). Попробуй ещё раз чуть позже."
+        ) from None
+    except anthropic.APIConnectionError:
+        raise FoodRecognitionError(
+            "Не получилось связаться с Claude — похоже, у сервера проблемы с сетью."
+        ) from None
+
+    tool_use = next((block for block in response.content if block.type == "tool_use"), None)
+    if tool_use is None:
+        logger.warning("Модель не вызвала инструмент, stop_reason=%s", response.stop_reason)
+        raise FoodRecognitionError(
+            "Не получилось разобрать ответ модели. Пришли фото ещё раз."
+        )
+
+    # SDK отдаёт input уже разобранным в dict — строковый разбор не нужен.
+    return _build_analysis(dict(tool_use.input))
+
+
+async def _request(content: list[dict[str, Any]]):
+    return await _get_client().messages.create(
         model=config.VISION_MODEL,
         max_tokens=MAX_TOKENS,
         system=SYSTEM_PROMPT,
@@ -186,14 +231,6 @@ async def _analyze(content: list[dict[str, Any]]) -> FoodAnalysis:
         tool_choice={"type": "auto"},
         messages=[{"role": "user", "content": content}],
     )
-
-    tool_use = next((block for block in response.content if block.type == "tool_use"), None)
-    if tool_use is None:
-        logger.warning("Модель не вызвала инструмент, stop_reason=%s", response.stop_reason)
-        raise FoodRecognitionError("Модель не вернула структурированный ответ")
-
-    # SDK отдаёт input уже разобранным в dict — строковый разбор не нужен.
-    return _build_analysis(dict(tool_use.input))
 
 
 async def analyze_photo(
