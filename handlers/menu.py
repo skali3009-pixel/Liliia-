@@ -1,9 +1,7 @@
-"""Обработчики кнопок главного меню.
+"""Кнопка «Профиль» главного меню.
 
-Реализованы разделы «Профиль» (анкета + норма) и «Добавить еду» (в
-handlers/food.py). Остальные разделы (вода, тренировки, прогресс,
-рекомендации по рациону) — следующие этапы, пока отвечают заглушкой, чтобы
-кнопки не оставались без ответа.
+Остальные кнопки живут в своих модулях: food, water, progress, workouts,
+suggestions.
 """
 
 from __future__ import annotations
@@ -12,15 +10,9 @@ from aiogram import F, Router
 from aiogram.types import Message
 
 from db import get_session
-from keyboards.main_menu import MENU_WHAT_TO_EAT
 from models import User
 
 router = Router(name="main_menu")
-
-# Все разделы, кроме «Что съесть», живут в своих модулях.
-_STUB_TEXT: dict[str, str] = {
-    MENU_WHAT_TO_EAT: "Рекомендации по рациону — в разработке 🚧",
-}
 
 GENDER_RU = {"male": "мужской", "female": "женский"}
 ACTIVITY_RU = {
@@ -42,11 +34,6 @@ DIET_RU = {
     "vegetarian": "вегетарианское",
     "gluten_free": "без глютена",
 }
-
-
-@router.message(F.text.in_(_STUB_TEXT))
-async def handle_stub(message: Message) -> None:
-    await message.answer(_STUB_TEXT[message.text])
 
 
 @router.message(F.text == "⚙️ Профиль")

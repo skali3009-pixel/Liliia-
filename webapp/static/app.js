@@ -549,6 +549,65 @@ async function finishWorkout() {
   } catch (e) { toast(e.message); }
 }
 
+
+/* --- Что съесть -------------------------------------------------------- */
+
+async function loadSuggestions() {
+  const button = document.getElementById('suggest-btn');
+  const box = document.getElementById('suggestions');
+
+  button.disabled = true;
+  button.textContent = 'Подбираю…';
+
+  try {
+    const data = await api('/api/suggestions', { method: 'POST' });
+    document.getElementById('gap-hint').textContent =
+      data.gap ? `не хватает ${data.gap}` : '';
+    renderSuggestions(data.suggestions);
+    button.textContent = 'Подобрать ещё';
+  } catch (e) {
+    box.innerHTML = `<div class="empty">${e.message}</div>`;
+    button.textContent = 'Попробовать снова';
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function renderSuggestions(items) {
+  const box = document.getElementById('suggestions');
+  box.innerHTML = items.length ? '' : '<div class="empty">Ничего не подобралось</div>';
+
+  for (const item of items) {
+    const row = document.createElement('div');
+    row.className = 'suggestion';
+    row.innerHTML = `
+      <div class="sug-head">
+        <span class="sug-name"></span>
+        <span class="sug-kcal">${Math.round(item.calories)} ккал</span>
+      </div>
+      <div class="sug-macros"></div>
+      <div class="sug-why"></div>
+      <button class="sug-eat">Съела это</button>`;
+
+    row.querySelector('.sug-name').textContent = item.name;
+    row.querySelector('.sug-macros').textContent =
+      `${Math.round(item.weight_g)} г · Б ${Math.round(item.protein_g)} · ` +
+      `Ж ${Math.round(item.fat_g)} · У ${Math.round(item.carbs_g)}`;
+    row.querySelector('.sug-why').textContent = item.why;
+
+    row.querySelector('.sug-eat').onclick = async () => {
+      try {
+        await api('/api/meals', { method: 'POST', body: JSON.stringify(item) });
+        haptic('medium');
+        toast(`Записала: ${item.name}`);
+        row.remove();
+        await refresh();
+      } catch (e) { toast(e.message); }
+    };
+    box.appendChild(row);
+  }
+}
+
 /* --- загрузка и переключение вкладок --- */
 async function refresh() {
   state = await api('/api/today');
@@ -640,6 +699,7 @@ async function init() {
     };
   }
   document.getElementById('finish-workout').onclick = finishWorkout;
+  document.getElementById('suggest-btn').onclick = loadSuggestions;
   document.getElementById('rest-skip').onclick = stopRest;
   document.getElementById('photo-input').onchange = (event) => {
     if (event.target.files[0]) uploadPhoto(event.target.files[0]);

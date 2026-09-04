@@ -107,15 +107,16 @@ class VisionNotConfigured(FoodRecognitionError):
     """Не задан ключ Anthropic — распознавание недоступно."""
 
 
-def _get_client() -> anthropic.AsyncAnthropic:
+def get_client() -> anthropic.AsyncAnthropic:
+    """Клиент Claude. Общий для распознавания еды и подбора блюд."""
     global _client
     if _client is not None:
         return _client
     if not config.ANTHROPIC_API_KEY:
         raise VisionNotConfigured(
-            "Распознавание еды по фото пока не настроено: не задан ключ Anthropic.\n\n"
-            "Всё остальное работает — анкета, профиль и норма КБЖУ. "
-            "Как добавишь ключ в .env и перезапустишь бота, фото заработают."
+            "Эта функция работает через Claude, а ключ Anthropic не задан.\n\n"
+            "Остальное работает — анкета, профиль, норма КБЖУ, вода, тренировки. "
+            "Как добавишь ключ и перезапустишь бота, заработает и это."
         )
     _client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
     return _client
@@ -220,7 +221,7 @@ async def _analyze(content: list[dict[str, Any]]) -> FoodAnalysis:
 
 
 async def _request(content: list[dict[str, Any]]):
-    return await _get_client().messages.create(
+    return await get_client().messages.create(
         model=config.VISION_MODEL,
         max_tokens=MAX_TOKENS,
         system=SYSTEM_PROMPT,

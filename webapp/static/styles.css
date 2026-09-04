@@ -216,3 +216,31 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
 .rest-card { text-align: center; padding: 0 32px; }
 .rest-label { font-size: 15px; color: var(--muted); }
 .rest-time { font-size: 76px; font-weight: 700; letter-spacing: -2px; margin: 6px 0 22px; }
+
+/* --- Правило тарелки и рекомендации --- */
+.plate-row { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; }
+.plate { width: 96px; height: 96px; flex: 0 0 96px; }
+.plate-rim { fill: none; stroke: var(--muted); stroke-opacity: .25; stroke-width: 2; }
+.plate-veg { fill: #3ac06a; fill-opacity: .75; }
+.plate-protein { fill: #e5804b; fill-opacity: .8; }
+.plate-carb { fill: #d8b44a; fill-opacity: .8; }
+
+.plate-legend { list-style: none; margin: 0; padding: 0; font-size: 12px; line-height: 1.7; }
+/* Маркер держим у первой строки: при переносе он не должен уезжать
+   в вертикальный центр абзаца. */
+.plate-legend li { display: flex; align-items: flex-start; gap: 7px; color: var(--muted); }
+.dot { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 9px; margin-top: 6px; }
+.dot.veg { background: #3ac06a; }
+.dot.protein { background: #e5804b; }
+.dot.carb { background: #d8b44a; }
+
+.suggestion { padding: 12px 0; border-bottom: 1px solid var(--bg); }
+.suggestion:last-child { border-bottom: none; }
+.sug-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.sug-name { font-size: 14px; font-weight: 500; }
+.sug-kcal { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.sug-macros { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.sug-why { font-size: 12px; color: var(--muted); margin-top: 5px; font-style: italic; }
+.sug-eat { margin-top: 8px; padding: 8px 14px; border: none; border-radius: 10px;
+           background: var(--bg); color: var(--accent); font-size: 13px; font-weight: 500;
+           font-family: inherit; cursor: pointer; }

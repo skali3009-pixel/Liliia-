@@ -12,7 +12,8 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 import config
 from db import init_models
-from handlers import food, menu, onboarding, progress, supplements, water, workouts
+from handlers import (food, menu, onboarding, progress, suggestions, supplements,
+                      water, workouts)
 from scheduler import start_scheduler
 from webapp.server import start_webapp
 
@@ -28,6 +29,7 @@ dp.include_router(water.router)
 dp.include_router(supplements.router)
 dp.include_router(progress.router)
 dp.include_router(workouts.router)
+dp.include_router(suggestions.router)
 dp.include_router(menu.router)
 
 

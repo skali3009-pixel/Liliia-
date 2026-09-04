@@ -167,7 +167,7 @@ def test_analysis_requires_api_key(monkeypatch):
     monkeypatch.setattr(food_vision, "_client", None)
     monkeypatch.setattr(food_vision.config, "ANTHROPIC_API_KEY", "")
 
-    with pytest.raises(VisionNotConfigured, match="не настроено"):
+    with pytest.raises(VisionNotConfigured, match="ключ Anthropic не задан"):
         asyncio.run(food_vision.analyze_photo(IMAGE_BYTES))
 
 

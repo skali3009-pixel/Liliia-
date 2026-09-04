@@ -51,6 +51,29 @@
       <div id="meals"></div>
       <p class="hint">Чтобы добавить — пришли фото или голосовое боту в чат.</p>
     </section>
+
+    <section class="card">
+      <div class="card-head"><h2>🍽️ Что съесть</h2><span id="gap-hint" class="muted"></span></div>
+
+      <div class="plate-row">
+        <svg class="plate" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="46" class="plate-rim"/>
+          <path d="M50 4 A46 46 0 0 0 50 96 Z" class="plate-veg"/>
+          <path d="M50 4 A46 46 0 0 1 96 50 L50 50 Z" class="plate-protein"/>
+          <path d="M50 50 L96 50 A46 46 0 0 1 50 96 Z" class="plate-carb"/>
+        </svg>
+        <ul class="plate-legend">
+          <li><i class="dot veg"></i>½ тарелки — овощи и зелень</li>
+          <li><i class="dot protein"></i>¼ — белок: мясо, рыба, творог</li>
+          <li><i class="dot carb"></i>¼ — сложные углеводы: крупы, паста</li>
+        </ul>
+      </div>
+
+      <button id="suggest-btn" class="btn">Подобрать блюда</button>
+      <div id="suggestions"></div>
+      <p class="hint">Подбирает Claude — учитывает остаток нормы, время суток,
+        твой тип питания и аллергии.</p>
+    </section>
   </main>
 
   <main id="screen-pills" class="screen" hidden>

@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from datetime import time as dt_time
 
 from aiohttp import web
 
 import config
 from db import get_session
-from models import Meal, ProgressPhoto, ScheduleTypeEnum, Supplement, User, WorkoutTypeEnum
-from services.meals import get_today_totals, list_today_meals
+from models import (Meal, MealSourceEnum, ProgressPhoto, ScheduleTypeEnum, Supplement, User,
+                    WorkoutTypeEnum)
+from services.food_vision import FoodAnalysis, FoodRecognitionError
+from services.meals import get_today_totals, list_today_meals, save_meal
 from services.progress import (
     MEASURE_FIELDS,
     add_measurement,
@@ -22,6 +25,7 @@ from services.progress import (
     photos_dir,
     save_photo,
 )
+from services.suggestions import suggest_meals
 from services.supplements import add_supplement, list_due_today, mark
 from services.workouts import (
     available_programs,
@@ -32,7 +36,8 @@ from services.workouts import (
     week_summary,
 )
 from services.water import add_water, today_total_ml, undo_last
-from utils.meal_time import MEAL_TYPE_RU
+from utils.macros import GAP_LABELS, dominant_gap, remaining
+from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, scale_nutrition
 from utils.timeframe import get_zone, today_in
 from webapp.auth import AuthError, verify_init_data
@@ -507,6 +512,82 @@ async def post_workout_log(request: web.Request) -> web.Response:
     )
 
 
+async def post_suggestions(request: web.Request) -> web.Response:
+    """Три варианта еды под остаток нормы — подбирает Claude."""
+    user_id, tz = request["user_id"], request["timezone"]
+
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        totals = await get_today_totals(session, user_id, timezone_name=tz)
+        norms = {
+            "calories": user.daily_calories or 0,
+            "protein_g": user.daily_protein_g or 0,
+            "fat_g": user.daily_fat_g or 0,
+            "carbs_g": user.daily_carbs_g or 0,
+        }
+
+    left = remaining(
+        {"calories": totals.calories, "protein_g": totals.protein_g,
+         "fat_g": totals.fat_g, "carbs_g": totals.carbs_g},
+        norms,
+    )
+
+    try:
+        suggestions = await suggest_meals(user, left, norms)
+    except FoodRecognitionError as e:
+        return web.json_response({"error": str(e)}, status=503)
+
+    gap = dominant_gap(left, norms)
+    return web.json_response(
+        {
+            "remaining": {
+                "calories": left.calories, "protein_g": left.protein_g,
+                "fat_g": left.fat_g, "carbs_g": left.carbs_g,
+            },
+            "gap": GAP_LABELS.get(gap) if gap else None,
+            "suggestions": [item.to_dict() for item in suggestions],
+        }
+    )
+
+
+async def post_meal(request: web.Request) -> web.Response:
+    """Записать блюдо целиком — например, выбранное из рекомендаций."""
+    body = await request.json()
+    name = str(body.get("name", "")).strip()
+    if not name:
+        return web.json_response({"error": "Нужно название"}, status=400)
+
+    def number(key: str) -> float:
+        try:
+            return max(float(body.get(key, 0)), 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    analysis = FoodAnalysis(
+        name=name[:60],
+        weight_g=number("weight_g"),
+        calories=number("calories"),
+        protein_g=number("protein_g"),
+        fat_g=number("fat_g"),
+        carbs_g=number("carbs_g"),
+        confidence="medium",
+        comment="",
+    )
+
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        await save_meal(
+            session,
+            user_id=user.id,
+            analysis=analysis,
+            source=MealSourceEnum.TEXT,
+            meal_type=guess_meal_type(datetime.now(get_zone(request["timezone"]))),
+        )
+        totals = await get_today_totals(session, user.id, timezone_name=request["timezone"])
+
+    return web.json_response({"ok": True, "calories_today": round(totals.calories)})
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -523,3 +604,5 @@ def add_routes(app: web.Application) -> None:
     app.router.add_delete("/api/photos/{photo_id}", delete_photo)
     app.router.add_get("/api/workouts", get_workouts)
     app.router.add_post("/api/workouts/log", post_workout_log)
+    app.router.add_post("/api/suggestions", post_suggestions)
+    app.router.add_post("/api/meals", post_meal)
