@@ -14,6 +14,7 @@ from models.user import (
     GoalEnum,
     User,
 )
+from models.supplement import ScheduleTypeEnum, Supplement, SupplementLog
 from models.water import WaterLog
 from models.workout import LevelEnum, LocationEnum, Workout, WorkoutLog, WorkoutTypeEnum
 
@@ -36,4 +37,7 @@ __all__ = [
     "BodyMeasurement",
     "ProgressPhoto",
     "Achievement",
+    "Supplement",
+    "SupplementLog",
+    "ScheduleTypeEnum",
 ]

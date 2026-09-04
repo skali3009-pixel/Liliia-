@@ -40,6 +40,8 @@ Telegram-приложение для питания и тренировок: о�
 - Дневная аналитика: «правило тарелки», умные рекомендации следующего приёма
   пищи под остаток БЖУ.
 - Трекер воды с кнопками быстрого добавления.
+- Витамины и лекарства: напоминания по расписанию и отметки о приёме
+  (схема БД и логика расписания уже готовы).
 - Тренировки: программы по цели × локации × уровню, видео-демо упражнений,
   таймер отдыха, автоучёт калорий по MET-формуле, кардио отдельно от силовых.
 - Прогресс тела: вес и объёмы, фото «до/после», графики динамики.
@@ -153,8 +155,9 @@ vision-модели и формат самого запроса к Claude.
 - `db.py` — асинхронное подключение к PostgreSQL и создание таблиц.
 - `config.py` — чтение настроек из `.env`.
 - `models/` — схема БД: `user.py`, `meal.py`, `water.py`, `workout.py`,
-  `body.py`, `achievement.py` (таблицы users, meals, water_log, workouts,
-  workout_log, body_measurements, progress_photos, achievements).
+  `body.py`, `achievement.py`, `supplement.py` (таблицы users, meals,
+  water_log, workouts, workout_log, body_measurements, progress_photos,
+  achievements, supplements, supplement_log).
 - `states/` — FSM-состояния (`onboarding.py`, `food.py`).
 - `keyboards/` — клавиатуры (`onboarding.py`, `main_menu.py`, `food.py`).
 - `services/` — бизнес-логика вне обработчиков:

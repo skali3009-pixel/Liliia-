@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from models.achievement import Achievement
     from models.body import BodyMeasurement, ProgressPhoto
     from models.meal import Meal
+    from models.supplement import Supplement, SupplementLog
     from models.water import WaterLog
     from models.workout import WorkoutLog
 
@@ -73,6 +74,10 @@ class User(Base):
     # Аллергии/непереносимости — свободный текст через запятую (MVP).
     allergies: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
+    # Часовой пояс в формате IANA («Europe/Moscow»): по нему считаются сутки
+    # в дневнике и время напоминаний.
+    timezone: Mapped[str] = mapped_column(String(64), default="Europe/Moscow", nullable=False)
+
     # --- Рассчитанная суточная норма (формула Миффлина-Сан Жеора) ---
     daily_calories: Mapped[int | None] = mapped_column(Integer, nullable=True)
     daily_protein_g: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -104,5 +109,11 @@ class User(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     achievements: Mapped[list["Achievement"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    supplements: Mapped[list["Supplement"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    supplement_logs: Mapped[list["SupplementLog"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
