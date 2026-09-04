@@ -359,7 +359,7 @@ async def post_measurement(request: web.Request) -> web.Response:
 
     values: dict[str, float] = {}
     limits = {"weight_kg": (30, 300), "waist_cm": (30, 200), "hips_cm": (30, 200),
-              "chest_cm": (30, 200), "arm_cm": (10, 100)}
+              "chest_cm": (30, 200), "thigh_cm": (20, 120), "arm_cm": (10, 100)}
     for key, (low, high) in limits.items():
         raw = body.get(key)
         if raw in (None, ""):

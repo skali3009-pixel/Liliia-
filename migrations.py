@@ -30,6 +30,7 @@ COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
     ("workouts", "style", "VARCHAR(20)"),
     ("meals", "fiber_g", "DOUBLE PRECISION NOT NULL DEFAULT 0"),
     ("users", "daily_fiber_g", "INTEGER"),
+    ("body_measurements", "thigh_cm", "DOUBLE PRECISION"),
 ]
 
 

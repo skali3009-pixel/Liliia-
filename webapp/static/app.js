@@ -481,12 +481,13 @@ async function saveMeasurement() {
     weight_kg: document.getElementById('m-weight').value,
     waist_cm: document.getElementById('m-waist').value,
     hips_cm: document.getElementById('m-hips').value,
+    thigh_cm: document.getElementById('m-thigh').value,
     chest_cm: document.getElementById('m-chest').value,
     arm_cm: document.getElementById('m-arm').value,
   };
   try {
     const result = await api('/api/measurements', { method: 'POST', body: JSON.stringify(body) });
-    for (const id of ['m-weight', 'm-waist', 'm-hips', 'm-chest', 'm-arm']) {
+    for (const id of ['m-weight', 'm-waist', 'm-hips', 'm-thigh', 'm-chest', 'm-arm']) {
       document.getElementById(id).value = '';
     }
     haptic('medium');
@@ -811,10 +812,10 @@ async function init() {
   for (const tab of document.querySelectorAll('.tab')) {
     tab.onclick = () => switchScreen(tab.dataset.screen);
   }
-  for (const button of document.querySelectorAll('#metric-switch .seg-btn')) {
+  for (const button of document.querySelectorAll('#metric-switch .chip-btn')) {
     button.onclick = () => {
       metric = button.dataset.metric;
-      document.querySelectorAll('#metric-switch .seg-btn').forEach((b) => b.classList.remove('active'));
+      document.querySelectorAll('#metric-switch .chip-btn').forEach((b) => b.classList.remove('active'));
       button.classList.add('active');
       refreshProgress().catch((e) => toast(e.message));
     };

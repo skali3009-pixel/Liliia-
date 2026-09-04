@@ -27,6 +27,9 @@ class BodyMeasurement(Base):
     weight_kg: Mapped[float | None] = mapped_column(Float, nullable=True)
     waist_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
     hips_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
+    # Обхват бедра (ноги) — меряем всегда одну и ту же ногу, иначе цифры
+    # не сравниваются между собой.
+    thigh_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
     chest_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
     arm_cm: Mapped[float | None] = mapped_column(Float, nullable=True)
 

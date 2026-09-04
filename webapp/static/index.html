@@ -196,10 +196,16 @@
     </section>
 
     <div class="filters">
-      <div class="seg" id="metric-switch">
-        <button class="seg-btn active" data-metric="weight">Вес</button>
-        <button class="seg-btn" data-metric="calories">Калории</button>
-        <button class="seg-btn" data-metric="waist">Талия</button>
+      <!-- Замеров стало больше, чем помещается в переключатель, — ряд
+           прокручивается, как выбор программы в «Спорте». -->
+      <div class="chips" id="metric-switch">
+        <button class="chip-btn active" data-metric="weight">Вес</button>
+        <button class="chip-btn" data-metric="calories">Калории</button>
+        <button class="chip-btn" data-metric="waist">Талия</button>
+        <button class="chip-btn" data-metric="hips">Бёдра</button>
+        <button class="chip-btn" data-metric="thigh">Бедро</button>
+        <button class="chip-btn" data-metric="chest">Грудь</button>
+        <button class="chip-btn" data-metric="arm">Руки</button>
       </div>
       <div class="seg" id="period-switch">
         <button class="seg-btn" data-period="week">Неделя</button>
@@ -227,11 +233,14 @@
         <input id="m-weight" class="input" type="number" step="0.1" placeholder="Вес, кг">
         <input id="m-waist" class="input" type="number" step="0.5" placeholder="Талия, см">
         <input id="m-hips" class="input" type="number" step="0.5" placeholder="Бёдра, см">
+        <input id="m-thigh" class="input" type="number" step="0.5" placeholder="Бедро (нога), см">
         <input id="m-chest" class="input" type="number" step="0.5" placeholder="Грудь, см">
         <input id="m-arm" class="input" type="number" step="0.5" placeholder="Руки, см">
       </div>
       <button id="m-save" class="btn">Сохранить замер</button>
-      <p class="hint">Заполни то, что мерила — остальное можно пропустить.</p>
+      <p class="hint">Заполни то, что мерила — остальное можно пропустить.
+        Бёдра — по самой широкой точке ягодиц, бедро — по самой широкой точке
+        ноги. Ногу и руку меряй всегда одну и ту же, иначе замеры не сравнить.</p>
     </section>
 
     <section class="card">

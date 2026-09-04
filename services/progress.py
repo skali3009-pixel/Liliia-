@@ -23,6 +23,7 @@ MEASURE_FIELDS = {
     "weight": ("weight_kg", "Вес", "кг"),
     "waist": ("waist_cm", "Талия", "см"),
     "hips": ("hips_cm", "Бёдра", "см"),
+    "thigh": ("thigh_cm", "Бедро", "см"),
     "chest": ("chest_cm", "Грудь", "см"),
     "arm": ("arm_cm", "Руки", "см"),
 }
@@ -133,6 +134,7 @@ async def add_measurement(
     waist_cm: float | None = None,
     hips_cm: float | None = None,
     chest_cm: float | None = None,
+    thigh_cm: float | None = None,
     arm_cm: float | None = None,
 ) -> tuple[BodyMeasurement, bool]:
     """Сохранить замер. Если изменился вес — обновляем профиль и норму КБЖУ.
@@ -145,6 +147,7 @@ async def add_measurement(
         waist_cm=waist_cm,
         hips_cm=hips_cm,
         chest_cm=chest_cm,
+        thigh_cm=thigh_cm,
         arm_cm=arm_cm,
     )
     session.add(measurement)

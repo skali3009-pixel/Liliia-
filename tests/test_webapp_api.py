@@ -269,6 +269,28 @@ def test_progress_calories_metric_uses_meals():
     run(scenario)
 
 
+def test_thigh_measurement_is_saved_and_charted():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/measurements",
+                                  json_body={"thigh_cm": 58.5})
+            assert response.status == 200
+
+            data = await (await call(client, "GET", "/api/progress?metric=thigh&period=month")).json()
+            assert data["title"] == "Бедро"
+            assert data["points"][-1]["value"] == 58.5
+    run(scenario)
+
+
+def test_thigh_measurement_validates_range():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/measurements",
+                                  json_body={"thigh_cm": 300})
+            assert response.status == 400
+    run(scenario)
+
+
 def test_measurement_validates_range():
     async def scenario():
         async with webapp_client() as (client, _):
