@@ -2,6 +2,8 @@
 
 import asyncio
 
+import anthropic
+import httpx
 import pytest
 
 from models import DietTypeEnum, GenderEnum, GoalEnum, User
@@ -111,4 +113,48 @@ def test_missing_tool_call_raises(monkeypatch):
     user = make_user()
     left = remaining({}, NORMS)
     with pytest.raises(module.FoodRecognitionError):
+        asyncio.run(suggest_meals(user, left, NORMS))
+
+
+class _RaisingClient:
+    """Клиент, у которого messages.create падает — так же, как в тестах food_vision."""
+
+    def __init__(self, error):
+        outer = self
+
+        class _Messages:
+            async def create(self, **kwargs):
+                raise outer._error
+
+        self._error = error
+        self.messages = _Messages()
+
+
+def _fake_api_error(cls, status_code, message):
+    """Собрать исключение SDK, не делая настоящий HTTP-запрос."""
+    request = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    response = httpx.Response(status_code, request=request, json={"error": {"message": message}})
+    return cls(message, response=response, body=None)
+
+
+def test_rate_limit_reported_plainly_not_as_bare_server_error(monkeypatch):
+    """Регрессия: до этого теста ошибки Claude тут вообще не обрабатывались —
+    в мини-приложении «Что съесть» падало голым «Что-то сломалось на сервере»
+    вместо понятного текста (нашли тестировщицы)."""
+    error = _fake_api_error(anthropic.RateLimitError, 429, "rate limit")
+    monkeypatch.setattr(module, "get_client", lambda: _RaisingClient(error))
+
+    user = make_user()
+    left = remaining({}, NORMS)
+    with pytest.raises(module.FoodRecognitionError, match="Слишком много запросов"):
+        asyncio.run(suggest_meals(user, left, NORMS))
+
+
+def test_invalid_key_reported_as_configuration_problem(monkeypatch):
+    error = _fake_api_error(anthropic.AuthenticationError, 401, "invalid x-api-key")
+    monkeypatch.setattr(module, "get_client", lambda: _RaisingClient(error))
+
+    user = make_user()
+    left = remaining({}, NORMS)
+    with pytest.raises(module.VisionNotConfigured, match="Ключ Anthropic не принят"):
         asyncio.run(suggest_meals(user, left, NORMS))

@@ -293,10 +293,19 @@ button:focus-visible, .tab:focus-visible {
 .plate-protein { fill: var(--lilac); fill-opacity: .85; }
 .plate-carb { fill: var(--indigo); fill-opacity: .85; }
 
-.plate-legend { list-style: none; margin: 0; padding: 0; font-size: 12px; line-height: 1.7; }
+/* min-width: 0 обязателен: без него у flex-элемента ширина по умолчанию
+   считается по содержимому, длинная строка не переносится и вылезает
+   за скруглённый край карточки на фон чата. */
+.plate-legend {
+  list-style: none; margin: 0; padding: 0; font-size: 12px; line-height: 1.7;
+  min-width: 0; flex: 1 1 auto;
+}
 /* Маркер держим у первой строки: при переносе он не должен уезжать
    в вертикальный центр абзаца. */
-.plate-legend li { display: flex; align-items: flex-start; gap: 7px; color: var(--muted); }
+.plate-legend li {
+  display: flex; align-items: flex-start; gap: 7px; color: var(--muted);
+  overflow-wrap: anywhere;
+}
 .dot { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 9px; margin-top: 6px; }
 .dot.veg { background: var(--teal); }
 .dot.protein { background: var(--lilac); }

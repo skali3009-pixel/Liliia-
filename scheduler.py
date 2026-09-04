@@ -11,6 +11,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import config
 from db import get_session
 from keyboards.supplements import reminder_keyboard
+from services.meal_reminders import users_without_meals_today
 from services.reminders import collect_due_reminders
 from services.selfupdate import run_update
 from services.subscriptions import expire_overdue, expiring_soon, mark_warned
@@ -51,6 +52,31 @@ def clear_sent_marks() -> None:
     _already_sent.clear()
 
 
+async def send_meal_nudges(bot: Bot) -> None:
+    """Вечером — тем, кто ничего не занёс за день."""
+    try:
+        async with get_session() as session:
+            nudges = await users_without_meals_today(session)
+    except Exception:
+        logger.exception("Не удалось собрать напоминания о дневнике")
+        return
+
+    for nudge in nudges:
+        key = (nudge.user_id, "meal_nudge")
+        if key in _already_sent:
+            continue
+        try:
+            await bot.send_message(
+                nudge.user_id,
+                "🍽 Сегодня ещё нет ни одной записи о еде.\n\n"
+                "Не страшно, если день был не по плану — просто занеси, что "
+                "успела съесть, дневник от этого не сломается.",
+            )
+            _already_sent.add(key)
+        except Exception:
+            logger.info("Не получилось напомнить про дневник %s", nudge.user_id)
+
+
 async def check_subscriptions(bot: Bot) -> None:
     """Предупредить, у кого подписка на исходе, и закрыть истёкшие."""
     try:
@@ -88,6 +114,7 @@ async def check_subscriptions(bot: Bot) -> None:
 def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(send_due_reminders, "cron", minute="*", args=[bot], id="supplements")
+    scheduler.add_job(send_meal_nudges, "cron", minute="*", args=[bot], id="meal_nudges")
     scheduler.add_job(clear_sent_marks, "cron", hour=0, minute=1, id="cleanup")
     # Раз в день утром: предупредить об окончании и закрыть просроченные.
     scheduler.add_job(check_subscriptions, "cron", hour=6, minute=0, args=[bot],

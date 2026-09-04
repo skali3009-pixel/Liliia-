@@ -13,6 +13,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any
 
+import anthropic
+
 import config
 from models import User
 from services.food_vision import FoodRecognitionError, VisionNotConfigured, get_client
@@ -137,14 +139,48 @@ def build_request(user: User, left: Remaining, norms: dict[str, float]) -> str:
 
 async def suggest_meals(user: User, left: Remaining, norms: dict[str, float]) -> list[Suggestion]:
     """Три варианта под остаток нормы."""
-    response = await get_client().messages.create(
-        model=config.VISION_MODEL,
-        max_tokens=MAX_TOKENS,
-        system=SYSTEM_PROMPT,
-        tools=[SUGGEST_TOOL],
-        tool_choice={"type": "auto"},
-        messages=[{"role": "user", "content": build_request(user, left, norms)}],
-    )
+    # Та же обработка ошибок Claude, что и в распознавании еды по фото
+    # (services/food_vision.py::_analyze) — раньше её тут не было, и любой
+    # сбой API (перегрузка, лимит запросов) улетал необработанным до общего
+    # 500-обработчика: пользователь видел голое «Что-то сломалось на сервере»
+    # вместо человеческого объяснения.
+    try:
+        response = await get_client().messages.create(
+            model=config.VISION_MODEL,
+            max_tokens=MAX_TOKENS,
+            system=SYSTEM_PROMPT,
+            tools=[SUGGEST_TOOL],
+            tool_choice={"type": "auto"},
+            messages=[{"role": "user", "content": build_request(user, left, norms)}],
+        )
+    except anthropic.AuthenticationError:
+        raise VisionNotConfigured(
+            "Ключ Anthropic не принят — он неверный, отозван или скопирован не полностью.\n\n"
+            "Создай новый на console.anthropic.com/settings/keys и пропиши его заново."
+        ) from None
+    except anthropic.PermissionDeniedError:
+        raise VisionNotConfigured(
+            "У ключа нет доступа к модели. Проверь настройки ключа в кабинете Anthropic."
+        ) from None
+    except anthropic.RateLimitError:
+        raise FoodRecognitionError(
+            "Слишком много запросов подряд. Подожди минуту и попробуй ещё раз."
+        ) from None
+    except anthropic.APIStatusError as e:
+        details = str(getattr(e, "message", "") or e).lower()
+        if "credit" in details or "billing" in details or "quota" in details:
+            raise FoodRecognitionError(
+                "На счёте Anthropic закончились деньги — пополни баланс "
+                "на console.anthropic.com/settings/billing."
+            ) from None
+        logger.warning("Claude ответил %s: %s", e.status_code, details[:300])
+        raise FoodRecognitionError(
+            f"Claude ответил ошибкой ({e.status_code}). Попробуй ещё раз чуть позже."
+        ) from None
+    except anthropic.APIConnectionError:
+        raise FoodRecognitionError(
+            "Не получилось связаться с Claude — похоже, у сервера проблемы с сетью."
+        ) from None
 
     tool_use = next((block for block in response.content if block.type == "tool_use"), None)
     if tool_use is None:
