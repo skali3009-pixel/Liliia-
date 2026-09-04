@@ -236,8 +236,11 @@ def test_checkin_rejects_empty_and_out_of_range():
     run(scenario)
 
 
-def test_app_is_closed_without_a_subscription():
+def test_app_is_closed_without_a_subscription(monkeypatch):
     """Кончилась подписка — данные на месте, но приложение просит оплату."""
+    # Без владельца платный доступ выключен, поэтому включаем его явно.
+    monkeypatch.setattr(config, "PAYWALL", True)
+
     async def scenario():
         async with webapp_client() as (client, _):
             from services.subscriptions import now

@@ -208,6 +208,39 @@ async def mark_warned(session: AsyncSession, subscription: Subscription) -> None
     await session.commit()
 
 
+async def grandfather_existing(session: AsyncSession, *, days: int = 30) -> int:
+    """Дать доступ тем, кто пользовался ботом до появления подписки.
+
+    Люди уже вели дневник — закрывать им бота одним обновлением нечестно.
+    Выполняется один раз: у кого запись о подписке уже есть, того не трогаем.
+    """
+    from models import User
+
+    stmt = (
+        select(User.id)
+        .outerjoin(Subscription, Subscription.user_id == User.id)
+        .where(User.onboarding_completed.is_(True), Subscription.id.is_(None))
+    )
+    user_ids = list((await session.execute(stmt)).scalars())
+    if not user_ids:
+        return 0
+
+    expires = now() + timedelta(days=days)
+    for user_id in user_ids:
+        session.add(
+            Subscription(
+                user_id=user_id,
+                status=SubscriptionStatus.ACTIVE,
+                source=SubscriptionSource.MANUAL,
+                expires_at=expires,
+                trial_used=True,
+            )
+        )
+    await session.commit()
+    logger.info("Доступ на %d дней выдан %d прежним пользователям", days, len(user_ids))
+    return len(user_ids)
+
+
 async def stats(session: AsyncSession) -> dict:
     """Сводка для владельца: сколько людей и денег."""
     async def count(*conditions) -> int:

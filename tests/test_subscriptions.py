@@ -176,3 +176,31 @@ def test_days_left_is_never_negative(days, expected):
             access = await check_access(session, USER_ID)
             assert access.days_left >= expected
     run(scenario)
+
+
+def test_existing_users_keep_access_after_the_paywall_appears():
+    """Люди уже вели дневник — обновление не должно запирать их снаружи."""
+    async def scenario():
+        async with db() as session:
+            from services.subscriptions import grandfather_existing
+
+            assert await grandfather_existing(session, days=30) == 1
+            access = await check_access(session, USER_ID)
+            assert access.allowed and access.days_left >= 29
+
+            # Повторный запуск ничего не выдаёт заново.
+            assert await grandfather_existing(session, days=30) == 0
+    run(scenario)
+
+
+def test_grandfathering_skips_people_who_never_finished_onboarding():
+    async def scenario():
+        async with db() as session:
+            from services.subscriptions import grandfather_existing
+
+            session.add(User(id=777, onboarding_completed=False))
+            await session.commit()
+
+            await grandfather_existing(session, days=30)
+            assert (await check_access(session, 777)).allowed is False
+    run(scenario)

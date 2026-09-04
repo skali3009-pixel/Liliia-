@@ -59,7 +59,9 @@ SUB_PRICE_STARS = int(os.getenv("SUB_PRICE_STARS", "499"))
 SUB_PERIOD_DAYS = 30
 
 # Платный доступ можно выключить: тогда бот открыт всем, как раньше.
-PAYWALL = os.getenv("PAYWALL", "1") not in {"0", "false", "no"}
+# Без ADMIN_IDS он не включается вовсе: иначе владелец закроет бот от себя же
+# и не сможет ни выдать доступ, ни посмотреть статистику.
+PAYWALL = os.getenv("PAYWALL", "1") not in {"0", "false", "no"} and bool(ADMIN_IDS)
 
 # Бот сам подтягивает обновления из git. Выключается AUTO_UPDATE=0.
 AUTO_UPDATE = os.getenv("AUTO_UPDATE", "1") not in {"0", "false", "no"}

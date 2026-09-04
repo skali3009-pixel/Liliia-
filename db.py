@@ -40,6 +40,12 @@ async def init_models() -> None:
     if applied:
         logger.info("Схема БД обновлена: %s", ", ".join(applied))
 
+    # Кто пользовался ботом до появления подписки, доступ не теряет.
+    from services.subscriptions import grandfather_existing
+
+    async with async_session_maker() as session:
+        await grandfather_existing(session)
+
     # Библиотека упражнений нужна сразу — без неё раздел тренировок пустой.
     from seed.loader import seed_workouts
 
