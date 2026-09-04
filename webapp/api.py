@@ -9,13 +9,24 @@ from aiohttp import web
 
 import config
 from db import get_session
-from models import Meal, ScheduleTypeEnum, Supplement, User
+from models import Meal, ProgressPhoto, ScheduleTypeEnum, Supplement, User
 from services.meals import get_today_totals, list_today_meals
+from services.progress import (
+    MEASURE_FIELDS,
+    add_measurement,
+    calorie_points,
+    compute_streak,
+    list_photos,
+    measure_points,
+    meal_days,
+    photos_dir,
+    save_photo,
+)
 from services.supplements import add_supplement, list_due_today, mark
 from services.water import add_water, today_total_ml, undo_last
 from utils.meal_time import MEAL_TYPE_RU
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, scale_nutrition
-from utils.timeframe import get_zone
+from utils.timeframe import get_zone, today_in
 from webapp.auth import AuthError, verify_init_data
 
 logger = logging.getLogger(__name__)
@@ -254,6 +265,147 @@ async def delete_supplement(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+PERIODS = {"week": 7, "month": 30}
+
+# Загружать гигабайты в дневник ни к чему: обычное фото с телефона меньше.
+MAX_PHOTO_BYTES = 10 * 1024 * 1024
+
+
+async def get_progress(request: web.Request) -> web.Response:
+    """Данные для экрана прогресса: график, сводка, стрик, фото."""
+    user_id, tz = request["user_id"], request["timezone"]
+    days = PERIODS.get(request.query.get("period", "month"), 30)
+    metric = request.query.get("metric", "weight")
+
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+
+        if metric == "calories":
+            points = await calorie_points(session, user_id, days=days, timezone_name=tz)
+            title, unit = "Калории", "ккал"
+        else:
+            points = await measure_points(
+                session, user_id, field=metric, days=days, timezone_name=tz
+            )
+            title, unit = MEASURE_FIELDS.get(metric, MEASURE_FIELDS["weight"])[1:]
+
+        # Вес показываем и за всё время — чтобы видеть путь к цели целиком.
+        all_weight = await measure_points(session, user_id, field="weight", days=3650,
+                                          timezone_name=tz)
+        streak = compute_streak(
+            await meal_days(session, user_id, timezone_name=tz), today=today_in(tz)
+        )
+        photos = await list_photos(session, user_id)
+
+    first_weight = all_weight[0].value if all_weight else user.current_weight_kg
+    last_weight = all_weight[-1].value if all_weight else user.current_weight_kg
+
+    return web.json_response(
+        {
+            "metric": metric,
+            "title": title,
+            "unit": unit,
+            "goal": user.target_weight_kg if metric == "weight" else None,
+            "points": [{"day": p.day.isoformat(), "value": p.value} for p in points],
+            "summary": {
+                "current_weight": last_weight,
+                "start_weight": first_weight,
+                "target_weight": user.target_weight_kg,
+                "changed": round((last_weight or 0) - (first_weight or 0), 1),
+                "streak": streak,
+            },
+            "photos": [
+                {"id": photo.id, "date": photo.taken_at.astimezone(get_zone(tz)).strftime("%d.%m.%Y")}
+                for photo in photos
+            ],
+        }
+    )
+
+
+async def post_measurement(request: web.Request) -> web.Response:
+    body = await request.json()
+
+    values: dict[str, float] = {}
+    limits = {"weight_kg": (30, 300), "waist_cm": (30, 200), "hips_cm": (30, 200),
+              "chest_cm": (30, 200), "arm_cm": (10, 100)}
+    for key, (low, high) in limits.items():
+        raw = body.get(key)
+        if raw in (None, ""):
+            continue
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            return web.json_response({"error": f"Некорректное значение: {key}"}, status=400)
+        if not low <= value <= high:
+            return web.json_response(
+                {"error": f"Значение вне разумного диапазона ({low}-{high})"}, status=400
+            )
+        values[key] = value
+
+    if not values:
+        return web.json_response({"error": "Заполни хотя бы одно поле"}, status=400)
+
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        _, norms_updated = await add_measurement(session, user=user, **values)
+        norms = {
+            "calories": user.daily_calories,
+            "protein_g": user.daily_protein_g,
+            "fat_g": user.daily_fat_g,
+            "carbs_g": user.daily_carbs_g,
+            "water_ml": user.daily_water_ml,
+        }
+
+    return web.json_response({"ok": True, "norms_updated": norms_updated, "norms": norms})
+
+
+async def post_photo(request: web.Request) -> web.Response:
+    """Фото прогресса загружается прямо из приложения."""
+    reader = await request.multipart()
+    field = await reader.next()
+    if field is None or field.name != "photo":
+        return web.json_response({"error": "Нет файла"}, status=400)
+
+    content = bytearray()
+    while chunk := await field.read_chunk():
+        content.extend(chunk)
+        if len(content) > MAX_PHOTO_BYTES:
+            return web.json_response({"error": "Фото слишком большое (максимум 10 МБ)"}, status=400)
+
+    if not content:
+        return web.json_response({"error": "Пустой файл"}, status=400)
+
+    async with get_session() as session:
+        photo = await save_photo(session, user_id=request["user_id"], content=bytes(content))
+    return web.json_response({"id": photo.id})
+
+
+async def get_photo(request: web.Request) -> web.Response:
+    photo_id = int(request.match_info["photo_id"])
+    async with get_session() as session:
+        photo = await session.get(ProgressPhoto, photo_id)
+        if photo is None or photo.user_id != request["user_id"] or not photo.file_name:
+            return web.json_response({"error": "Фото не найдено"}, status=404)
+        path = photos_dir(photo.user_id) / photo.file_name
+
+    if not path.exists():
+        return web.json_response({"error": "Файл потерялся"}, status=404)
+    return web.FileResponse(path)
+
+
+async def delete_photo(request: web.Request) -> web.Response:
+    photo_id = int(request.match_info["photo_id"])
+    async with get_session() as session:
+        photo = await session.get(ProgressPhoto, photo_id)
+        if photo is None or photo.user_id != request["user_id"]:
+            return web.json_response({"error": "Фото не найдено"}, status=404)
+        if photo.file_name:
+            (photos_dir(photo.user_id) / photo.file_name).unlink(missing_ok=True)
+        await session.delete(photo)
+        await session.commit()
+    return web.json_response({"ok": True})
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -263,3 +415,8 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/supplements", post_supplement)
     app.router.add_post("/api/supplements/{supplement_id}/mark", mark_supplement)
     app.router.add_delete("/api/supplements/{supplement_id}", delete_supplement)
+    app.router.add_get("/api/progress", get_progress)
+    app.router.add_post("/api/measurements", post_measurement)
+    app.router.add_post("/api/photos", post_photo)
+    app.router.add_get("/api/photos/{photo_id}", get_photo)
+    app.router.add_delete("/api/photos/{photo_id}", delete_photo)

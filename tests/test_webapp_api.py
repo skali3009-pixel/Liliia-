@@ -201,3 +201,61 @@ def test_supplement_of_another_user_is_not_markable():
                                   user_id=OTHER_ID)
             assert response.status == 404
     run(scenario)
+
+
+def test_progress_returns_series_and_summary():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            # два замера: вчера и сегодня
+            await call(client, "POST", "/api/measurements", json_body={"weight_kg": 62})
+            response = await call(client, "GET", "/api/progress?metric=weight&period=month")
+            assert response.status == 200
+            data = await response.json()
+
+            assert data["title"] == "Вес"
+            assert data["unit"] == "кг"
+            assert data["goal"] == 55          # целевой вес из профиля
+            assert data["points"][-1]["value"] == 62
+            assert data["summary"]["current_weight"] == 62
+            assert data["summary"]["streak"] >= 1   # еда за сегодня записана в фикстуре
+    run(scenario)
+
+
+def test_progress_calories_metric_uses_meals():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            data = await (await call(client, "GET", "/api/progress?metric=calories")).json()
+            assert data["title"] == "Калории"
+            assert data["points"][-1]["value"] == 320   # единственный приём пищи в фикстуре
+            assert data["goal"] is None                 # у калорий нет линии цели
+    run(scenario)
+
+
+def test_measurement_validates_range():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/measurements", json_body={"weight_kg": 900})
+            assert response.status == 400
+
+            response = await call(client, "POST", "/api/measurements", json_body={})
+            assert response.status == 400
+    run(scenario)
+
+
+def test_photo_of_another_user_is_not_readable():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            import io
+            form = {"photo": io.BytesIO(b"\xff\xd8fake-jpeg")}
+            response = await client.post(
+                "/api/photos",
+                headers={"X-Telegram-Init-Data": init_data(USER_ID)},
+                data=form,
+            )
+            assert response.status == 200
+            photo_id = (await response.json())["id"]
+
+            assert (await call(client, "GET", f"/api/photos/{photo_id}")).status == 200
+            other = await call(client, "GET", f"/api/photos/{photo_id}", user_id=OTHER_ID)
+            assert other.status == 404
+    run(scenario)

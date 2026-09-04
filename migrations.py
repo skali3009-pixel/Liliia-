@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # (таблица, колонка, определение) — порядок соответствует истории изменений.
 COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
     ("users", "timezone", "VARCHAR(64) NOT NULL DEFAULT 'Europe/Moscow'"),
+    ("progress_photos", "file_name", "VARCHAR(255)"),
 ]
 
 

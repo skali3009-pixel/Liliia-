@@ -132,3 +132,57 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
   background: var(--fg); color: var(--bg); padding: 10px 16px; border-radius: 12px;
   font-size: 13px; z-index: 10; opacity: .95;
 }
+
+/* --- Прогресс --- */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.stat { background: var(--card); border-radius: var(--radius); padding: 14px 10px; text-align: center; }
+/* Крупные числа — пропорциональными цифрами: моноширинные на таком кегле
+   выглядят разреженно. */
+.stat-value { font-size: 21px; font-weight: 700; letter-spacing: -.3px; }
+.stat-label { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+/* Переключатели стоят над карточкой графика: один ряд фильтров на всё,
+   что они меняют. */
+.filters { display: grid; gap: 8px; margin-top: 14px; }
+.seg { display: flex; background: var(--card); border-radius: 12px; padding: 3px; }
+.seg-btn {
+  flex: 1; padding: 8px 4px; border: none; border-radius: 9px; background: none;
+  color: var(--muted); font-size: 13px; font-weight: 500; font-family: inherit; cursor: pointer;
+}
+.seg-btn.active { background: var(--bg); color: var(--fg); }
+
+.link-btn {
+  border: none; background: none; color: var(--accent);
+  font-size: 13px; font-family: inherit; cursor: pointer; padding: 0;
+}
+
+/* Сетка и оси — сплошные волоски на тон от фона, без штриховки. */
+.chart { width: 100%; display: block; touch-action: pan-y; }
+.grid-line { stroke: var(--muted); stroke-opacity: .18; stroke-width: 1; }
+.axis-text { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.series-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round;
+               stroke-linejoin: round; }
+.series-dot { fill: var(--accent); }
+/* Точка под пальцем обводится цветом фона, чтобы не сливалась с линией. */
+.series-dot.active { stroke: var(--bg); stroke-width: 2; }
+.goal-line { stroke: var(--ok); stroke-opacity: .55; stroke-width: 1; }
+.goal-text { fill: var(--ok); font-size: 10px; opacity: .85; }
+.crosshair { stroke: var(--muted); stroke-opacity: .35; stroke-width: 1; }
+.tip-box { fill: var(--fg); }
+.tip-text { fill: var(--bg); font-size: 11px; font-weight: 600; }
+
+.table-row { display: flex; justify-content: space-between; padding: 7px 0;
+             border-bottom: 1px solid var(--bg); font-size: 13px; }
+.table-row:last-child { border-bottom: none; }
+.table-row span:last-child { font-variant-numeric: tabular-nums; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid2 .input { margin-bottom: 0; }
+
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.compare figure { margin: 0; }
+.compare img { width: 100%; border-radius: 12px; display: block; background: var(--bg); }
+.compare figcaption { font-size: 11px; color: var(--muted); text-align: center; margin-top: 5px; }
+.photo-strip { display: flex; gap: 8px; overflow-x: auto; margin-top: 10px; padding-bottom: 4px; }
+.photo-strip img { height: 64px; border-radius: 9px; opacity: .55; }
+.photo-strip img.on { opacity: 1; outline: 2px solid var(--accent); }

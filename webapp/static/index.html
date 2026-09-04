@@ -76,8 +76,63 @@
     </section>
   </main>
 
+
+  <main id="screen-progress" class="screen" hidden>
+    <section class="stats">
+      <div class="stat"><div id="stat-weight" class="stat-value">—</div>
+        <div class="stat-label">сейчас, кг</div></div>
+      <div class="stat"><div id="stat-change" class="stat-value">—</div>
+        <div class="stat-label">изменение</div></div>
+      <div class="stat"><div id="stat-streak" class="stat-value">—</div>
+        <div class="stat-label">дней подряд</div></div>
+    </section>
+
+    <div class="filters">
+      <div class="seg" id="metric-switch">
+        <button class="seg-btn active" data-metric="weight">Вес</button>
+        <button class="seg-btn" data-metric="calories">Калории</button>
+        <button class="seg-btn" data-metric="waist">Талия</button>
+      </div>
+      <div class="seg" id="period-switch">
+        <button class="seg-btn" data-period="week">Неделя</button>
+        <button class="seg-btn active" data-period="month">Месяц</button>
+      </div>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 id="chart-title">Вес</h2>
+        <button id="table-toggle" class="link-btn">таблица</button>
+      </div>
+      <div id="chart-box"></div>
+      <div id="chart-table" hidden></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Новый замер</h2></div>
+      <div class="grid2">
+        <input id="m-weight" class="input" type="number" step="0.1" placeholder="Вес, кг">
+        <input id="m-waist" class="input" type="number" step="0.5" placeholder="Талия, см">
+        <input id="m-hips" class="input" type="number" step="0.5" placeholder="Бёдра, см">
+        <input id="m-chest" class="input" type="number" step="0.5" placeholder="Грудь, см">
+        <input id="m-arm" class="input" type="number" step="0.5" placeholder="Руки, см">
+      </div>
+      <button id="m-save" class="btn">Сохранить замер</button>
+      <p class="hint">Заполни то, что мерила — остальное можно пропустить.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Фото прогресса</h2>
+        <label class="link-btn" for="photo-input">добавить</label></div>
+      <input id="photo-input" type="file" accept="image/*" hidden>
+      <div id="photo-compare"></div>
+      <p class="hint" id="photo-hint">Снимай в одинаковой позе и при одном свете — так разница видна честнее.</p>
+    </section>
+  </main>
+
   <nav class="tabs">
     <button class="tab active" data-screen="today">📊 Сегодня</button>
+    <button class="tab" data-screen="progress">📈 Прогресс</button>
     <button class="tab" data-screen="pills">💊 Добавки</button>
   </nav>
 </div>

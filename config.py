@@ -1,6 +1,7 @@
 """Загрузка настроек бота из переменных окружения (.env)."""
 
 import os
+from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -42,6 +43,9 @@ VOICE_MODEL = os.getenv("VOICE_MODEL", "whisper-large-v3")
 WEBAPP_URL = os.getenv("WEBAPP_URL", "")
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "127.0.0.1")
 WEBAPP_PORT = int(os.getenv("WEBAPP_PORT", "8080"))
+
+# Куда складывать фото прогресса, загруженные из приложения.
+PHOTOS_DIR = os.getenv("PHOTOS_DIR", str(Path(__file__).parent / "data" / "photos"))
 
 # Строка подключения к PostgreSQL (профиль пользователя, питание,
 # тренировки, прогресс). Формат — SQLAlchemy + asyncpg.

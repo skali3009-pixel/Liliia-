@@ -47,7 +47,10 @@ class ProgressPhoto(Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True, nullable=False
     )
 
-    photo_file_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Файл, загруженный из приложения (лежит в PHOTOS_DIR).
+    file_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Если фото пришло в чат — сохраняем идентификатор файла Telegram.
+    photo_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     taken_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

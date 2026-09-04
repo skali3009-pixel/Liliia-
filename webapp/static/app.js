@@ -189,6 +189,226 @@ async function addPill() {
   } catch (e) { toast(e.message); }
 }
 
+
+/* --- Экран прогресса --------------------------------------------------- */
+
+let progress = null;
+let metric = 'weight';
+let period = 'month';
+let tableMode = false;
+
+const CHART = { w: 320, h: 150, padL: 34, padR: 12, padT: 12, padB: 22 };
+
+function buildChart(data) {
+  const box = document.getElementById('chart-box');
+  const points = data.points;
+
+  if (points.length === 0) {
+    box.innerHTML = '<div class="empty">Пока нет данных за этот период</div>';
+    return;
+  }
+  if (points.length === 1) {
+    const only = points[0];
+    box.innerHTML = `<div class="empty">Одна точка: ${fmt(only.value)} ${data.unit} ·
+      ${dayLabel(only.day)}<br>Добавь ещё замер — появится динамика.</div>`;
+    return;
+  }
+
+  // Шкала: захватываем и цель, чтобы её линия не ушла за край.
+  const values = points.map((p) => p.value);
+  if (data.goal) values.push(data.goal);
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+  const pad = (max - min) * 0.15 || Math.max(max * 0.05, 1);
+  min -= pad; max += pad;
+
+  const { w, h, padL, padR, padT, padB } = CHART;
+  const plotW = w - padL - padR;
+  const plotH = h - padT - padB;
+  const x = (i) => padL + (plotW * i) / (points.length - 1);
+  const y = (v) => padT + plotH * (1 - (v - min) / (max - min));
+
+  const ticks = [max, (max + min) / 2, min];
+  const grid = ticks.map((t) => `
+    <line class="grid-line" x1="${padL}" y1="${y(t).toFixed(1)}" x2="${w - padR}" y2="${y(t).toFixed(1)}"/>
+    <text class="axis-text" x="0" y="${(y(t) + 3).toFixed(1)}">${fmt(t)}</text>`).join('');
+
+  const path = points.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(' ');
+
+  // Подписываем только последнюю точку — число у каждой превращается в кашу.
+  const last = points[points.length - 1];
+  const lastX = x(points.length - 1);
+  const lastY = y(last.value);
+
+  const goalLine = data.goal ? `
+    <line class="goal-line" x1="${padL}" y1="${y(data.goal).toFixed(1)}"
+          x2="${w - padR}" y2="${y(data.goal).toFixed(1)}"/>
+    <text class="goal-text" x="${w - padR}" y="${(y(data.goal) - 4).toFixed(1)}"
+          text-anchor="end">цель ${fmt(data.goal)}</text>` : '';
+
+  const dots = points.map((p, i) =>
+    `<circle class="series-dot" data-i="${i}" cx="${x(i).toFixed(1)}" cy="${y(p.value).toFixed(1)}" r="${points.length > 20 ? 0 : 3}"/>`
+  ).join('');
+
+  box.innerHTML = `
+    <svg class="chart" viewBox="0 0 ${w} ${h}" role="img"
+         aria-label="${data.title} за период: от ${fmt(points[0].value)} до ${fmt(last.value)} ${data.unit}">
+      ${grid}${goalLine}
+      <path class="series-line" d="${path}"/>
+      ${dots}
+      <circle class="series-dot active" cx="${lastX.toFixed(1)}" cy="${lastY.toFixed(1)}" r="4"/>
+      <text class="axis-text" x="${padL}" y="${h - 6}">${dayLabel(points[0].day)}</text>
+      <text class="axis-text" x="${w - padR}" y="${h - 6}" text-anchor="end">${dayLabel(last.day)}</text>
+      <g id="hover-layer"></g>
+      <rect id="hit-area" x="${padL}" y="0" width="${plotW}" height="${h}" fill="transparent"/>
+    </svg>`;
+
+  attachHover(box.querySelector('svg'), points, data, { x, y, plotW, padL });
+}
+
+/* Палец толще точки: ищем ближайшую по горизонтали, а не попадание в кружок. */
+function attachHover(svg, points, data, geom) {
+  const layer = svg.querySelector('#hover-layer');
+  const hit = svg.querySelector('#hit-area');
+
+  const show = (event) => {
+    const rect = svg.getBoundingClientRect();
+    const touch = event.touches ? event.touches[0] : event;
+    const localX = ((touch.clientX - rect.left) / rect.width) * CHART.w;
+
+    let nearest = 0;
+    let best = Infinity;
+    points.forEach((_, i) => {
+      const distance = Math.abs(geom.x(i) - localX);
+      if (distance < best) { best = distance; nearest = i; }
+    });
+
+    const point = points[nearest];
+    const px = geom.x(nearest);
+    const py = geom.y(point.value);
+    const label = `${dayLabel(point.day)} · ${fmt(point.value)} ${data.unit}`;
+    const boxW = label.length * 5.6 + 14;
+    const boxX = Math.min(Math.max(px - boxW / 2, 2), CHART.w - boxW - 2);
+
+    layer.innerHTML = `
+      <line class="crosshair" x1="${px.toFixed(1)}" y1="${CHART.padT}"
+            x2="${px.toFixed(1)}" y2="${CHART.h - CHART.padB}"/>
+      <circle class="series-dot active" cx="${px.toFixed(1)}" cy="${py.toFixed(1)}" r="4.5"/>
+      <rect class="tip-box" x="${boxX.toFixed(1)}" y="0" width="${boxW.toFixed(1)}" height="18" rx="6"/>
+      <text class="tip-text" x="${(boxX + boxW / 2).toFixed(1)}" y="13" text-anchor="middle">${label}</text>`;
+  };
+
+  hit.addEventListener('touchstart', show, { passive: true });
+  hit.addEventListener('touchmove', show, { passive: true });
+  hit.addEventListener('mousemove', show);
+  hit.addEventListener('touchend', () => { layer.innerHTML = ''; });
+  hit.addEventListener('mouseleave', () => { layer.innerHTML = ''; });
+}
+
+function buildTable(data) {
+  const box = document.getElementById('chart-table');
+  box.innerHTML = data.points.length
+    ? data.points.slice().reverse().map((p) =>
+        `<div class="table-row"><span>${dayLabel(p.day)}</span><span>${fmt(p.value)} ${data.unit}</span></div>`
+      ).join('')
+    : '<div class="empty">Пока нет данных</div>';
+}
+
+function fmt(value) {
+  return Number.isInteger(value) ? value : Number(value).toFixed(1);
+}
+
+function dayLabel(iso) {
+  const [, month, day] = iso.split('-');
+  return `${day}.${month}`;
+}
+
+async function renderPhotos(photos) {
+  const box = document.getElementById('photo-compare');
+  const hint = document.getElementById('photo-hint');
+  box.innerHTML = '';
+
+  if (photos.length === 0) {
+    hint.textContent = 'Пока нет фото. Первое станет точкой отсчёта «до».';
+    return;
+  }
+  hint.textContent = photos.length === 1
+    ? 'Есть первое фото. Следующее встанет рядом для сравнения.'
+    : 'Снимай в одинаковой позе и при одном свете — так разница видна честнее.';
+
+  const first = photos[0];
+  const last = photos[photos.length - 1];
+  box.innerHTML = `
+    <div class="compare">
+      <figure><img id="photo-a" alt="Фото до"><figcaption>${first.date}</figcaption></figure>
+      <figure><img id="photo-b" alt="Фото после"><figcaption>${last.date}</figcaption></figure>
+    </div>`;
+  await loadPhoto(first.id, document.getElementById('photo-a'));
+  if (photos.length > 1) await loadPhoto(last.id, document.getElementById('photo-b'));
+  else document.getElementById('photo-b').closest('figure').remove();
+}
+
+/* Картинку тянем с подписью в заголовке: <img src> её передать не может. */
+async function loadPhoto(id, img) {
+  const response = await fetch(`/api/photos/${id}`, {
+    headers: { 'X-Telegram-Init-Data': tg?.initData || '' },
+  });
+  if (!response.ok) return;
+  img.src = URL.createObjectURL(await response.blob());
+}
+
+async function refreshProgress() {
+  progress = await api(`/api/progress?metric=${metric}&period=${period}`);
+
+  const s = progress.summary;
+  document.getElementById('stat-weight').textContent = s.current_weight ? fmt(s.current_weight) : '—';
+  document.getElementById('stat-change').textContent =
+    s.changed > 0 ? `+${fmt(s.changed)}` : fmt(s.changed || 0);
+  document.getElementById('stat-streak').textContent = s.streak;
+  document.getElementById('chart-title').textContent = progress.title;
+
+  buildChart(progress);
+  buildTable(progress);
+  await renderPhotos(progress.photos);
+}
+
+async function saveMeasurement() {
+  const body = {
+    weight_kg: document.getElementById('m-weight').value,
+    waist_cm: document.getElementById('m-waist').value,
+    hips_cm: document.getElementById('m-hips').value,
+    chest_cm: document.getElementById('m-chest').value,
+    arm_cm: document.getElementById('m-arm').value,
+  };
+  try {
+    const result = await api('/api/measurements', { method: 'POST', body: JSON.stringify(body) });
+    for (const id of ['m-weight', 'm-waist', 'm-hips', 'm-chest', 'm-arm']) {
+      document.getElementById(id).value = '';
+    }
+    haptic('medium');
+    toast(result.norms_updated
+      ? `Записал. Норма пересчитана: ${result.norms.calories} ккал`
+      : 'Записал');
+    await refreshProgress();
+    await refresh();
+  } catch (e) { toast(e.message); }
+}
+
+async function uploadPhoto(file) {
+  const form = new FormData();
+  form.append('photo', file, 'photo.jpg');
+  toast('Загружаю фото…');
+  try {
+    await fetch('/api/photos', {
+      method: 'POST',
+      headers: { 'X-Telegram-Init-Data': tg?.initData || '' },
+      body: form,
+    }).then((r) => { if (!r.ok) throw new Error('Не удалось загрузить'); });
+    haptic('medium');
+    await refreshProgress();
+  } catch (e) { toast(e.message); }
+}
+
 /* --- загрузка и переключение вкладок --- */
 async function refresh() {
   state = await api('/api/today');
@@ -201,7 +421,10 @@ function switchScreen(name) {
     tab.classList.toggle('active', tab.dataset.screen === name);
   }
   document.getElementById('screen-today').hidden = name !== 'today';
+  document.getElementById('screen-progress').hidden = name !== 'progress';
   document.getElementById('screen-pills').hidden = name !== 'pills';
+
+  if (name === 'progress' && !progress) refreshProgress().catch((e) => toast(e.message));
 }
 
 function buildWeekdayPicker() {
@@ -234,6 +457,33 @@ async function init() {
   for (const tab of document.querySelectorAll('.tab')) {
     tab.onclick = () => switchScreen(tab.dataset.screen);
   }
+  for (const button of document.querySelectorAll('#metric-switch .seg-btn')) {
+    button.onclick = () => {
+      metric = button.dataset.metric;
+      document.querySelectorAll('#metric-switch .seg-btn').forEach((b) => b.classList.remove('active'));
+      button.classList.add('active');
+      refreshProgress().catch((e) => toast(e.message));
+    };
+  }
+  for (const button of document.querySelectorAll('#period-switch .seg-btn')) {
+    button.onclick = () => {
+      period = button.dataset.period;
+      document.querySelectorAll('#period-switch .seg-btn').forEach((b) => b.classList.remove('active'));
+      button.classList.add('active');
+      refreshProgress().catch((e) => toast(e.message));
+    };
+  }
+  document.getElementById('table-toggle').onclick = (event) => {
+    tableMode = !tableMode;
+    document.getElementById('chart-box').hidden = tableMode;
+    document.getElementById('chart-table').hidden = !tableMode;
+    event.target.textContent = tableMode ? 'график' : 'таблица';
+  };
+  document.getElementById('m-save').onclick = saveMeasurement;
+  document.getElementById('photo-input').onchange = (event) => {
+    if (event.target.files[0]) uploadPhoto(event.target.files[0]);
+  };
+
   document.getElementById('pill-schedule').onchange = (event) => {
     document.getElementById('weekday-picker').hidden = event.target.value !== 'weekdays';
     document.getElementById('pill-interval').hidden = event.target.value !== 'interval';
