@@ -80,10 +80,22 @@ if [ -n "$DOMAIN" ]; then
     inf "$DOMAIN → ${RESOLVED:-не резолвится}"
 
     CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://$DOMAIN/health" 2>/dev/null)"
-    [ "$CODE" = "200" ] && ok "HTTP отвечает ($CODE)" || bad "HTTP не отвечает (код: ${CODE:-нет ответа})"
+    case "$CODE" in
+        2*|3*) ok "HTTP отвечает ($CODE — перенаправление на HTTPS, это нормально)";;
+        *)     bad "HTTP не отвечает (код: ${CODE:-нет ответа}) — значит, порт 80 закрыт снаружи";;
+    esac
 
     CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "https://$DOMAIN/health" 2>/dev/null)"
-    [ "$CODE" = "200" ] && ok "HTTPS отвечает ($CODE) — всё в порядке!" || bad "HTTPS не отвечает (код: ${CODE:-нет ответа})"
+    if [ "$CODE" = "200" ]; then
+        if curl -sv --max-time 10 "https://$DOMAIN/health" 2>&1 | grep -qi "STAGING"; then
+            bad "сертификат тестовый — Telegram такому не доверяет"
+            inf "лечится так: systemctl stop caddy && rm -rf /var/lib/caddy/.local/share/caddy/certificates && systemctl start caddy"
+        else
+            ok "HTTPS отвечает ($CODE) — всё в порядке!"
+        fi
+    else
+        bad "HTTPS не отвечает (код: ${CODE:-нет ответа})"
+    fi
 fi
 
 hdr "Готово"

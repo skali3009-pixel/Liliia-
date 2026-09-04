@@ -58,6 +58,14 @@ ok "Caddy установлен"
 
 # --- 3. Настройка ------------------------------------------------------------
 say "Шаг 3/5. Настраиваю HTTPS для $DOMAIN…"
+
+# Let's Encrypt проверяет владение адресом через порт 80: если он закрыт
+# файрволом, сертификата не будет. Открываем 80 и 443 заранее.
+if command -v ufw >/dev/null 2>&1 && $SUDO ufw status 2>/dev/null | grep -q "Status: active"; then
+    $SUDO ufw allow 80/tcp >/dev/null 2>&1
+    $SUDO ufw allow 443/tcp >/dev/null 2>&1
+    ok "порты 80 и 443 открыты в файрволе"
+fi
 $SUDO tee /etc/caddy/Caddyfile >/dev/null <<CADDY
 $DOMAIN {
     reverse_proxy 127.0.0.1:$WEBAPP_PORT
@@ -81,8 +89,21 @@ ok "адрес сохранён: $WEBAPP_URL"
 say "Шаг 5/5. Проверяю, что всё поднялось…"
 sleep 8
 
+check_staging_cert() {
+    # Caddy после серии неудач может выпустить тестовый сертификат
+    # Let's Encrypt — браузер и Telegram такому не доверяют.
+    if curl -sv --max-time 10 "$WEBAPP_URL/health" 2>&1 | grep -qi "STAGING"; then
+        echo "  Сертификат оказался тестовым — получаю боевой…"
+        $SUDO systemctl stop caddy
+        $SUDO rm -rf /var/lib/caddy/.local/share/caddy/certificates 2>/dev/null || true
+        $SUDO systemctl start caddy
+        sleep 20
+    fi
+}
+
 for attempt in 1 2 3 4 5; do
     if curl -sf --max-time 15 "$WEBAPP_URL/health" >/dev/null 2>&1; then
+        check_staging_cert
         printf "\n\033[1;32m═══════════════════════════════════════════\033[0m\n"
         printf "\033[1;32m  ГОТОВО! Приложение работает.\033[0m\n"
         printf "\033[1;32m═══════════════════════════════════════════\033[0m\n\n"
