@@ -156,6 +156,7 @@ async def get_today(request: web.Request) -> web.Response:
             fiber_g=totals.fiber_g,
             water_ml=water,
             timezone_name=tz,
+            stress_marked=state.stress is not None,
         )
 
         return web.json_response(

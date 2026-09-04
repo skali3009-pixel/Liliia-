@@ -162,6 +162,7 @@ async def sync_today(
     fiber_g: float,
     water_ml: float,
     timezone_name: str = DEFAULT_TIMEZONE,
+    stress_marked: bool = False,
 ) -> dict:
     """Пересчитать игровое состояние на сегодня и сохранить его."""
     today = today_in(timezone_name)
@@ -176,6 +177,7 @@ async def sync_today(
         fiber_norm_g=user.daily_fiber_g or 0,
         workouts_today=await _workouts_today(session, user.id, timezone_name),
         days_since_measure=await _days_since_measure(session, user.id, timezone_name),
+        stress_marked=stress_marked,
     )
 
     done_codes = [quest.code for quest in quests if quest.done]

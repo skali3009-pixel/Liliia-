@@ -52,6 +52,20 @@ def test_empty_day_closes_nothing():
     assert day_xp(quests) == 0
 
 
+def test_stress_quest_stays_open_until_marked_today():
+    quests = build_quests(**FULL_DAY)
+    assert "stress" not in codes(quests)
+    assert "stress" in codes(quests, done_only=False)
+
+
+def test_stress_quest_closes_once_marked_and_adds_its_xp():
+    without = build_quests(**FULL_DAY)
+    with_stress = build_quests(**{**FULL_DAY, "stress_marked": True})
+
+    assert "stress" in codes(with_stress)
+    assert day_xp(with_stress) == day_xp(without) + 10
+
+
 def test_undereating_does_not_close_the_calorie_quest():
     """Недобор — такой же промах, как перебор: 500 из 1662 не считается."""
     quests = build_quests(**{**FULL_DAY, "calories": 500})

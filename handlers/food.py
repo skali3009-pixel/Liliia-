@@ -32,7 +32,7 @@ from services.food_vision import (
     analyze_photo,
     analyze_text,
 )
-from services.checkins import save_checkin
+from services.checkins import save_checkin, today_state
 from services.gamification import sync_today
 from services.meals import get_today_totals, list_today_meals, save_meal
 from services.moments import Moment, analyze_moment
@@ -432,6 +432,8 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
         )
         # Игровой итог считаем здесь же: запись еды может закрыть задание дня,
         # и узнать об этом приятнее сразу, а не при следующем входе в приложение.
+        # Отдельное имя — переменная `state` в этой функции уже занята FSM.
+        day_state = await today_state(session, user.id, timezone_name=user.timezone)
         game = await sync_today(
             session,
             user,
@@ -440,6 +442,7 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
             fiber_g=totals.fiber_g,
             water_ml=await today_total_ml(session, user.id, timezone_name=user.timezone),
             timezone_name=user.timezone,
+            stress_marked=day_state.stress is not None,
         )
 
     await state.clear()

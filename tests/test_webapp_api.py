@@ -140,6 +140,26 @@ def test_today_includes_game_state_with_quests():
     run(scenario)
 
 
+def test_marking_stress_closes_its_quest():
+    """Пожелание из живого теста: стресс тоже влияет на вес — по нему должен
+    быть свой квест, и он закрывается той же кнопкой, что и остальное
+    состояние (/api/checkin)."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            before = (await (await call(client, "GET", "/api/today")).json())["game"]
+            quests_before = {q["code"]: q for q in before["quests"]}
+            assert quests_before["stress"]["done"] is False
+
+            response = await call(client, "POST", "/api/checkin",
+                                   json_body={"stress": "средний"})
+            assert response.status == 200
+
+            after = (await (await call(client, "GET", "/api/today")).json())["game"]
+            quests_after = {q["code"]: q for q in after["quests"]}
+            assert quests_after["stress"]["done"] is True
+    run(scenario)
+
+
 def test_closing_a_quest_gives_xp_and_a_streak():
     async def scenario():
         async with webapp_client() as (client, _):

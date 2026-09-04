@@ -75,6 +75,7 @@ def build_quests(
     fiber_norm_g: float,
     workouts_today: int,
     days_since_measure: int | None,
+    stress_marked: bool = False,
 ) -> list[Quest]:
     """Задания на сегодня, посчитанные по данным дня.
 
@@ -132,6 +133,18 @@ def build_quests(
             target=1,
             done=workouts_today >= 1,
             hint="сделано" if workouts_today else "хотя бы одна тренировка",
+        ),
+        Quest(
+            code="stress",
+            title="Оценить уровень стресса",
+            icon="〰️",
+            xp=10,
+            progress=1 if stress_marked else 0,
+            target=1,
+            done=stress_marked,
+            # Стресс напрямую влияет на вес через кортизол и переедание —
+            # это и есть повод отмечать его каждый день, а не только еду.
+            hint="отмечено" if stress_marked else "он тоже влияет на вес",
         ),
     ]
 
