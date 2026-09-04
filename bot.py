@@ -56,6 +56,18 @@ async def setup_menu_button() -> None:
 
 def warn_about_setup() -> None:
     """Сказать вслух то, что владелец иначе заметит только от юриста."""
+    # Первой строкой в журнале — главный вопрос: бот открыт или закрыт.
+    if config.PAYWALL:
+        logger.info(
+            "Доступ платный: пробный период %d дн., далее %d ⭐ в месяц",
+            config.TRIAL_DAYS, config.SUB_PRICE_STARS,
+        )
+    else:
+        logger.info(
+            "Доступ открыт всем: ADMIN_IDS не задан либо PAYWALL=0. "
+            "Проверить состояние целиком — bash status.sh"
+        )
+
     if config.PAYWALL and not config.LEGAL_OWNER:
         logger.warning(
             "Платный доступ включён, но LEGAL_OWNER пуст: оферта выйдет без "
