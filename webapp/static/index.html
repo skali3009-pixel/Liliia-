@@ -75,16 +75,15 @@
         <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
       </div>
       <div class="capture-row">
-        <button class="round-btn" id="capture-photo" aria-label="Прислать фото">📷</button>
-        <button class="mic-btn" id="capture-voice" aria-label="Наговорить голосом">
+        <button class="mic-btn" id="moment-open" aria-label="Рассказать, что происходит">
           <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="9" y="3" width="6" height="11" rx="3"/>
-            <path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+            <path d="M20 12a8 8 0 0 1-8 8H5l1.5-3A8 8 0 1 1 20 12z"/>
+            <path d="M9 11h6M9 14h4"/>
           </svg>
         </button>
-        <button class="round-btn" id="moment-open" aria-label="Написать текстом">+</button>
       </div>
-      <p class="capture-hint">Голосом и фото — через чат с ботом, текстом — здесь.</p>
+      <p class="capture-hint">Фото и голосовое — в чате с ботом: он поймёт так же,
+        а записанное придёт сюда само.</p>
     </section>
 
     <section class="state-grid" id="state-grid"></section>
@@ -259,6 +258,14 @@
 
 
   <main id="screen-progress" class="screen" hidden>
+    <section class="hero slim">
+      <div class="hero-art" data-art="sky"></div>
+      <div class="hero-body">
+        <h1 class="hero-title">Прогресс</h1>
+        <div class="eyebrow">Вес, объёмы и фото по неделям</div>
+      </div>
+    </section>
+
     <section class="stats">
       <div class="stat"><div id="stat-weight" class="stat-value">—</div>
         <div class="stat-label">сейчас, кг</div></div>
@@ -321,6 +328,14 @@
 
 
   <main id="screen-gym" class="screen" hidden>
+    <section class="hero slim">
+      <div class="hero-art" data-art="gym"></div>
+      <div class="hero-body">
+        <h1 class="hero-title">Спорт</h1>
+        <div class="eyebrow">Тело, лицо, глаза, осанка</div>
+      </div>
+    </section>
+
     <section class="stats">
       <div class="stat"><div id="gym-count" class="stat-value">—</div>
         <div class="stat-label">тренировок</div></div>

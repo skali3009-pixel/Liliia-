@@ -70,6 +70,7 @@ async def show_progress(message: Message) -> None:
 
     keyboard = _open_app_keyboard()
     if keyboard is None:
-        lines += ["", "Графики и замеры — в приложении (кнопка «Дневник» у поля ввода)."]
+        lines += ["", f"Графики и замеры — в приложении "
+                      f"(кнопка «{config.WEBAPP_BUTTON}» у поля ввода)."]
 
     await message.answer("\n".join(lines), reply_markup=keyboard)

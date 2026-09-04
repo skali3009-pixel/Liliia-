@@ -31,6 +31,14 @@
 
   --radius: 20px;
   color-scheme: dark;
+
+  /* Ночное небо: подложка под арты и замена им, пока картинки не скачаны. */
+  --sky-fallback:
+    radial-gradient(1px 1px at 18% 22%, rgba(255, 255, 255, .5), transparent),
+    radial-gradient(1px 1px at 62% 12%, rgba(255, 255, 255, .35), transparent),
+    radial-gradient(1.5px 1.5px at 82% 30%, rgba(196, 181, 253, .6), transparent),
+    radial-gradient(1px 1px at 35% 38%, rgba(255, 255, 255, .3), transparent),
+    radial-gradient(120% 90% at 70% 12%, #2A2450 0%, #17132C 46%, var(--void) 100%);
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -453,52 +461,67 @@ button:focus-visible, .tab:focus-visible {
 
 /* --- Шапка-герой и «Мой мир» --- */
 
-/* Арт лежит в /static/img/. Если картинки нет, остаётся градиент —
+/* Арты лежат в /static/img/. Если картинки нет, остаётся градиент —
    приложение выглядит целым и без неё. */
 .hero, .world-hero {
-  position: relative; margin: 0 -16px 0; padding: 0;
-  border-bottom: 1px solid var(--stroke); overflow: hidden;
+  position: relative; margin: 0 -16px; padding: 0; overflow: hidden;
 }
 .hero-art, .world-art {
-  position: absolute; inset: 0;
+  position: absolute; left: 0; right: 0; top: -14%; height: 128%;
   /* Портрет стоит справа: слева остаётся тёмное поле под заголовок. */
   background-position: right top; background-size: cover;
-  background-image: url('/static/img/hero.png'),
-    radial-gradient(1px 1px at 18% 22%, rgba(255, 255, 255, .5), transparent),
-    radial-gradient(1px 1px at 62% 12%, rgba(255, 255, 255, .35), transparent),
-    radial-gradient(1.5px 1.5px at 82% 30%, rgba(196, 181, 253, .6), transparent),
-    radial-gradient(1px 1px at 35% 38%, rgba(255, 255, 255, .3), transparent),
-    radial-gradient(120% 90% at 70% 10%, #2A2450 0%, #17132C 45%, var(--void) 100%);
+  background-repeat: no-repeat;
+  /* Края растворяются, чтобы арт не читался наклеенным прямоугольником:
+     видно только «пятно света», из которого выходит зверь. */
+  -webkit-mask-image: radial-gradient(115% 78% at 72% 26%,
+    #000 0%, #000 38%, rgba(0, 0, 0, .72) 60%, rgba(0, 0, 0, .28) 80%, transparent 100%);
+  mask-image: radial-gradient(115% 78% at 72% 26%,
+    #000 0%, #000 38%, rgba(0, 0, 0, .72) 60%, rgba(0, 0, 0, .28) 80%, transparent 100%);
+  will-change: transform;
 }
-.world-art {
+/* Градиент-заглушка со звёздами — на случай, если арт ещё не скачали. */
+.hero-art { background-image: url('/static/img/hero.png'), var(--sky-fallback); }
+.world-art, .hero-art[data-art="world"] {
   background-position: center top;
-  background-image: url('/static/img/world.png'),
-    radial-gradient(1.5px 1.5px at 22% 18%, rgba(196, 181, 253, .7), transparent),
-    radial-gradient(1px 1px at 68% 10%, rgba(255, 255, 255, .45), transparent),
-    radial-gradient(1px 1px at 45% 30%, rgba(255, 255, 255, .35), transparent),
-    radial-gradient(1.5px 1.5px at 84% 24%, rgba(196, 181, 253, .5), transparent),
-    radial-gradient(120% 90% at 30% 20%, #2E2657 0%, #191333 50%, var(--void) 100%);
+  background-image: url('/static/img/world.png'), var(--sky-fallback);
+  -webkit-mask-image: radial-gradient(120% 84% at 50% 34%,
+    #000 0%, #000 44%, rgba(0, 0, 0, .7) 66%, rgba(0, 0, 0, .25) 84%, transparent 100%);
+  mask-image: radial-gradient(120% 84% at 50% 34%,
+    #000 0%, #000 44%, rgba(0, 0, 0, .7) 66%, rgba(0, 0, 0, .25) 84%, transparent 100%);
 }
-/* Затемнение снизу — чтобы текст читался поверх любой картинки. */
+.hero-art[data-art="gym"] { background-image: url('/static/img/gym.png'), var(--sky-fallback); }
+.hero-art[data-art="sky"] {
+  background-position: center top;
+  background-image: url('/static/img/sky.png'), var(--sky-fallback);
+}
+
+/* Затемнение снизу — чтобы текст читался поверх любой картинки и переход
+   к контенту был без единой заметной линии. */
 .hero::after, .world-hero::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(180deg, rgba(10, 9, 18, .25) 0%, rgba(10, 9, 18, .1) 30%,
-              rgba(10, 9, 18, .82) 72%, var(--void) 100%);
+  background: linear-gradient(180deg, rgba(10, 9, 18, .3) 0%, rgba(10, 9, 18, .06) 26%,
+              rgba(10, 9, 18, .55) 62%, rgba(10, 9, 18, .93) 86%, var(--void) 100%);
 }
-.hero-body, .world-body { position: relative; z-index: 1; padding: 118px 16px 18px; }
-.world-body { padding-top: 200px; }
+.hero-body, .world-body { position: relative; z-index: 1; padding: 132px 16px 18px; }
+.world-body { padding-top: 216px; }
+/* Карточка открытия заходит на арт — мир и данные читаются как одно полотно. */
+#screen-world .discovery { margin-top: -22px; }
+/* Шапки «Спорта» и «Прогресса» ниже: там сразу начинаются данные. */
+.hero.slim .hero-body { padding: 96px 16px 14px; }
+
 /* «СЕГОДНЯ» набрано вразрядку и упирается в портрет — как в макете. */
 .hero-title {
   font-size: 34px; margin: 0; letter-spacing: .08em; text-transform: uppercase;
   line-height: 1;
 }
+.hero.slim .hero-title { font-size: 26px; }
+.world-title { font-size: 32px; margin: 0; }
 .hero-greeting { font-size: 15px; line-height: 1.35; margin: 18px 0 0; max-width: 15em;
                  white-space: pre-line; }
 .hero-state { display: flex; align-items: center; gap: 11px; margin-top: 14px; }
 .hero-state-icon { font-size: 19px; line-height: 1; }
 .hero-state-title { font-size: 14px; font-weight: 600; }
 .hero-state-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
-.world-title { font-size: 32px; margin: 0; }
 .hero-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
 .world-sub { font-size: 13px; color: var(--muted); margin: 8px 0 0; max-width: 22em; }
 

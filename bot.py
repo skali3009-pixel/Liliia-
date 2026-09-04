@@ -39,7 +39,7 @@ async def setup_menu_button() -> None:
         return
     await bot.set_chat_menu_button(
         menu_button=MenuButtonWebApp(
-            text="Дневник", web_app=WebAppInfo(url=config.WEBAPP_URL)
+            text=config.WEBAPP_BUTTON, web_app=WebAppInfo(url=config.WEBAPP_URL)
         )
     )
     logger.info("Кнопка мини-приложения включена: %s", config.WEBAPP_URL)

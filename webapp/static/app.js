@@ -65,7 +65,7 @@ const GREETINGS = [
   [5, '🌙', 'Доброй ночи.'],
   [12, '☀️', 'Доброе утро,\nты в фокусе.'],
   [17, '🌤️', 'Добрый день,\nты в ритме.'],
-  [23, '🌘', 'Добрый вечер,\nдень почти собран.'],
+  [23, '🌙', 'Добрый вечер,\nдень почти собран.'],
   [24, '🌙', 'Доброй ночи.'],
 ];
 
@@ -902,12 +902,6 @@ function renderSuggestions(items) {
 /* --- «Расскажи, что происходит»: распознали → показали → сохранили --- */
 let pendingMoment = null;
 
-function toChat(hint) {
-  toast(hint);
-  haptic();
-  setTimeout(() => tg?.close?.(), 900);
-}
-
 function openMoment() {
   pendingMoment = null;
   document.getElementById('moment-head').textContent = 'Что происходит?';
@@ -1081,6 +1075,31 @@ async function saveMoment() {
   }
 }
 
+/* --- живой фон: арт отстаёт от прокрутки --- */
+const PARALLAX_DEPTH = 0.22;   // насколько медленнее арта едет за экраном
+const PARALLAX_LIMIT = 56;     // дальше сдвигать некуда: под артом пустота
+
+function moveArt() {
+  const shift = Math.min(window.scrollY * PARALLAX_DEPTH, PARALLAX_LIMIT);
+  for (const art of document.querySelectorAll('.hero-art, .world-art')) {
+    art.style.transform = `translate3d(0, ${shift.toFixed(1)}px, 0)`;
+  }
+}
+
+function startParallax() {
+  // Кому анимация мешает — тому неподвижная картинка.
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+  let ticking = false;
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => { moveArt(); ticking = false; });
+  };
+  window.addEventListener('scroll', onScroll, { passive: true });
+  moveArt();
+}
+
 /* --- загрузка и переключение вкладок --- */
 async function refresh() {
   state = await api('/api/today');
@@ -1103,6 +1122,7 @@ function switchScreen(name) {
   // Кнопка ввода живёт на «Сегодня»: на других экранах она бы закрывала списки.
   document.getElementById('moment-open').classList.toggle('hidden-screen', name !== 'today');
   window.scrollTo(0, 0);
+  moveArt();
 
   if (name === 'progress' && !progress) refreshProgress().catch((e) => toast(e.message));
   if (name === 'gym' && !gym) refreshWorkouts().catch((e) => toast(e.message));
@@ -1141,10 +1161,7 @@ async function init() {
   };
 
   document.getElementById('moment-open').onclick = openMoment;
-  // Записать голос или снять фото умеет чат: там для этого есть всё, чего
-  // мини-приложению не даёт Telegram. Поэтому просто уходим туда.
-  document.getElementById('capture-voice').onclick = () => toChat('🎤 Зажми микрофон в чате и расскажи');
-  document.getElementById('capture-photo').onclick = () => toChat('📷 Пришли фото еды в чат');
+  startParallax();
   document.getElementById('moment-close').onclick = closeMoment;
   document.getElementById('moment-send').onclick = recognizeMoment;
   document.getElementById('moment-save').onclick = saveMoment;

@@ -41,6 +41,8 @@ VOICE_MODEL = os.getenv("VOICE_MODEL", "whisper-large-v3")
 # который выдаёт setup-webapp.sh; пока он пуст, приложение не подключается
 # и бот работает как обычно.
 WEBAPP_URL = os.getenv("WEBAPP_URL", "")
+# Подпись кнопки мини-приложения рядом с полем ввода в чате.
+WEBAPP_BUTTON = os.getenv("WEBAPP_BUTTON", "Кабинет")[:16]
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "127.0.0.1")
 WEBAPP_PORT = int(os.getenv("WEBAPP_PORT", "8080"))
 

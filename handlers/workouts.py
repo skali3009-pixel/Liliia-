@@ -52,6 +52,6 @@ async def show_workouts(message: Message) -> None:
 
     keyboard = _open_app_keyboard()
     if keyboard is None:
-        lines += ["", "Открой приложение кнопкой «Дневник» у поля ввода."]
+        lines += ["", f"Открой приложение кнопкой «{config.WEBAPP_BUTTON}» у поля ввода."]
 
     await message.answer("\n".join(lines), reply_markup=keyboard)
