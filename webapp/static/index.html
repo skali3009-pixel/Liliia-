@@ -130,9 +130,51 @@
     </section>
   </main>
 
+
+  <main id="screen-gym" class="screen" hidden>
+    <section class="stats">
+      <div class="stat"><div id="gym-count" class="stat-value">—</div>
+        <div class="stat-label">тренировок</div></div>
+      <div class="stat"><div id="gym-kcal" class="stat-value">—</div>
+        <div class="stat-label">ккал за неделю</div></div>
+    </section>
+
+    <div class="filters">
+      <div class="seg" id="place-switch">
+        <button class="seg-btn active" data-place="home">🏠 Дома</button>
+        <button class="seg-btn" data-place="gym">🏋️ В зале</button>
+      </div>
+      <div class="seg" id="level-switch">
+        <button class="seg-btn active" data-level="beginner">Новичок</button>
+        <button class="seg-btn" data-level="intermediate">Средний</button>
+      </div>
+    </div>
+
+    <section class="card">
+      <div class="card-head"><h2 id="program-title">Программа</h2>
+        <span id="program-sub" class="muted"></span></div>
+      <div id="exercises"></div>
+      <button id="finish-workout" class="btn" hidden>Записать тренировку</button>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Кардио</h2></div>
+      <div id="cardio-list"></div>
+    </section>
+  </main>
+
+  <div id="rest-overlay" class="overlay" hidden>
+    <div class="rest-card">
+      <div class="rest-label">Отдых</div>
+      <div id="rest-time" class="rest-time">60</div>
+      <button id="rest-skip" class="btn">Пропустить</button>
+    </div>
+  </div>
+
   <nav class="tabs">
-    <button class="tab active" data-screen="today">📊 Сегодня</button>
+    <button class="tab active" data-screen="today">📊 День</button>
     <button class="tab" data-screen="progress">📈 Прогресс</button>
+    <button class="tab" data-screen="gym">🏋️ Спорт</button>
     <button class="tab" data-screen="pills">💊 Добавки</button>
   </nav>
 </div>

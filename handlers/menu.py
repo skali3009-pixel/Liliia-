@@ -12,14 +12,13 @@ from aiogram import F, Router
 from aiogram.types import Message
 
 from db import get_session
-from keyboards.main_menu import MENU_WHAT_TO_EAT, MENU_WORKOUT
+from keyboards.main_menu import MENU_WHAT_TO_EAT
 from models import User
 
 router = Router(name="main_menu")
 
-# «Добавить еду», «Вода» и «Прогресс» живут в своих модулях — тут заглушки.
+# Все разделы, кроме «Что съесть», живут в своих модулях.
 _STUB_TEXT: dict[str, str] = {
-    MENU_WORKOUT: "Тренировки — в разработке 🚧",
     MENU_WHAT_TO_EAT: "Рекомендации по рациону — в разработке 🚧",
 }
 

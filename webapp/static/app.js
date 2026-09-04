@@ -409,6 +409,146 @@ async function uploadPhoto(file) {
   } catch (e) { toast(e.message); }
 }
 
+
+/* --- Тренировки -------------------------------------------------------- */
+
+let gym = null;
+let place = 'home';
+let level = 'beginner';
+const doneExercises = new Set();
+let restTimer = null;
+
+function renderWorkouts(data) {
+  const program = data.programs.find((p) => p.code === data.selected);
+  document.getElementById('program-title').textContent = program ? program.title : 'Программа';
+  document.getElementById('program-sub').textContent = program ? program.subtitle : '';
+  document.getElementById('gym-count').textContent = data.week.workouts;
+  document.getElementById('gym-kcal').textContent = data.week.calories;
+
+  const box = document.getElementById('exercises');
+  box.innerHTML = '';
+  for (const exercise of data.exercises) {
+    box.appendChild(exerciseRow(exercise));
+  }
+
+  const cardio = document.getElementById('cardio-list');
+  cardio.innerHTML = '';
+  for (const exercise of data.cardio) {
+    cardio.appendChild(exerciseRow(exercise, { cardio: true }));
+  }
+
+  updateFinishButton();
+}
+
+function exerciseRow(exercise, { cardio = false } = {}) {
+  const done = doneExercises.has(exercise.id);
+  const row = document.createElement('div');
+  row.className = 'exercise';
+
+  // Упражнение на время описывается подходами и секундами, а не повторами.
+  const load = exercise.seconds_per_set
+    ? `${exercise.sets} подхода по ${exercise.seconds_per_set} с`
+    : `${exercise.sets}×${exercise.reps}`;
+  const detail = cardio
+    ? `${exercise.minutes} мин · ~${exercise.calories} ккал`
+    : `${load} · отдых ${exercise.rest_seconds} с · ~${exercise.calories} ккал`;
+
+  row.innerHTML = `
+    <button class="ex-check${done ? ' done' : ''}">✓</button>
+    <div class="ex-main">
+      <div class="ex-name${done ? ' done' : ''}"></div>
+      <div class="ex-sub"></div>
+      <div class="ex-actions">
+        <a class="ex-link" target="_blank" rel="noopener">как делать →</a>
+        ${cardio ? '' : '<button class="ex-link rest-btn">запустить отдых</button>'}
+      </div>
+    </div>`;
+
+  row.querySelector('.ex-name').textContent = exercise.name;
+  row.querySelector('.ex-sub').textContent =
+    [exercise.muscle, detail].filter(Boolean).join(' · ');
+  row.querySelector('.ex-link').href = exercise.demo_url;
+
+  row.querySelector('.ex-check').onclick = () => {
+    if (doneExercises.has(exercise.id)) doneExercises.delete(exercise.id);
+    else {
+      doneExercises.add(exercise.id);
+      haptic();
+      // После отметки сразу предлагаем отдых — так и делают между подходами.
+      if (!cardio && exercise.rest_seconds) startRest(exercise.rest_seconds);
+    }
+    renderWorkouts(gym);
+  };
+
+  const restButton = row.querySelector('.rest-btn');
+  if (restButton) restButton.onclick = () => startRest(exercise.rest_seconds);
+
+  return row;
+}
+
+function updateFinishButton() {
+  const button = document.getElementById('finish-workout');
+  const count = doneExercises.size;
+  button.hidden = count === 0;
+  button.textContent = `Записать тренировку (${count})`;
+}
+
+function startRest(seconds) {
+  clearInterval(restTimer);
+  let left = seconds;
+
+  const overlay = document.getElementById('rest-overlay');
+  const display = document.getElementById('rest-time');
+  display.textContent = left;
+  overlay.hidden = false;
+
+  restTimer = setInterval(() => {
+    left -= 1;
+    display.textContent = Math.max(left, 0);
+    if (left <= 0) {
+      stopRest();
+      haptic('heavy');
+      tg?.HapticFeedback?.notificationOccurred?.('success');
+    }
+  }, 1000);
+}
+
+function stopRest() {
+  clearInterval(restTimer);
+  restTimer = null;
+  document.getElementById('rest-overlay').hidden = true;
+}
+
+async function refreshWorkouts() {
+  gym = await api(`/api/workouts?location=${place}&level=${level}`);
+  renderWorkouts(gym);
+}
+
+async function finishWorkout() {
+  const ids = [...doneExercises];
+  if (ids.length === 0) return;
+
+  // Для кардио спрашиваем реальное время — оно у всех разное.
+  const cardioIds = new Set(gym.cardio.map((c) => c.id));
+  let minutes = null;
+  if (ids.some((id) => cardioIds.has(id))) {
+    const answer = prompt('Сколько минут кардио?', '30');
+    if (answer === null) return;
+    minutes = Number(answer);
+  }
+
+  try {
+    const result = await api('/api/workouts/log', {
+      method: 'POST',
+      body: JSON.stringify({ exercise_ids: ids, minutes }),
+    });
+    doneExercises.clear();
+    haptic('medium');
+    toast(`Записано: ${result.minutes} мин, ${result.calories} ккал`);
+    await refreshWorkouts();
+  } catch (e) { toast(e.message); }
+}
+
 /* --- загрузка и переключение вкладок --- */
 async function refresh() {
   state = await api('/api/today');
@@ -422,9 +562,11 @@ function switchScreen(name) {
   }
   document.getElementById('screen-today').hidden = name !== 'today';
   document.getElementById('screen-progress').hidden = name !== 'progress';
+  document.getElementById('screen-gym').hidden = name !== 'gym';
   document.getElementById('screen-pills').hidden = name !== 'pills';
 
   if (name === 'progress' && !progress) refreshProgress().catch((e) => toast(e.message));
+  if (name === 'gym' && !gym) refreshWorkouts().catch((e) => toast(e.message));
 }
 
 function buildWeekdayPicker() {
@@ -480,6 +622,25 @@ async function init() {
     event.target.textContent = tableMode ? 'график' : 'таблица';
   };
   document.getElementById('m-save').onclick = saveMeasurement;
+
+  for (const button of document.querySelectorAll('#place-switch .seg-btn')) {
+    button.onclick = () => {
+      place = button.dataset.place;
+      document.querySelectorAll('#place-switch .seg-btn').forEach((b) => b.classList.remove('active'));
+      button.classList.add('active');
+      refreshWorkouts().catch((e) => toast(e.message));
+    };
+  }
+  for (const button of document.querySelectorAll('#level-switch .seg-btn')) {
+    button.onclick = () => {
+      level = button.dataset.level;
+      document.querySelectorAll('#level-switch .seg-btn').forEach((b) => b.classList.remove('active'));
+      button.classList.add('active');
+      refreshWorkouts().catch((e) => toast(e.message));
+    };
+  }
+  document.getElementById('finish-workout').onclick = finishWorkout;
+  document.getElementById('rest-skip').onclick = stopRest;
   document.getElementById('photo-input').onchange = (event) => {
     if (event.target.files[0]) uploadPhoto(event.target.files[0]);
   };

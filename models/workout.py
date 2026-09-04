@@ -52,6 +52,13 @@ class Workout(Base):
     )
     level: Mapped[LevelEnum] = mapped_column(Enum(LevelEnum, name="level_enum"), nullable=False)
 
+    # Программа — это упражнения с общим кодом, идущие по порядку.
+    program_code: Mapped[str | None] = mapped_column(String(50), index=True, nullable=True)
+    position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    muscle_group: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    # Для кардио: сколько минут длится по умолчанию.
+    duration_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     sets: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reps: Mapped[int | None] = mapped_column(Integer, nullable=True)
     rest_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)

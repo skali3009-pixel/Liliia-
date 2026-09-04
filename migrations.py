@@ -22,6 +22,10 @@ logger = logging.getLogger(__name__)
 COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
     ("users", "timezone", "VARCHAR(64) NOT NULL DEFAULT 'Europe/Moscow'"),
     ("progress_photos", "file_name", "VARCHAR(255)"),
+    ("workouts", "program_code", "VARCHAR(50)"),
+    ("workouts", "position", "INTEGER NOT NULL DEFAULT 0"),
+    ("workouts", "muscle_group", "VARCHAR(60)"),
+    ("workouts", "duration_minutes", "INTEGER"),
 ]
 
 

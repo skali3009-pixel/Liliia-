@@ -39,3 +39,9 @@ async def init_models() -> None:
 
     if applied:
         logger.info("Схема БД обновлена: %s", ", ".join(applied))
+
+    # Библиотека упражнений нужна сразу — без неё раздел тренировок пустой.
+    from seed.loader import seed_workouts
+
+    async with async_session_maker() as session:
+        await seed_workouts(session)

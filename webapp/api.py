@@ -9,7 +9,7 @@ from aiohttp import web
 
 import config
 from db import get_session
-from models import Meal, ProgressPhoto, ScheduleTypeEnum, Supplement, User
+from models import Meal, ProgressPhoto, ScheduleTypeEnum, Supplement, User, WorkoutTypeEnum
 from services.meals import get_today_totals, list_today_meals
 from services.progress import (
     MEASURE_FIELDS,
@@ -23,6 +23,14 @@ from services.progress import (
     save_photo,
 )
 from services.supplements import add_supplement, list_due_today, mark
+from services.workouts import (
+    available_programs,
+    exercise_calories,
+    exercise_minutes,
+    log_session,
+    program_exercises,
+    week_summary,
+)
 from services.water import add_water, today_total_ml, undo_last
 from utils.meal_time import MEAL_TYPE_RU
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, scale_nutrition
@@ -406,6 +414,99 @@ async def delete_photo(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def get_workouts(request: web.Request) -> web.Response:
+    """Программы под выбранные место и уровень плюс упражнения выбранной."""
+    user_id, tz = request["user_id"], request["timezone"]
+    location = request.query.get("location", "home")
+    level = request.query.get("level", "beginner")
+    program_code = request.query.get("program")
+
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        weight = user.current_weight_kg or 70
+
+        programs = available_programs(location=location, level=level)
+        chosen = program_code or (programs[0].code if programs else None)
+
+        exercises = await program_exercises(session, chosen) if chosen else []
+        cardio = await program_exercises(session, "cardio")
+        summary = await week_summary(session, user_id, timezone_name=tz)
+
+    def exercise_json(workout) -> dict:
+        return {
+            "id": workout.id,
+            "name": workout.name,
+            "muscle": workout.muscle_group or "",
+            "sets": workout.sets,
+            "reps": workout.reps,
+            "rest_seconds": workout.rest_seconds,
+            "seconds_per_set": (
+                int(workout.duration_minutes)
+                if workout.duration_minutes and workout.workout_type != WorkoutTypeEnum.CARDIO
+                else None
+            ),
+            "minutes": round(exercise_minutes(workout)),
+            "calories": round(exercise_calories(workout, weight)),
+            "demo_url": workout.demo_url,
+            "is_cardio": workout.workout_type == WorkoutTypeEnum.CARDIO,
+        }
+
+    return web.json_response(
+        {
+            "programs": [
+                {
+                    "code": p.code,
+                    "title": p.title,
+                    "subtitle": p.subtitle,
+                    "exercise_count": p.exercise_count,
+                }
+                for p in programs
+            ],
+            "selected": chosen,
+            "exercises": [exercise_json(w) for w in exercises],
+            "cardio": [exercise_json(w) for w in cardio],
+            "week": summary,
+        }
+    )
+
+
+async def post_workout_log(request: web.Request) -> web.Response:
+    """Записать выполненные упражнения и посчитать расход."""
+    body = await request.json()
+    raw_ids = body.get("exercise_ids") or []
+    if not isinstance(raw_ids, list) or not raw_ids:
+        return web.json_response({"error": "Не отмечено ни одного упражнения"}, status=400)
+
+    try:
+        exercise_ids = [int(value) for value in raw_ids][:50]
+    except (TypeError, ValueError):
+        return web.json_response({"error": "Некорректный список упражнений"}, status=400)
+
+    minutes = None
+    if body.get("minutes") not in (None, ""):
+        try:
+            minutes = float(body["minutes"])
+        except (TypeError, ValueError):
+            return web.json_response({"error": "Некорректное время"}, status=400)
+        if not 1 <= minutes <= 300:
+            return web.json_response({"error": "Время от 1 до 300 минут"}, status=400)
+
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        count, total_minutes, calories = await log_session(
+            session,
+            user_id=user.id,
+            weight_kg=user.current_weight_kg or 70,
+            exercise_ids=exercise_ids,
+            minutes=minutes,
+        )
+        summary = await week_summary(session, user.id, timezone_name=request["timezone"])
+
+    return web.json_response(
+        {"logged": count, "minutes": total_minutes, "calories": calories, "week": summary}
+    )
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -420,3 +521,5 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/photos", post_photo)
     app.router.add_get("/api/photos/{photo_id}", get_photo)
     app.router.add_delete("/api/photos/{photo_id}", delete_photo)
+    app.router.add_get("/api/workouts", get_workouts)
+    app.router.add_post("/api/workouts/log", post_workout_log)

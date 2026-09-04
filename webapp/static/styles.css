@@ -186,3 +186,33 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
 .photo-strip { display: flex; gap: 8px; overflow-x: auto; margin-top: 10px; padding-bottom: 4px; }
 .photo-strip img { height: 64px; border-radius: 9px; opacity: .55; }
 .photo-strip img.on { opacity: 1; outline: 2px solid var(--accent); }
+
+/* --- Тренировки --- */
+.exercise { display: flex; align-items: flex-start; gap: 11px; padding: 12px 0;
+            border-bottom: 1px solid var(--bg); }
+.exercise:last-of-type { border-bottom: none; }
+.ex-check {
+  width: 26px; height: 26px; flex: 0 0 26px; margin-top: 2px; border-radius: 50%;
+  border: 2px solid var(--muted); background: none; color: transparent;
+  font-size: 14px; line-height: 1; cursor: pointer;
+}
+.ex-check.done { background: var(--ok); border-color: var(--ok); color: #fff; }
+.ex-main { flex: 1; min-width: 0; }
+.ex-name { font-size: 14px; font-weight: 500; }
+.ex-name.done { color: var(--muted); text-decoration: line-through; }
+.ex-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.ex-actions { display: flex; gap: 12px; margin-top: 7px; }
+.ex-link {
+  font-size: 12px; color: var(--accent); text-decoration: none;
+  border: none; background: none; padding: 0; font-family: inherit; cursor: pointer;
+}
+
+/* Таймер отдыха закрывает экран целиком: во время паузы всё равно
+   ничего другого не делаешь, зато цифру видно с вытянутой руки. */
+.overlay {
+  position: fixed; inset: 0; z-index: 20;
+  background: var(--bg); display: flex; align-items: center; justify-content: center;
+}
+.rest-card { text-align: center; padding: 0 32px; }
+.rest-label { font-size: 15px; color: var(--muted); }
+.rest-time { font-size: 76px; font-weight: 700; letter-spacing: -2px; margin: 6px 0 22px; }

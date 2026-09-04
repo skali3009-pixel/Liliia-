@@ -259,3 +259,97 @@ def test_photo_of_another_user_is_not_readable():
             other = await call(client, "GET", f"/api/photos/{photo_id}", user_id=OTHER_ID)
             assert other.status == 404
     run(scenario)
+
+
+def _seed_workouts_sync(client):
+    """Библиотека упражнений в тестовой базе."""
+    from seed.loader import seed_workouts
+    import webapp.api as api_module
+    return api_module.get_session
+
+
+def test_workouts_returns_program_for_place_and_level():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from seed.loader import seed_workouts
+            import webapp.api as api_module
+            async with api_module.get_session() as session:
+                await seed_workouts(session)
+
+            data = await (await call(client, "GET", "/api/workouts?location=home&level=beginner")).json()
+            assert data["selected"] == "home_beginner"
+            assert len(data["exercises"]) == 6
+            first = data["exercises"][0]
+            assert first["sets"] and first["reps"] and first["rest_seconds"]
+            assert first["calories"] > 0            # расход посчитан по MET
+            assert first["demo_url"].startswith("https://")
+            assert len(data["cardio"]) == 7
+            assert data["cardio"][0]["is_cardio"] is True
+    run(scenario)
+
+
+def test_gym_program_differs_from_home():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from seed.loader import seed_workouts
+            import webapp.api as api_module
+            async with api_module.get_session() as session:
+                await seed_workouts(session)
+
+            home = await (await call(client, "GET", "/api/workouts?location=home&level=beginner")).json()
+            gym = await (await call(client, "GET", "/api/workouts?location=gym&level=beginner")).json()
+            assert home["selected"] != gym["selected"]
+            assert {e["name"] for e in home["exercises"]} != {e["name"] for e in gym["exercises"]}
+    run(scenario)
+
+
+def test_workout_log_counts_calories_and_updates_week():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from seed.loader import seed_workouts
+            import webapp.api as api_module
+            async with api_module.get_session() as session:
+                await seed_workouts(session)
+
+            data = await (await call(client, "GET", "/api/workouts")).json()
+            ids = [e["id"] for e in data["exercises"][:3]]
+
+            result = await (await call(client, "POST", "/api/workouts/log",
+                                       json_body={"exercise_ids": ids})).json()
+            assert result["logged"] == 3
+            assert result["calories"] > 0
+            assert result["minutes"] > 0
+            assert result["week"]["workouts"] == 1      # одна тренировка за неделю
+            assert result["week"]["exercises"] == 3
+    run(scenario)
+
+
+def test_workout_log_requires_exercises():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/workouts/log",
+                                  json_body={"exercise_ids": []})
+            assert response.status == 400
+    run(scenario)
+
+
+def test_cardio_minutes_are_validated():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from seed.loader import seed_workouts
+            import webapp.api as api_module
+            async with api_module.get_session() as session:
+                await seed_workouts(session)
+
+            data = await (await call(client, "GET", "/api/workouts")).json()
+            cardio_id = data["cardio"][0]["id"]
+
+            response = await call(client, "POST", "/api/workouts/log",
+                                  json_body={"exercise_ids": [cardio_id], "minutes": 999})
+            assert response.status == 400
+
+            result = await (await call(client, "POST", "/api/workouts/log",
+                                       json_body={"exercise_ids": [cardio_id], "minutes": 45})).json()
+            # Ходьба (MET 4.3) 45 минут при весе 60 кг ≈ 190 ккал.
+            assert 150 < result["calories"] < 250
+    run(scenario)
