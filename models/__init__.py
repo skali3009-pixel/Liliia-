@@ -6,6 +6,7 @@ workout_log, body_measurements, progress_photos, achievements)."""
 from models.achievement import Achievement
 from models.base import Base
 from models.body import BodyMeasurement, ProgressPhoto
+from models.checkin import Checkin
 from models.day_stat import DayStat
 from models.meal import Meal, MealSourceEnum, MealTypeEnum
 from models.user import (
@@ -39,6 +40,7 @@ __all__ = [
     "ProgressPhoto",
     "Achievement",
     "DayStat",
+    "Checkin",
     "Supplement",
     "SupplementLog",
     "ScheduleTypeEnum",

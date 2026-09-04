@@ -37,6 +37,116 @@ function haptic(type = 'light') {
 }
 
 /* --- отрисовка --- */
+// Время суток и род слова: «спокойное утро», но «спокойный вечер».
+const DAY_TITLES = [
+  [5, 'Ночь', 'f'], [9, 'Утро', 'n'], [12, 'День', 'm'],
+  [17, 'Вечер', 'm'], [24, 'Вечер', 'm'],
+];
+const TONES = {
+  'спокойно': ['Спокойное', 'Спокойный', 'Спокойная'],
+  'бодро': ['Бодрое', 'Бодрый', 'Бодрая'],
+  'радостно': ['Светлое', 'Светлый', 'Светлая'],
+  'устала': ['Тихое', 'Тихий', 'Тихая'],
+  'тревожно': ['Тревожное', 'Тревожный', 'Тревожная'],
+  'грустно': ['Тихое', 'Тихий', 'Тихая'],
+  'раздражённо': ['Колючее', 'Колючий', 'Колючая'],
+};
+
+function dayTitle(state) {
+  const hour = new Date().getHours();
+  const [, base, gender] = DAY_TITLES.find(([until]) => hour < until) || DAY_TITLES[1];
+  // Настроение делает заголовок личным: «Спокойное утро» вместо «Утро».
+  const tone = TONES[state?.mood];
+  if (!tone) return base;
+  return `${tone[{ n: 0, m: 1, f: 2 }[gender]]} ${base.toLowerCase()}`;
+}
+
+function renderHero(data) {
+  const state = data.state || {};
+  document.getElementById('hero-title').textContent = dayTitle(state);
+
+  const parts = [];
+  if (state.sleep_minutes) {
+    const h = Math.floor(state.sleep_minutes / 60);
+    const m = state.sleep_minutes % 60;
+    parts.push(`Сон ${h} ч ${String(m).padStart(2, '0')} м`);
+  }
+  if (state.energy) parts.push(`Энергия ${state.energy}/10`);
+  parts.push(`${data.totals.calories} из ${data.norms.calories} ккал`);
+  document.getElementById('hero-sub').textContent = parts.join(' · ');
+
+  const tiles = [
+    { icon: '⚡', label: 'Энергия', value: state.energy ? `${state.energy}` : null, suffix: '/10' },
+    { icon: '🤍', label: 'Настроение', value: state.mood || null, text: true },
+    { icon: '🎯', label: 'Фокус', value: state.focus ? `${state.focus}` : null, suffix: '/10' },
+    { icon: '〰️', label: 'Стресс', value: state.stress || null, text: true },
+  ];
+  const grid = document.getElementById('state-grid');
+  grid.innerHTML = '';
+  for (const tile of tiles) {
+    const box = document.createElement('div');
+    box.className = 'state';
+    const filled = tile.value !== null;
+    box.innerHTML = `
+      <div class="state-icon"></div>
+      <div class="state-value"></div>
+      <div class="state-label"></div>`;
+    box.querySelector('.state-icon').textContent = tile.icon;
+    const value = box.querySelector('.state-value');
+    value.textContent = filled ? tile.value + (tile.suffix || '') : '—';
+    value.classList.toggle('text', Boolean(tile.text) && filled);
+    value.classList.toggle('empty', !filled);
+    box.querySelector('.state-label').textContent = tile.label;
+    grid.appendChild(box);
+  }
+}
+
+function renderTimeline(events) {
+  const box = document.getElementById('timeline');
+  box.innerHTML = events.length
+    ? ''
+    : '<div class="empty">День ещё пустой. Расскажи, что происходит 👇</div>';
+  document.getElementById('timeline-count').textContent =
+    events.length ? `${events.length} ${plural(events.length, 'событие', 'события', 'событий')}` : '';
+
+  for (const event of events) {
+    const row = document.createElement('div');
+    row.className = 'event';
+    row.dataset.kind = event.kind;
+    row.innerHTML = `
+      <div class="event-dot"></div>
+      <div class="event-main">
+        <div class="event-time"></div>
+        <div class="event-title"></div>
+        <div class="event-sub"></div>
+      </div>
+      <div class="event-value"></div>`;
+    row.querySelector('.event-dot').textContent = event.icon;
+    row.querySelector('.event-time').textContent = event.time;
+    row.querySelector('.event-title').textContent = event.title;
+    row.querySelector('.event-sub').textContent = event.subtitle;
+    row.querySelector('.event-value').textContent = event.value;
+
+    // Еду можно поправить прямо в ленте — остальные события правятся там,
+    // где их создали.
+    if (event.kind === 'meal' && event.id) {
+      const meal = (state?.meals || []).find((item) => item.id === event.id);
+      if (meal) {
+        const actions = document.createElement('div');
+        actions.className = 'event-actions';
+        actions.innerHTML = `
+          <button class="icon-btn" title="Изменить вес">✎</button>
+          <button class="icon-btn" title="Удалить">🗑</button>`;
+        const [editBtn, deleteBtn] = actions.querySelectorAll('.icon-btn');
+        editBtn.onclick = () => editWeight(meal);
+        deleteBtn.onclick = () => removeMeal(meal);
+        row.appendChild(actions);
+      }
+    }
+    box.appendChild(row);
+  }
+}
+
 function renderToday(data) {
   const { totals, norms, meals } = data;
 
@@ -73,32 +183,8 @@ function renderToday(data) {
   document.getElementById('bar-water').style.width =
     norms.water_ml ? `${Math.min((totals.water_ml / norms.water_ml) * 100, 100)}%` : '0%';
 
-  const list = document.getElementById('meals');
-  list.innerHTML = meals.length
-    ? ''
-    : '<div class="empty">Пока пусто. Пришли боту фото еды 📷</div>';
-
-  for (const meal of meals) {
-    const row = document.createElement('div');
-    row.className = 'meal';
-    row.innerHTML = `
-      <div class="meal-main">
-        <div class="meal-name"></div>
-        <div class="meal-sub"></div>
-      </div>
-      <div class="meal-kcal">${meal.calories}</div>
-      <button class="icon-btn" title="Изменить вес">✎</button>
-      <button class="icon-btn" title="Удалить">🗑</button>`;
-    row.querySelector('.meal-name').textContent = meal.name;
-    row.querySelector('.meal-sub').textContent =
-      `${meal.time} · ${meal.weight_g} г · Б ${meal.protein_g} Ж ${meal.fat_g} У ${meal.carbs_g}` +
-      (meal.fiber_g ? ` · 🥦 ${meal.fiber_g}` : '');
-
-    const [editBtn, deleteBtn] = row.querySelectorAll('.icon-btn');
-    editBtn.onclick = () => editWeight(meal);
-    deleteBtn.onclick = () => removeMeal(meal);
-    list.appendChild(row);
-  }
+  renderHero(data);
+  renderTimeline(data.timeline || []);
 }
 
 /* --- игра: уровень, кристалл, задания дня --- */
@@ -164,8 +250,21 @@ function renderAwards(awards) {
     tile.querySelector('.a-goal').textContent = award.goal;
     box.appendChild(tile);
   }
-  document.getElementById('award-count').textContent =
-    `${awards.filter((a) => a.earned).length} из ${awards.length}`;
+  const earned = awards.filter((a) => a.earned).length;
+  document.getElementById('award-count').textContent = `${earned} из ${awards.length}`;
+
+  // Подсказываем ровно одно следующее открытие: список целей целиком
+  // превращается в список долгов.
+  const next = awards.find((a) => !a.earned);
+  document.getElementById('award-next').textContent =
+    next ? `Следующее открытие: ${next.title} — ${next.goal}.` : 'Все открытия собраны.';
+
+  const world = document.getElementById('world-sub');
+  if (world) {
+    world.textContent = earned
+      ? `Открыто ${earned} ${plural(earned, 'место', 'места', 'мест')} из ${awards.length}. Мир растёт с каждым закрытым заданием.`
+      : 'Пока пусто. Закрой первое задание дня — и мир начнёт открываться.';
+  }
 }
 
 /* Награда — редкое событие, поэтому единственное окно в приложении.
@@ -468,7 +567,6 @@ async function refreshProgress() {
   document.getElementById('stat-change').textContent =
     s.changed > 0 ? `+${fmt(s.changed)}` : fmt(s.changed || 0);
   document.getElementById('stat-streak').textContent = s.streak;
-  renderAwards(progress.awards);
   document.getElementById('chart-title').textContent = progress.title;
 
   buildChart(progress);
@@ -758,11 +856,87 @@ function renderSuggestions(items) {
   }
 }
 
+/* --- «Расскажи, что происходит»: распознали → показали → сохранили --- */
+let pendingMoment = null;
+
+function openMoment() {
+  pendingMoment = null;
+  document.getElementById('moment-head').textContent = 'Что происходит?';
+  document.getElementById('moment-input').hidden = false;
+  document.getElementById('moment-result').hidden = true;
+  document.getElementById('moment-sheet').hidden = false;
+  document.getElementById('moment-text').focus();
+}
+
+function closeMoment() {
+  document.getElementById('moment-sheet').hidden = true;
+  document.getElementById('moment-text').value = '';
+  pendingMoment = null;
+}
+
+async function recognizeMoment() {
+  const text = document.getElementById('moment-text').value.trim();
+  if (!text) { toast('Напиши пару слов'); return; }
+
+  const button = document.getElementById('moment-send');
+  button.disabled = true;
+  button.textContent = 'Разбираю…';
+  try {
+    const data = await api('/api/moment', { method: 'POST', body: JSON.stringify({ text }) });
+    pendingMoment = data.moment;
+
+    document.getElementById('moment-head').textContent = data.summary || 'Проверь момент';
+    document.getElementById('moment-quote').textContent = `«${text}»`;
+
+    const box = document.getElementById('moment-facts');
+    box.innerHTML = '';
+    for (const fact of data.facts) {
+      const row = document.createElement('div');
+      row.className = 'fact';
+      row.innerHTML = `<div class="fact-icon"></div><div class="fact-label"></div>
+                       <div class="fact-value"></div>`;
+      row.querySelector('.fact-icon').textContent = fact.icon;
+      row.querySelector('.fact-label').textContent = fact.label;
+      row.querySelector('.fact-value').textContent = fact.value;
+      box.appendChild(row);
+    }
+
+    document.getElementById('moment-input').hidden = true;
+    document.getElementById('moment-result').hidden = false;
+    haptic();
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = 'Распознать';
+  }
+}
+
+async function saveMoment() {
+  if (!pendingMoment) return;
+  const button = document.getElementById('moment-save');
+  button.disabled = true;
+  try {
+    const result = await api('/api/moment/confirm', {
+      method: 'POST', body: JSON.stringify({ moment: pendingMoment }),
+    });
+    closeMoment();
+    haptic('medium');
+    toast(result.saved.length ? `Записала: ${result.saved.join(' и ')}` : 'Записала');
+    await refresh();
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
 /* --- загрузка и переключение вкладок --- */
 async function refresh() {
   state = await api('/api/today');
   renderToday(state);
   renderGame(state.game);
+  renderAwards(state.game?.awards);
   renderPills(state.supplements);
   // Награда и закрытое задание приходят от сервера ровно один раз — если не
   // показать их сейчас, пользователь о них не узнает.
@@ -773,10 +947,12 @@ function switchScreen(name) {
   for (const tab of document.querySelectorAll('.tab')) {
     tab.classList.toggle('active', tab.dataset.screen === name);
   }
-  document.getElementById('screen-today').hidden = name !== 'today';
-  document.getElementById('screen-progress').hidden = name !== 'progress';
-  document.getElementById('screen-gym').hidden = name !== 'gym';
-  document.getElementById('screen-pills').hidden = name !== 'pills';
+  for (const screen of ['today', 'world', 'gym', 'progress']) {
+    document.getElementById(`screen-${screen}`).hidden = screen !== name;
+  }
+  // Кнопка ввода живёт на «Сегодня»: на других экранах она бы закрывала списки.
+  document.getElementById('moment-open').classList.toggle('hidden-screen', name !== 'today');
+  window.scrollTo(0, 0);
 
   if (name === 'progress' && !progress) refreshProgress().catch((e) => toast(e.message));
   if (name === 'gym' && !gym) refreshWorkouts().catch((e) => toast(e.message));
@@ -809,6 +985,20 @@ async function init() {
     await refresh();
   };
   document.getElementById('pill-add').onclick = addPill;
+  document.getElementById('pill-form-toggle').onclick = () => {
+    const form = document.getElementById('pill-form');
+    form.hidden = !form.hidden;
+  };
+
+  document.getElementById('moment-open').onclick = openMoment;
+  document.getElementById('moment-close').onclick = closeMoment;
+  document.getElementById('moment-send').onclick = recognizeMoment;
+  document.getElementById('moment-save').onclick = saveMoment;
+  document.getElementById('moment-edit').onclick = () => {
+    document.getElementById('moment-input').hidden = false;
+    document.getElementById('moment-result').hidden = true;
+    document.getElementById('moment-head').textContent = 'Что происходит?';
+  };
   for (const tab of document.querySelectorAll('.tab')) {
     tab.onclick = () => switchScreen(tab.dataset.screen);
   }

@@ -12,9 +12,11 @@ import config
 from db import get_session
 from models import (Meal, MealSourceEnum, ProgressPhoto, ScheduleTypeEnum, Supplement, User,
                     WorkoutTypeEnum)
+from services.checkins import save_checkin, today_state
 from services.food_vision import FoodAnalysis, FoodRecognitionError
 from services.gamification import awards_summary, sync_today
 from services.meals import get_today_totals, list_today_meals, save_meal
+from services.moments import Moment, analyze_moment, facts as moment_facts
 from services.progress import (
     MEASURE_FIELDS,
     add_measurement,
@@ -27,6 +29,7 @@ from services.progress import (
     save_photo,
 )
 from services.suggestions import suggest_meals
+from services.timeline import day_timeline
 from services.supplements import add_supplement, list_due_today, mark
 from services.workouts import (
     available_programs,
@@ -126,6 +129,8 @@ async def get_today(request: web.Request) -> web.Response:
         meals = await list_today_meals(session, user_id, timezone_name=tz)
         water = await today_total_ml(session, user_id, timezone_name=tz)
         supplements = await list_due_today(session, user_id, timezone_name=tz)
+        state = await today_state(session, user_id, timezone_name=tz)
+        timeline = await day_timeline(session, user_id, timezone_name=tz)
         game = await sync_today(
             session,
             user,
@@ -162,6 +167,14 @@ async def get_today(request: web.Request) -> web.Response:
                 },
                 "meals": [_meal_json(m, tz) for m in meals],
                 "supplements": [_supplement_json(s) for s in supplements],
+                "state": {
+                    "energy": state.energy,
+                    "focus": state.focus,
+                    "mood": state.mood,
+                    "stress": state.stress,
+                    "sleep_minutes": state.sleep_minutes,
+                },
+                "timeline": timeline,
                 "game": game,
             }
         )
@@ -624,6 +637,104 @@ async def post_meal(request: web.Request) -> web.Response:
     return web.json_response({"ok": True, "calories_today": round(totals.calories)})
 
 
+async def post_moment(request: web.Request) -> web.Response:
+    """Свободная фраза → распознанные факты. Ничего пока не сохраняем."""
+    body = await request.json()
+    text = str(body.get("text", "")).strip()
+    if not text:
+        return web.json_response({"error": "Расскажи, что происходит"}, status=400)
+    if len(text) > 500:
+        return web.json_response({"error": "Слишком длинно — уложись в 500 символов"}, status=400)
+
+    now = datetime.now(get_zone(request["timezone"]))
+    try:
+        moment = await analyze_moment(text, now=now)
+    except FoodRecognitionError as e:
+        return web.json_response({"error": str(e)}, status=503)
+
+    if moment.is_empty:
+        return web.json_response(
+            {"error": "Не нашла здесь ни еды, ни самочувствия. Скажи чуть подробнее."},
+            status=422,
+        )
+
+    return web.json_response({
+        "moment": moment.to_dict(),
+        "facts": moment_facts(moment),
+        "summary": moment.summary,
+    })
+
+
+async def confirm_moment(request: web.Request) -> web.Response:
+    """Сохранить подтверждённый момент: еду, состояние или и то, и другое."""
+    body = await request.json()
+    try:
+        moment = Moment.from_dict(body["moment"])
+    except (KeyError, TypeError, ValueError):
+        return web.json_response({"error": "Момент устарел, повтори ввод"}, status=400)
+
+    user_id, tz = request["user_id"], request["timezone"]
+    saved = []
+
+    async with get_session() as session:
+        if moment.food:
+            await save_meal(
+                session,
+                user_id=user_id,
+                analysis=moment.food,
+                source=MealSourceEnum.TEXT,
+                meal_type=guess_meal_type(datetime.now(get_zone(tz))),
+            )
+            saved.append("еда")
+        if moment.has_state:
+            await save_checkin(
+                session,
+                user_id=user_id,
+                energy=moment.energy,
+                focus=moment.focus,
+                mood=moment.mood,
+                stress=moment.stress,
+                sleep_minutes=moment.sleep_minutes,
+                note=moment.text,
+            )
+            saved.append("самочувствие")
+
+    return web.json_response({"saved": saved})
+
+
+async def post_checkin(request: web.Request) -> web.Response:
+    """Отметить состояние кнопками, без разбора текста."""
+    body = await request.json()
+
+    def score(key: str) -> int | None:
+        raw = body.get(key)
+        if raw in (None, ""):
+            return None
+        try:
+            value = int(raw)
+        except (TypeError, ValueError):
+            return None
+        return value if 1 <= value <= 10 else None
+
+    def choice(key: str, allowed: list[str]) -> str | None:
+        value = str(body.get(key, "")).strip().lower()
+        return value if value in allowed and value else None
+
+    from services.moments import MOODS, STRESS_LEVELS
+
+    energy, focus = score("energy"), score("focus")
+    mood, stress = choice("mood", MOODS), choice("stress", STRESS_LEVELS)
+    if not any((energy, focus, mood, stress)):
+        return web.json_response({"error": "Нечего сохранять"}, status=400)
+
+    async with get_session() as session:
+        await save_checkin(
+            session, user_id=request["user_id"], energy=energy, focus=focus,
+            mood=mood, stress=stress,
+        )
+    return web.json_response({"ok": True})
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -642,3 +753,6 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/workouts/log", post_workout_log)
     app.router.add_post("/api/suggestions", post_suggestions)
     app.router.add_post("/api/meals", post_meal)
+    app.router.add_post("/api/moment", post_moment)
+    app.router.add_post("/api/moment/confirm", confirm_moment)
+    app.router.add_post("/api/checkin", post_checkin)

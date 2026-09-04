@@ -32,8 +32,10 @@ from services.food_vision import (
     analyze_photo,
     analyze_text,
 )
+from services.checkins import save_checkin
 from services.gamification import sync_today
 from services.meals import get_today_totals, list_today_meals, save_meal
+from services.moments import Moment, analyze_moment
 from services.transcription import TranscriptionError, VoiceNotConfigured, transcribe
 from services.water import today_total_ml
 from states.food import FoodStates
@@ -141,7 +143,8 @@ async def start_adding_food(message: Message, state: FSMContext) -> None:
     await state.set_state(FoodStates.waiting_input)
     await message.answer(
         "Пришли фото блюда 📷 — распознаю и посчитаю КБЖУ.\n"
-        "Или наговори голосовым 🎤, или напиши текстом: «омлет из трёх яиц с сыром»."
+        "Или расскажи словами — голосовым 🎤 или текстом: «позавтракала омлетом "
+        "из трёх яиц, чувствую себя бодрее». Запишу и еду, и самочувствие."
     )
 
 
@@ -202,39 +205,84 @@ async def handle_food_voice(message: Message, state: FSMContext) -> None:
         await status.edit_text("Не получилось разобрать голосовое. Попробуй ещё раз или напиши текстом.")
         return
 
-    await status.edit_text(f"🎤 Услышал: {spoken}\n\n🔍 Считаю КБЖУ…")
+    await status.edit_text(f"🎤 Услышал: {spoken}\n\n🔍 Разбираю…")
 
     try:
-        analysis = await analyze_text(spoken)
+        moment = await analyze_moment(spoken, now=datetime.now(get_zone(DEFAULT_TIMEZONE)))
     except FoodRecognitionError as e:  # включая «нет ключа» и «не видно еды»
         await status.edit_text(f"🎤 Услышал: {spoken}\n\n{e}")
         return
     except Exception:
-        logger.exception("Ошибка расчёта КБЖУ по голосовому сообщению")
+        logger.exception("Ошибка разбора голосового сообщения")
         await status.edit_text(GENERIC_ERROR)
         return
 
-    await status.delete()
-    await _show_card(message, state, analysis, photo_file_id=None)
+    await _handle_moment(message, state, moment, status)
 
 
 @router.message(FoodStates.waiting_input, F.text)
 async def handle_food_text(message: Message, state: FSMContext) -> None:
-    status = await message.answer("🔍 Считаю КБЖУ…")
+    status = await message.answer("🔍 Разбираю…")
     await message.bot.send_chat_action(message.chat.id, "typing")
 
     try:
-        analysis = await analyze_text(message.text)
+        moment = await analyze_moment(message.text, now=datetime.now(get_zone(DEFAULT_TIMEZONE)))
     except FoodRecognitionError as e:  # включая «нет ключа» и «не видно еды»
         await status.edit_text(str(e))
         return
     except Exception:
-        logger.exception("Ошибка распознавания еды по тексту")
+        logger.exception("Ошибка разбора сообщения")
         await status.edit_text(GENERIC_ERROR)
         return
 
+    await _handle_moment(message, state, moment, status)
+
+
+def _render_state_line(moment: Moment) -> str:
+    """Что записали из самочувствия — одной строкой."""
+    parts = []
+    if moment.energy:
+        parts.append(f"⚡ энергия {moment.energy}/10")
+    if moment.focus:
+        parts.append(f"🎯 фокус {moment.focus}/10")
+    if moment.mood:
+        parts.append(f"🤍 настроение: {moment.mood}")
+    if moment.stress:
+        parts.append(f"〰️ стресс {moment.stress}")
+    if moment.sleep_minutes:
+        hours, minutes = divmod(moment.sleep_minutes, 60)
+        parts.append(f"🌙 сон {hours} ч {minutes:02d} м")
+    return ", ".join(parts)
+
+
+async def _handle_moment(message: Message, state: FSMContext, moment: Moment, status) -> None:
+    """Самочувствие записываем сразу, еду — через карточку с коррекцией."""
+    saved_state = ""
+    if moment.has_state:
+        async with get_session() as session:
+            await save_checkin(
+                session,
+                user_id=message.from_user.id,
+                energy=moment.energy,
+                focus=moment.focus,
+                mood=moment.mood,
+                stress=moment.stress,
+                sleep_minutes=moment.sleep_minutes,
+                note=moment.text,
+            )
+        saved_state = _render_state_line(moment)
+
+    if moment.food is None:
+        await status.edit_text(
+            f"✅ Записала: {saved_state}" if saved_state
+            else "Не нашла здесь ни еды, ни самочувствия. Скажи чуть подробнее."
+        )
+        return
+
     await status.delete()
-    await _show_card(message, state, analysis, photo_file_id=None)
+    if saved_state:
+        await message.answer(f"✅ Записала: {saved_state}")
+    await _show_card(message, state, moment.food, photo_file_id=None)
 
 
 async def _load_analysis(state: FSMContext) -> FoodAnalysis | None:

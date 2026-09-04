@@ -25,7 +25,8 @@
   --warn: #F5B544;
   --over: #FF6B6B;
 
-  --display: 'Unbounded', 'SF Pro Display', -apple-system, sans-serif;
+  --gold: #C9A961;
+  --display: 'Playfair Display', 'Times New Roman', Georgia, serif;
   --body: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
   --radius: 20px;
@@ -40,17 +41,30 @@
 
 body {
   margin: 0;
-  padding: 0 16px calc(76px + env(safe-area-inset-bottom)) 16px;
+  /* Снизу оставлено место под вкладки и кнопку «Расскажи, что происходит». */
+  padding: 0 16px calc(148px + env(safe-area-inset-bottom)) 16px;
   background: var(--bg);
   color: var(--fg);
   font: 500 15px/1.45 var(--body);
   -webkit-font-smoothing: antialiased;
 }
 
-/* Крупные числа — акцидентным шрифтом: он и есть характер приложения. */
-.kcal-value, .stat-value, .rest-time, .dial-val, .hud-level, .pop-title {
+/* Сериф — только для крупных заголовков-обращений: он задаёт тон, но
+   в данных мешает, поэтому числа остаются гротеском. */
+.hero-title, .world-title, .pop-title, .quote {
   font-family: var(--display);
-  font-weight: 600;
+  font-weight: 500;
+  letter-spacing: -.01em;
+}
+.kcal-value, .stat-value, .rest-time, .dial-val, .hud-level {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Надпись-указатель над заголовком: маленькая, разрядкой, золотом. */
+.eyebrow {
+  font-size: 10px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 6px;
 }
 
 .center { display: flex; height: 70vh; align-items: center; justify-content: center; color: var(--muted); }
@@ -118,6 +132,14 @@ h2 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
   font-size: 15px; font-family: inherit;
 }
 .input::placeholder { color: var(--muted); }
+/* Фокус виден, но своим цветом, а не системной белой рамкой. */
+.input:focus, .input:focus-visible {
+  outline: none; border-color: var(--violet);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, .25);
+}
+button:focus-visible, .tab:focus-visible {
+  outline: 2px solid var(--lilac); outline-offset: 2px;
+}
 
 /* Список еды */
 .meal { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--bg); }
@@ -426,3 +448,130 @@ h2 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
 @media (prefers-reduced-motion: reduce) {
   * { animation: none !important; transition: none !important; }
 }
+
+/* --- Шапка-герой и «Мой мир» --- */
+
+/* Арт лежит в /static/img/. Если картинки нет, остаётся градиент —
+   приложение выглядит целым и без неё. */
+.hero, .world-hero {
+  position: relative; margin: 0 -16px 0; padding: 0;
+  border-bottom: 1px solid var(--stroke); overflow: hidden;
+}
+.hero-art, .world-art {
+  position: absolute; inset: 0;
+  background-position: center top; background-size: cover;
+  background-image: url('/static/img/hero.png'),
+    radial-gradient(1px 1px at 18% 22%, rgba(255, 255, 255, .5), transparent),
+    radial-gradient(1px 1px at 62% 12%, rgba(255, 255, 255, .35), transparent),
+    radial-gradient(1.5px 1.5px at 82% 30%, rgba(196, 181, 253, .6), transparent),
+    radial-gradient(1px 1px at 35% 38%, rgba(255, 255, 255, .3), transparent),
+    radial-gradient(120% 90% at 70% 10%, #2A2450 0%, #17132C 45%, var(--void) 100%);
+}
+.world-art {
+  background-image: url('/static/img/world.png'),
+    radial-gradient(1.5px 1.5px at 22% 18%, rgba(196, 181, 253, .7), transparent),
+    radial-gradient(1px 1px at 68% 10%, rgba(255, 255, 255, .45), transparent),
+    radial-gradient(1px 1px at 45% 30%, rgba(255, 255, 255, .35), transparent),
+    radial-gradient(1.5px 1.5px at 84% 24%, rgba(196, 181, 253, .5), transparent),
+    radial-gradient(120% 90% at 30% 20%, #2E2657 0%, #191333 50%, var(--void) 100%);
+}
+/* Затемнение снизу — чтобы текст читался поверх любой картинки. */
+.hero::after, .world-hero::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(10, 9, 18, .25) 0%, rgba(10, 9, 18, .1) 30%,
+              rgba(10, 9, 18, .82) 72%, var(--void) 100%);
+}
+.hero-body, .world-body { position: relative; z-index: 1; padding: 132px 16px 16px; }
+.world-body { padding-top: 200px; }
+.hero-title { font-size: 30px; margin: 0; }
+.world-title { font-size: 32px; margin: 0; }
+.hero-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.world-sub { font-size: 13px; color: var(--muted); margin: 8px 0 0; max-width: 22em; }
+
+.hud { display: flex; align-items: center; gap: 12px; margin-top: 16px;
+       padding: 12px 14px; border-radius: 16px;
+       background: rgba(21, 19, 39, .72); border: 1px solid var(--stroke);
+       backdrop-filter: blur(8px); }
+
+/* --- Плитки состояния --- */
+.state-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+.state {
+  padding: 12px 8px; border-radius: 16px; text-align: center;
+  background: var(--surface); border: 1px solid var(--stroke);
+}
+.state-icon { font-size: 15px; line-height: 1; }
+.state-value { font-size: 17px; font-weight: 700; margin-top: 6px; }
+.state-value.text { font-size: 13px; font-weight: 600; }
+.state-value.empty { color: var(--muted); font-weight: 500; }
+.state-label { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+/* --- Лента дня --- */
+.event { display: flex; gap: 12px; padding: 0 0 14px; position: relative; }
+.event:last-child { padding-bottom: 0; }
+/* Линия соединяет кружки событий и обрывается на последнем. */
+.event:not(:last-child)::before {
+  content: ''; position: absolute; left: 17px; top: 38px; bottom: 0; width: 1px;
+  background: var(--stroke);
+}
+.event-dot {
+  width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%;
+  background: var(--surface-2); border: 1px solid var(--stroke);
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.event[data-kind="state"] .event-dot { border-color: rgba(196, 181, 253, .5); }
+.event[data-kind="workout"] .event-dot { border-color: rgba(45, 212, 191, .5); }
+.event-main { flex: 1; min-width: 0; padding-top: 1px; }
+.event-time { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.event-title { font-size: 14px; font-weight: 600; margin-top: 1px; }
+.event-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.event-value { font-size: 13px; font-weight: 700; white-space: nowrap; padding-top: 14px;
+               font-variant-numeric: tabular-nums; }
+
+/* --- Кнопка «Расскажи, что происходит» --- */
+.say {
+  position: fixed; left: 16px; right: 16px; z-index: 9;
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  padding: 15px 18px; border-radius: 18px; cursor: pointer;
+  border: 1px solid rgba(196, 181, 253, .55);
+  background: linear-gradient(135deg, rgba(139, 92, 246, .96), rgba(79, 70, 229, .96));
+  color: #fff; font-family: inherit; font-size: 15px; font-weight: 600;
+  box-shadow: 0 12px 34px rgba(88, 44, 190, .45);
+}
+.say:active { transform: scale(.99); }
+.say-spark { color: var(--gold); margin-right: 6px; }
+/* Кнопка нужна только на «Сегодня» — на других экранах она бы перекрывала списки. */
+.say.hidden-screen { display: none; }
+
+/* --- Лист «Что происходит» --- */
+.sheet {
+  position: fixed; inset: 0; z-index: 25; display: flex; align-items: flex-end;
+  background: rgba(6, 5, 12, .72); backdrop-filter: blur(6px);
+}
+.sheet-card {
+  width: 100%; max-height: 88vh; overflow-y: auto;
+  padding: 18px 16px calc(20px + env(safe-area-inset-bottom));
+  border-radius: 26px 26px 0 0; border: 1px solid var(--stroke); border-bottom: none;
+  background: linear-gradient(180deg, #1B1734, var(--surface));
+  animation: sheet-up .28s cubic-bezier(.22, 1, .36, 1);
+}
+@keyframes sheet-up { from { transform: translateY(16%); } to { transform: translateY(0); } }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.sheet-head h2 { font-size: 17px; }
+.input.area { resize: none; line-height: 1.4; font-family: inherit; }
+
+.quote {
+  font-size: 16px; font-style: italic; color: var(--lilac);
+  padding: 4px 0 14px; line-height: 1.4;
+}
+.facts { margin-bottom: 14px; }
+.fact { display: flex; align-items: center; gap: 11px; padding: 11px 0;
+        border-bottom: 1px solid var(--void); }
+.fact:last-child { border-bottom: none; }
+.fact-icon { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 10px;
+             background: var(--surface-2); border: 1px solid var(--stroke);
+             display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.fact-label { flex: 1; font-size: 13px; color: var(--muted); }
+.fact-value { font-size: 14px; font-weight: 600; text-align: right; }
+.btn.narrow { flex: 1; margin-top: 0; }
+.row .chip { flex: 0 0 40%; }
+.event-actions { display: flex; align-items: flex-start; padding-top: 10px; }

@@ -146,6 +146,83 @@ def test_closing_a_quest_gives_xp_and_a_streak():
     run(scenario)
 
 
+def test_moment_is_recognized_but_not_saved_until_confirmed():
+    """Догадки модели человек должен увидеть до записи в дневник."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            import webapp.api as api_module
+            from services.moments import build_moment
+
+            payload = {
+                "summary": "Завтрак", "food_name": "Овсянка", "weight_g": 250,
+                "calories": 320, "protein_g": 9, "fat_g": 7, "carbs_g": 49, "fiber_g": 6,
+                "energy": 7, "focus": 0, "mood": "бодро", "stress": "", "sleep_hours": 0,
+                "comment": "порция каши",
+            }
+
+            async def fake_analyze(text, **kwargs):
+                return build_moment(payload, text=text)
+
+            original = api_module.analyze_moment
+            api_module.analyze_moment = fake_analyze
+            try:
+                before = await (await call(client, "GET", "/api/today")).json()
+
+                data = await (await call(client, "POST", "/api/moment", json_body={
+                    "text": "Позавтракала овсянкой, чувствую себя бодрее"})).json()
+                assert data["summary"] == "Завтрак"
+                assert {row["label"] for row in data["facts"]} >= {"Еда", "Энергия", "Настроение"}
+
+                # Пока не подтвердили — в дневнике ничего не прибавилось.
+                middle = await (await call(client, "GET", "/api/today")).json()
+                assert middle["totals"]["calories"] == before["totals"]["calories"]
+
+                saved = await (await call(client, "POST", "/api/moment/confirm",
+                                          json_body={"moment": data["moment"]})).json()
+                assert saved["saved"] == ["еда", "самочувствие"]
+
+                after = await (await call(client, "GET", "/api/today")).json()
+                assert after["totals"]["calories"] == before["totals"]["calories"] + 320
+                assert after["state"]["energy"] == 7
+                assert after["state"]["mood"] == "бодро"
+                # Съеденное и самочувствие встали в ленту дня.
+                kinds = {event["kind"] for event in after["timeline"]}
+                assert {"meal", "state"} <= kinds
+            finally:
+                api_module.analyze_moment = original
+    run(scenario)
+
+
+def test_moment_without_text_is_rejected():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/moment", json_body={"text": "  "})
+            assert response.status == 400
+    run(scenario)
+
+
+def test_checkin_saves_state_tiles():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/checkin",
+                                  json_body={"energy": 8, "mood": "спокойно"})
+            assert response.status == 200
+
+            data = await (await call(client, "GET", "/api/today")).json()
+            assert data["state"]["energy"] == 8
+            assert data["state"]["mood"] == "спокойно"
+    run(scenario)
+
+
+def test_checkin_rejects_empty_and_out_of_range():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            assert (await call(client, "POST", "/api/checkin", json_body={})).status == 400
+            assert (await call(client, "POST", "/api/checkin",
+                               json_body={"energy": 42})).status == 400
+    run(scenario)
+
+
 def test_request_without_signature_is_rejected():
     async def scenario():
         async with webapp_client() as (client, _):
