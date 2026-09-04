@@ -39,6 +39,8 @@ async def seed_workouts(session: AsyncSession) -> int:
                     location=LocationEnum(program["location"]),
                     level=LevelEnum(program["level"]),
                     program_code=code,
+                    category=program["category"],
+                    style=program.get("style"),
                     position=position,
                     muscle_group=muscle,
                     # Для упражнений на время храним длительность подхода.
@@ -61,6 +63,8 @@ async def seed_workouts(session: AsyncSession) -> int:
                     location=LocationEnum.HOME,
                     level=LevelEnum.BEGINNER,
                     program_code=CARDIO_CODE,
+                    category="body",
+                    style="cardio",
                     position=position,
                     duration_minutes=minutes,
                     met_value=met,

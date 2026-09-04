@@ -52,6 +52,12 @@ class Workout(Base):
     )
     level: Mapped[LevelEnum] = mapped_column(Enum(LevelEnum, name="level_enum"), nullable=False)
 
+    # Что тренируем: body / face / eyes / posture.
+    category: Mapped[str] = mapped_column(String(20), default="body", index=True, nullable=False)
+    # В какой форме занимаемся: mix / strength / cardio / bands / yoga / stretching / pilates.
+    # У лица, глаз и осанки стиля нет.
+    style: Mapped[str | None] = mapped_column(String(20), nullable=True)
+
     # Программа — это упражнения с общим кодом, идущие по порядку.
     program_code: Mapped[str | None] = mapped_column(String(50), index=True, nullable=True)
     position: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

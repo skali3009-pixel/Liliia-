@@ -276,7 +276,7 @@ def test_workouts_returns_program_for_place_and_level():
             async with api_module.get_session() as session:
                 await seed_workouts(session)
 
-            data = await (await call(client, "GET", "/api/workouts?location=home&level=beginner")).json()
+            data = await (await call(client, "GET", "/api/workouts?category=body&style=mix")).json()
             assert data["selected"] == "home_beginner"
             assert len(data["exercises"]) == 6
             first = data["exercises"][0]
@@ -288,7 +288,7 @@ def test_workouts_returns_program_for_place_and_level():
     run(scenario)
 
 
-def test_gym_program_differs_from_home():
+def test_styles_give_different_programs():
     async def scenario():
         async with webapp_client() as (client, _):
             from seed.loader import seed_workouts
@@ -296,10 +296,55 @@ def test_gym_program_differs_from_home():
             async with api_module.get_session() as session:
                 await seed_workouts(session)
 
-            home = await (await call(client, "GET", "/api/workouts?location=home&level=beginner")).json()
-            gym = await (await call(client, "GET", "/api/workouts?location=gym&level=beginner")).json()
-            assert home["selected"] != gym["selected"]
-            assert {e["name"] for e in home["exercises"]} != {e["name"] for e in gym["exercises"]}
+            mix = await (await call(client, "GET", "/api/workouts?category=body&style=mix")).json()
+            yoga = await (await call(client, "GET", "/api/workouts?category=body&style=yoga")).json()
+
+            assert mix["selected"] != yoga["selected"]
+            assert {e["name"] for e in mix["exercises"]} != {e["name"] for e in yoga["exercises"]}
+            # Формы занятий предлагаются только для тела.
+            assert {s["code"] for s in mix["styles"]} >= {"mix", "yoga", "pilates", "bands"}
+
+
+def test_face_category_has_its_own_programs_and_no_calories():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from seed.loader import seed_workouts
+            import webapp.api as api_module
+            async with api_module.get_session() as session:
+                await seed_workouts(session)
+
+            data = await (await call(client, "GET", "/api/workouts?category=face")).json()
+
+            assert data["selected"] in {"face_yoga", "face_massage"}
+            assert len(data["programs"]) == 2
+            # Расход калорий у гимнастики для лица ничтожен — не показываем.
+            assert data["show_calories"] is False
+            # Честная оговорка о том, чем это является и чем нет.
+            assert "косметологию" in data["note"] or "врач" in data["note"]
+            assert data["styles"] == []          # у лица нет форм занятий
+            assert data["cardio"] == []          # и отдельного кардио тоже
+    run(scenario)
+
+
+def test_eyes_and_posture_categories_exist():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from seed.loader import seed_workouts
+            import webapp.api as api_module
+            async with api_module.get_session() as session:
+                await seed_workouts(session)
+
+            eyes = await (await call(client, "GET", "/api/workouts?category=eyes")).json()
+            assert eyes["selected"] == "eyes_daily"
+            assert "офтальмолог" in eyes["note"]
+            assert eyes["show_calories"] is False
+
+            posture = await (await call(client, "GET", "/api/workouts?category=posture")).json()
+            assert posture["selected"] == "posture_daily"
+            assert posture["show_calories"] is True   # осанка — это всё-таки нагрузка
+
+            categories = {c["code"] for c in eyes["categories"]}
+            assert categories == {"body", "face", "eyes", "posture"}
     run(scenario)
 
 

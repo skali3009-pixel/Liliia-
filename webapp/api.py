@@ -29,6 +29,7 @@ from services.suggestions import suggest_meals
 from services.supplements import add_supplement, list_due_today, mark
 from services.workouts import (
     available_programs,
+    styles_for,
     exercise_calories,
     exercise_minutes,
     log_session,
@@ -422,19 +423,23 @@ async def delete_photo(request: web.Request) -> web.Response:
 async def get_workouts(request: web.Request) -> web.Response:
     """Программы под выбранные место и уровень плюс упражнения выбранной."""
     user_id, tz = request["user_id"], request["timezone"]
-    location = request.query.get("location", "home")
-    level = request.query.get("level", "beginner")
+    category = request.query.get("category", "body")
+    style = request.query.get("style") or None
     program_code = request.query.get("program")
 
     async with get_session() as session:
         user = await session.get(User, user_id)
         weight = user.current_weight_kg or 70
 
-        programs = available_programs(location=location, level=level)
+        programs = available_programs(category=category, style=style)
+        # Если стиль не подошёл ни к одной программе — показываем всё направление.
+        if not programs:
+            programs = available_programs(category=category)
         chosen = program_code or (programs[0].code if programs else None)
 
         exercises = await program_exercises(session, chosen) if chosen else []
-        cardio = await program_exercises(session, "cardio")
+        # Отдельный список кардио нужен только в разделе тела.
+        cardio = await program_exercises(session, "cardio") if category == "body" else []
         summary = await week_summary(session, user_id, timezone_name=tz)
 
     def exercise_json(workout) -> dict:
@@ -456,8 +461,18 @@ async def get_workouts(request: web.Request) -> web.Response:
             "is_cardio": workout.workout_type == WorkoutTypeEnum.CARDIO,
         }
 
+    from seed.workout_programs import CATEGORIES, CATEGORIES_WITH_CALORIES
+
+    chosen_program = next((p for p in programs if p.code == chosen), None)
+
     return web.json_response(
         {
+            "categories": [{"code": code, "label": label} for code, label in CATEGORIES],
+            "styles": [{"code": code, "label": label} for code, label in styles_for(category)],
+            "category": category,
+            "style": style,
+            "show_calories": category in CATEGORIES_WITH_CALORIES,
+            "note": chosen_program.note if chosen_program else None,
             "programs": [
                 {
                     "code": p.code,

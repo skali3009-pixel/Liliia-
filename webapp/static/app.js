@@ -413,8 +413,9 @@ async function uploadPhoto(file) {
 /* --- Тренировки -------------------------------------------------------- */
 
 let gym = null;
-let place = 'home';
-let level = 'beginner';
+let category = 'body';
+let style = null;
+let programCode = null;
 const doneExercises = new Set();
 let restTimer = null;
 
@@ -424,6 +425,32 @@ function renderWorkouts(data) {
   document.getElementById('program-sub').textContent = program ? program.subtitle : '';
   document.getElementById('gym-count').textContent = data.week.workouts;
   document.getElementById('gym-kcal').textContent = data.week.calories;
+
+  renderChips('category-switch', data.categories, category, (code) => {
+    category = code;
+    style = null;
+    programCode = null;
+    refreshWorkouts().catch((e) => toast(e.message));
+  });
+  renderChips('style-switch', data.styles, style, (code) => {
+    style = style === code ? null : code;   // повторный тап снимает фильтр
+    programCode = null;
+    refreshWorkouts().catch((e) => toast(e.message));
+  });
+  renderChips(
+    'program-switch',
+    data.programs.map((p) => ({ code: p.code, label: p.title })),
+    data.selected,
+    (code) => {
+      programCode = code;
+      refreshWorkouts().catch((e) => toast(e.message));
+    },
+  );
+
+  const note = document.getElementById('program-note');
+  note.textContent = data.note || '';
+  note.hidden = !data.note;
+  document.getElementById('cardio-card').hidden = data.cardio.length === 0;
 
   const box = document.getElementById('exercises');
   box.innerHTML = '';
@@ -440,6 +467,18 @@ function renderWorkouts(data) {
   updateFinishButton();
 }
 
+function renderChips(containerId, items, activeCode, onPick) {
+  const box = document.getElementById(containerId);
+  box.innerHTML = '';
+  for (const item of items) {
+    const button = document.createElement('button');
+    button.className = `chip-btn${item.code === activeCode ? ' active' : ''}`;
+    button.textContent = item.label;
+    button.onclick = () => { haptic(); onPick(item.code); };
+    box.appendChild(button);
+  }
+}
+
 function exerciseRow(exercise, { cardio = false } = {}) {
   const done = doneExercises.has(exercise.id);
   const row = document.createElement('div');
@@ -449,9 +488,10 @@ function exerciseRow(exercise, { cardio = false } = {}) {
   const load = exercise.seconds_per_set
     ? `${exercise.sets} подхода по ${exercise.seconds_per_set} с`
     : `${exercise.sets}×${exercise.reps}`;
+  const kcal = gym?.show_calories ? ` · ~${exercise.calories} ккал` : '';
   const detail = cardio
-    ? `${exercise.minutes} мин · ~${exercise.calories} ккал`
-    : `${load} · отдых ${exercise.rest_seconds} с · ~${exercise.calories} ккал`;
+    ? `${exercise.minutes} мин${kcal}`
+    : `${load} · отдых ${exercise.rest_seconds} с${kcal}`;
 
   row.innerHTML = `
     <button class="ex-check${done ? ' done' : ''}">✓</button>
@@ -520,7 +560,11 @@ function stopRest() {
 }
 
 async function refreshWorkouts() {
-  gym = await api(`/api/workouts?location=${place}&level=${level}`);
+  const params = new URLSearchParams({ category });
+  if (style) params.set('style', style);
+  if (programCode) params.set('program', programCode);
+
+  gym = await api(`/api/workouts?${params}`);
   renderWorkouts(gym);
 }
 
@@ -682,22 +726,6 @@ async function init() {
   };
   document.getElementById('m-save').onclick = saveMeasurement;
 
-  for (const button of document.querySelectorAll('#place-switch .seg-btn')) {
-    button.onclick = () => {
-      place = button.dataset.place;
-      document.querySelectorAll('#place-switch .seg-btn').forEach((b) => b.classList.remove('active'));
-      button.classList.add('active');
-      refreshWorkouts().catch((e) => toast(e.message));
-    };
-  }
-  for (const button of document.querySelectorAll('#level-switch .seg-btn')) {
-    button.onclick = () => {
-      level = button.dataset.level;
-      document.querySelectorAll('#level-switch .seg-btn').forEach((b) => b.classList.remove('active'));
-      button.classList.add('active');
-      refreshWorkouts().catch((e) => toast(e.message));
-    };
-  }
   document.getElementById('finish-workout').onclick = finishWorkout;
   document.getElementById('suggest-btn').onclick = loadSuggestions;
   document.getElementById('rest-skip').onclick = stopRest;

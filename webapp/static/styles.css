@@ -244,3 +244,23 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
 .sug-eat { margin-top: 8px; padding: 8px 14px; border: none; border-radius: 10px;
            background: var(--bg); color: var(--accent); font-size: 13px; font-weight: 500;
            font-family: inherit; cursor: pointer; }
+
+/* Направлений и форм занятий много — прокручиваем ряд, а не переносим:
+   так первый элемент всегда на месте и высота не скачет. */
+.chips { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chips:empty { display: none; }
+.chips .chip-btn {
+  flex: 0 0 auto; padding: 8px 13px; border: none; border-radius: 11px;
+  background: var(--card); color: var(--muted);
+  font-size: 13px; font-weight: 500; font-family: inherit; cursor: pointer; white-space: nowrap;
+}
+.chips .chip-btn.active { background: var(--accent); color: var(--accent-fg); }
+.chips.programs { margin-top: 10px; }
+.chips.programs .chip-btn { background: var(--card); }
+.chips.programs .chip-btn.active { background: var(--accent); color: var(--accent-fg); }
+
+.note {
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 11px;
+  background: var(--bg); color: var(--muted); font-size: 12px; line-height: 1.5;
+}

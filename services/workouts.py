@@ -27,30 +27,47 @@ class ProgramInfo:
     code: str
     title: str
     subtitle: str
+    category: str
+    style: str | None
     location: str
     level: str
     exercise_count: int
+    note: str | None
 
 
-def available_programs(*, location: str | None = None, level: str | None = None) -> list[ProgramInfo]:
-    """Программы, подходящие под место и уровень."""
+def available_programs(
+    *, category: str | None = None, style: str | None = None
+) -> list[ProgramInfo]:
+    """Программы выбранного направления и формы занятий."""
     result = []
     for code, program in PROGRAMS.items():
-        if location and program["location"] != location:
+        if category and program["category"] != category:
             continue
-        if level and program["level"] != level:
+        # Стиль есть только у тела: у лица, глаз и осанки он не задан.
+        if style and program.get("style") != style:
             continue
         result.append(
             ProgramInfo(
                 code=code,
                 title=program["title"],
                 subtitle=program["subtitle"],
+                category=program["category"],
+                style=program.get("style"),
                 location=program["location"],
                 level=program["level"],
                 exercise_count=len(program["exercises"]),
+                note=program.get("note"),
             )
         )
     return result
+
+
+def styles_for(category: str) -> list[tuple[str, str]]:
+    """Какие формы занятий есть у направления."""
+    from seed.workout_programs import STYLES
+
+    present = {p.get("style") for p in PROGRAMS.values() if p["category"] == category}
+    return [(code, label) for code, label in STYLES if code in present]
 
 
 async def program_exercises(session: AsyncSession, program_code: str) -> list[Workout]:

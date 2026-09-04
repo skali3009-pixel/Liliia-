@@ -163,24 +163,21 @@
     </section>
 
     <div class="filters">
-      <div class="seg" id="place-switch">
-        <button class="seg-btn active" data-place="home">🏠 Дома</button>
-        <button class="seg-btn" data-place="gym">🏋️ В зале</button>
-      </div>
-      <div class="seg" id="level-switch">
-        <button class="seg-btn active" data-level="beginner">Новичок</button>
-        <button class="seg-btn" data-level="intermediate">Средний</button>
-      </div>
+      <div class="chips" id="category-switch"></div>
+      <div class="chips" id="style-switch"></div>
     </div>
+
+    <div class="chips programs" id="program-switch"></div>
 
     <section class="card">
       <div class="card-head"><h2 id="program-title">Программа</h2>
         <span id="program-sub" class="muted"></span></div>
+      <p id="program-note" class="note" hidden></p>
       <div id="exercises"></div>
       <button id="finish-workout" class="btn" hidden>Записать тренировку</button>
     </section>
 
-    <section class="card">
+    <section class="card" id="cardio-card">
       <div class="card-head"><h2>Кардио</h2></div>
       <div id="cardio-list"></div>
     </section>
