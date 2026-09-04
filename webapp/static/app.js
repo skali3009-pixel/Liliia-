@@ -692,36 +692,70 @@ function taperPath(stops) {
   ].join(' ');
 }
 
+/* Гладкая кривая через анатомические точки: Catmull-Rom переводим в
+   кубические Безье. Так контур задаётся точками тела (подмышка, талия,
+   гребень таза), а не подбором контрольных «усов» на глаз. */
+function smoothHalf(points) {
+  const segs = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i - 1] || points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2] || p2;
+    segs.push([
+      [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6],
+      [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6],
+      p2,
+    ]);
+  }
+  return segs;
+}
+
+/* Торс по анатомии: трапеция от шеи к плечу, подмышка, грудная клетка,
+   талия, гребень таза, бедро. Без промежуточных точек силуэт получается
+   мешком — талия и таз должны быть разными событиями на контуре. */
 function torsoPath(s) {
   const c = FIG.cx;
   const sh = s.shoulder * FIG_H;
   const bu = s.bust * FIG_H;
   const wa = s.waist * FIG_H;
   const hi = s.hip * FIG_H;
-  return mirrored(c, [c, FIG.chin + 4], [
-    [[c + sh * 0.5, FIG.chin + 8], [c + sh * 0.8, FIG.shoulder - 10], [c + sh * 0.85, FIG.shoulder + 4]],
-    [[c + sh * 0.85, FIG.shoulder + 18], [c + bu, FIG.bust - 20], [c + bu, FIG.bust]],
-    [[c + bu, FIG.underbust + 4], [c + wa, FIG.waist - 20], [c + wa, FIG.waist]],
-    [[c + wa, FIG.waist + 18], [c + hi, FIG.hip - 22], [c + hi, FIG.hip]],
-    [[c + hi, FIG.hip + 16], [c + hi * 0.95, FIG.crotch - 10], [c + hi * 0.78, FIG.crotch]],
-  ]);
+
+  const points = [
+    [c, FIG.chin + 2],
+    [c + sh * 0.42, FIG.shoulder - 12],          // скат трапеции
+    [c + sh * 0.86, FIG.shoulder + 6],           // точка плеча
+    [c + bu * 0.94, FIG.bust - 24],              // подмышка
+    [c + bu, FIG.bust + 2],                      // грудь, самое широкое
+    [c + bu * 0.84, FIG.underbust],              // под грудью
+    [c + wa, FIG.waist],                         // талия
+    [c + wa * 1.1, FIG.waist + 20],              // гребень таза
+    [c + hi, FIG.hip],                           // бедро, самое широкое
+    [c + hi * 0.94, FIG.crotch - 12],
+    [c + hi * 0.72, FIG.crotch + 2],
+  ];
+  return mirrored(c, points[0], smoothHalf(points));
 }
 
-/* Ноги стоят почти отвесно: если сводить их центры к щиколоткам, просвет
-   между ними исчезает и получается одна тумба. Просвет должен рождаться
-   сужением самой ноги, а не сведением центров. */
+/* Нога по анатомии: бедро, надколенная впадина, колено, икра выше
+   середины голени, тонкая щиколотка. На четырёх точках нога выходит
+   конусом — а конус не читается как нога. */
 function legStops(s, side) {
   const hi = s.hip * FIG_H;
   const th = s.thigh * FIG_H;
   const top = FIG.cx + side * hi * 0.44;
   const foot = FIG.cx + side * hi * 0.36;
   const at = (y) => between(top, foot, (y - FIG.crotch) / (FIG.ankle - FIG.crotch));
+  const p = (y, w) => [y, at(y), th * w];
   return [
-    [FIG.crotch - 14, at(FIG.crotch - 14), th * 0.99],
-    [FIG.thighMid, at(FIG.thighMid), th * 0.9],
-    [FIG.knee, at(FIG.knee), th * 0.56],
-    [FIG.calf, at(FIG.calf), th * 0.62],
-    [FIG.ankle, at(FIG.ankle), th * 0.28],
+    p(FIG.crotch - 16, 0.99),
+    p(FIG.thighMid, 0.9),
+    p(FIG.knee - 16, 0.62),      // над коленом нога уже самого колена
+    p(FIG.knee, 0.58),
+    p(FIG.knee + 12, 0.55),
+    p(FIG.calf, 0.64),           // икра — выше середины голени
+    p(FIG.calf + 26, 0.46),
+    p(FIG.ankle, 0.26),
   ];
 }
 
@@ -732,24 +766,25 @@ function armStops(s, side) {
   const sh = s.shoulder * FIG_H;
   const ar = s.arm * FIG_H;
   const hi = s.hip * FIG_H;
-  // Плечо — на линии плеч, кисть чуть дальше от тела: рука слегка отведена,
-  // и между предплечьем и талией появляется просвет.
   const top = FIG.cx + side * (sh - ar * 0.3);
   const wrist = FIG.cx + side * Math.max(hi + ar * 0.2, sh + ar * 0.6);
   const wristY = FIG.crotch - 4;
   const at = (y) => between(top, wrist, (y - FIG.shoulder) / (wristY - FIG.shoulder));
+  const p = (y, w) => [y, at(y), ar * w];
   return [
-    [FIG.shoulder - 2, at(FIG.shoulder - 2), ar * 0.98],
-    [FIG.bust + 8, at(FIG.bust + 8), ar * 0.9],
-    [FIG.waist + 10, at(FIG.waist + 10), ar * 0.66],
-    [wristY, at(wristY), ar * 0.46],
+    p(FIG.shoulder - 2, 0.98),
+    p(FIG.bust - 6, 0.94),         // бицепс
+    p(FIG.underbust + 8, 0.74),    // над локтем
+    p(FIG.waist + 6, 0.7),         // локоть
+    p(FIG.hip - 14, 0.62),         // предплечье
+    p(wristY, 0.42),               // запястье
   ];
 }
 
-/* Тело одной фигурой: голова, шея, торс, руки и ноги отдельными формами.
-   Заливка у всех одна, поэтому в глазах они сливаются в один силуэт, но
-   каждая часть при этом живёт по своему замеру. */
+/* Тело собирается из отдельных форм с общей заливкой: в глазах они
+   сливаются в один силуэт, но каждая живёт по своему замеру. */
 function bodyShapes(s) {
+  const bu = s.bust * FIG_H;
   const th = s.thigh * FIG_H;
   const ar = s.arm * FIG_H;
   const neck = s.neck * FIG_H;
@@ -757,11 +792,14 @@ function bodyShapes(s) {
   const arms = [-1, 1].map((side) => armStops(s, side));
 
   const parts = [
-    `<circle cx="${FIG.cx}" cy="${FIG.bunY}" r="${n1(FIG.bunR)}"/>`,
+    // Пучок волос: две формы вместо шарика — так это причёска, а не мяч.
+    `<ellipse cx="${FIG.cx}" cy="${FIG.bunY}" rx="${n1(FIG.bunR * 1.15)}" ` +
+      `ry="${n1(FIG.bunR * 0.9)}"/>`,
+    `<ellipse cx="${FIG.cx}" cy="${n1(FIG.bunY + 9)}" rx="${n1(FIG.headRx * 0.95)}" ry="9"/>`,
     `<ellipse cx="${FIG.cx}" cy="${FIG.headCy}" rx="${FIG.headRx}" ry="${FIG.headRy}"/>`,
     `<path d="${taperPath([
-      [FIG.chin - 6, FIG.cx, neck],
-      [FIG.shoulder + 2, FIG.cx, neck * 1.35],
+      [FIG.chin - 8, FIG.cx, neck],
+      [FIG.shoulder + 2, FIG.cx, neck * 1.45],
     ])}"/>`,
     `<path d="${torsoPath(s)}"/>`,
   ];
@@ -781,6 +819,36 @@ function bodyShapes(s) {
     parts.push(`<path d="${taperPath(stops)}"/>`);
     parts.push(`<ellipse cx="${n1(hand[1])}" cy="${n1(hand[0] + 7)}" ` +
                `rx="${n1(ar * 0.45)}" ry="8"/>`);
+  }
+  return parts.join('');
+}
+
+/* Объём: мягкие блики поверх силуэта. Именно они отличают «фигуру» от
+   плоского пятна — грудь, живот и бёдра должны быть выпуклыми. */
+function bodyVolume(s) {
+  const bu = s.bust * FIG_H;
+  const wa = s.waist * FIG_H;
+  const hi = s.hip * FIG_H;
+  const th = s.thigh * FIG_H;
+  const legs = [-1, 1].map((side) => legStops(s, side));
+
+  const parts = [
+    // Грудь
+    `<ellipse cx="${n1(FIG.cx - bu * 0.42)}" cy="${n1(FIG.bust - 2)}" ` +
+      `rx="${n1(bu * 0.36)}" ry="${n1(bu * 0.32)}"/>`,
+    `<ellipse cx="${n1(FIG.cx + bu * 0.42)}" cy="${n1(FIG.bust - 2)}" ` +
+      `rx="${n1(bu * 0.36)}" ry="${n1(bu * 0.32)}"/>`,
+    // Живот и таз
+    `<ellipse cx="${FIG.cx}" cy="${n1(FIG.waist + 26)}" ` +
+      `rx="${n1(wa * 0.7)}" ry="${n1((FIG.hip - FIG.waist) * 0.62)}"/>`,
+    // Ключицы — короткая мягкая дуга под шеей
+    `<ellipse cx="${FIG.cx}" cy="${n1(FIG.shoulder + 10)}" ` +
+      `rx="${n1(bu * 0.62)}" ry="6"/>`,
+  ];
+  for (const stops of legs) {
+    const [topY, topX] = stops[0];
+    parts.push(`<ellipse cx="${n1(topX)}" cy="${n1(FIG.thighMid - 10)}" ` +
+               `rx="${n1(th * 0.6)}" ry="${n1((FIG.knee - topY) * 0.34)}"/>`);
   }
   return parts.join('');
 }
@@ -841,19 +909,34 @@ function zoneShapes(s, active) {
   ].join('');
 }
 
+let figureSeq = 0;
+
 function figureGroup(s, { dx = 0, dim = false, zones = '' } = {}) {
   const shapes = bodyShapes(s);
+  const clip = `fig-clip-${figureSeq++}`;
+  // Самая широкая точка фигуры — внешний край руки: по ней растягиваем
+  // градиент тени, чтобы её края совпали с краями тела.
+  const half = Math.max(...armStops(s, 1).map(([, cx, w]) => cx - FIG.cx + w));
   // Отражение под полом: тот же силуэт, сжатый и почти прозрачный.
   const mirror = FIG.bottom + 0.35 * FIG.bottom;
   // Контур берём фильтром по всей фигуре, а не обводкой каждой детали:
   // иначе внутри силуэта видны швы между рукой, торсом и шеей.
   return `
     <g transform="translate(${dx} 0)" class="figure${dim ? ' dim' : ''}">
+      <clipPath id="${clip}">${shapes}</clipPath>
       ${figureDecor()}
       <g transform="translate(0 ${n1(mirror)}) scale(1 -0.35)" class="fig-mirror">${shapes}</g>
       <g class="fig-glow">${shapes}</g>
       <g class="fig-rim">${shapes}</g>
-      <g class="fig-body">${shapes}${legSeam(s)}</g>
+      <g class="fig-body">${shapes}</g>
+      <!-- Свет на фигуре один, поэтому и тень одна: прямоугольник во всю
+           ширину тела, обрезанный силуэтом. Если затенять каждую деталь
+           отдельно, её собственные тёмные края видны швами внутри тела. -->
+      <rect class="fig-shade" clip-path="url(#${clip})"
+            x="${n1(FIG.cx - half)}" y="0" width="${n1(half * 2)}" height="470"/>
+      <!-- Блики объёма обрезаем силуэтом, иначе живот вылезает за талию. -->
+      <g class="fig-volume" clip-path="url(#${clip})">${bodyVolume(s)}</g>
+      <g class="fig-body">${legSeam(s)}</g>
       ${zones}
     </g>`;
 }
@@ -875,11 +958,32 @@ function nebula(x) {
 
 const FIG_DEFS = `
   <defs>
-    <linearGradient id="fig-fill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#C4B5FD" stop-opacity=".34"/>
-      <stop offset="55%" stop-color="#8B5CF6" stop-opacity=".20"/>
-      <stop offset="1" stop-color="#5B6CFF" stop-opacity=".10"/>
+    <!-- Заливка непрозрачная, прозрачность задаётся всей группе. Иначе в
+         местах, где формы налезают друг на друга (шея на торс, дельта на
+         руку, таз на бёдра), альфа складывается и по телу идут светлые швы. -->
+    <!-- gradientUnits="userSpaceOnUse" обязателен: по умолчанию градиент
+         считается по границам каждой формы, и тогда ноги начинаются заново
+         со светлого — поперёк бёдер идёт резкая ступенька. Здесь свет течёт
+         по всей фигуре от макушки до пола. -->
+    <linearGradient id="fig-fill" gradientUnits="userSpaceOnUse"
+                    x1="0" y1="${FIG.top}" x2="0" y2="${FIG.bottom}">
+      <stop offset="0" stop-color="#CFC2FF"/>
+      <stop offset="55%" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#4C4BC4"/>
     </linearGradient>
+    <!-- Скругление объёма: тёмные края, светлая полоса ближе к левому краю —
+         так тело читается стеклянной трубкой, а не плоским пятном. -->
+    <linearGradient id="fig-round" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0A0912" stop-opacity=".45"/>
+      <stop offset="16%" stop-color="#0A0912" stop-opacity=".06"/>
+      <stop offset="36%" stop-color="#FFFFFF" stop-opacity=".14"/>
+      <stop offset="66%" stop-color="#0A0912" stop-opacity=".06"/>
+      <stop offset="1" stop-color="#0A0912" stop-opacity=".45"/>
+    </linearGradient>
+    <radialGradient id="fig-lume">
+      <stop offset="0" stop-color="#EDEAFB" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#EDEAFB" stop-opacity="0"/>
+    </radialGradient>
     <linearGradient id="fig-mirror-fill" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#C4B5FD" stop-opacity=".22"/>
       <stop offset="1" stop-color="#C4B5FD" stop-opacity="0"/>

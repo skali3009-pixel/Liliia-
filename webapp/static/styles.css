@@ -297,25 +297,37 @@ button:focus-visible, .tab:focus-visible {
 .fig-body path, .fig-body ellipse, .fig-body circle {
   fill: url(#fig-fill); stroke: none;
 }
+/* Прозрачность — группе целиком, а не каждой форме (см. комментарий у
+   градиента fig-fill): только так перекрытия не светятся швами. */
+.fig-body { opacity: .34; }
 /* Шов между ногами — единственная линия внутри силуэта. */
 .fig-body .fig-seam {
-  fill: none; stroke: var(--void); stroke-opacity: .32; stroke-width: 1.4;
+  fill: none; stroke: var(--void); stroke-opacity: .22; stroke-width: 2;
   stroke-linecap: round; filter: url(#fig-blur-soft);
 }
 .fig-rim { filter: url(#fig-rim); }
+/* Скругление и блики: вместе они и делают фигуру объёмной. */
+.fig-shade { fill: url(#fig-round); }
+.fig-volume { filter: url(#fig-blur-soft); }
+.fig-volume ellipse { fill: url(#fig-lume); stroke: none; }
+.fig-volume { opacity: .9; }
 /* Дублёр под телом: размытая копия даёт объём и свет вокруг фигуры. */
 .fig-glow path, .fig-glow ellipse, .fig-glow circle {
   fill: var(--violet); stroke: none;
 }
-.fig-glow { opacity: .34; filter: url(#fig-blur); }
+.fig-glow { opacity: .3; filter: url(#fig-blur); }
 .fig-mirror { filter: url(#fig-blur-soft); }
 .fig-mirror path, .fig-mirror ellipse, .fig-mirror circle {
-  fill: url(#fig-mirror-fill); stroke: none; opacity: .5;
+  fill: url(#fig-mirror-fill); stroke: none;
 }
-/* Фигура-цель светит слабее: главная — та, что сейчас. */
+.fig-mirror { opacity: .5; }
+/* Фигура-цель светит слабее: главная — та, что сейчас. Значения здесь
+   абсолютные, а не «доля от основной»: правило со .dim перебивает базовое
+   по специфичности, и множителя не получится — получится замена. */
 .figure.dim .fig-rim { opacity: .6; }
-.figure.dim .fig-glow { opacity: .2; }
-.figure.dim .fig-body { opacity: .75; }
+.figure.dim .fig-glow { opacity: .18; }
+.figure.dim .fig-body { opacity: .24; }
+.figure.dim .fig-volume { opacity: .6; }
 
 .fig-halo { fill: none; stroke: var(--lilac); stroke-opacity: .16; stroke-width: 1; }
 .fig-halo.dotted { stroke-dasharray: 1 7; stroke-opacity: .3; }
