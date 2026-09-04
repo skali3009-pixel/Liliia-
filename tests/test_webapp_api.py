@@ -626,3 +626,17 @@ def test_cardio_minutes_are_validated():
             # Ходьба (MET 4.3) 45 минут при весе 60 кг ≈ 190 ккал.
             assert 150 < result["calories"] < 250
     run(scenario)
+
+
+def test_page_carries_asset_versions_so_telegram_cannot_serve_a_stale_app():
+    """Без метки версии Telegram неделями показывает старое приложение —
+    именно так новая карточка «Твоё тело» до человека и не доехала."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "GET", "/", signed=False)
+            page = await response.text()
+
+            assert "/static/app.js?v=" in page
+            assert "/static/styles.css?v=" in page
+            assert "no-store" in response.headers.get("Cache-Control", "")
+    run(scenario)

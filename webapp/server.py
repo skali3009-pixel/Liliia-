@@ -19,8 +19,39 @@ logger = logging.getLogger(__name__)
 STATIC_DIR = Path(__file__).parent / "static"
 
 
+# Файлы, к ссылкам на которые дописывается версия.
+VERSIONED = ("styles.css", "app.js")
+
+
+def asset_version() -> str:
+    """Короткая метка версии статики — меняется, когда меняются файлы.
+
+    Telegram кэширует app.js и styles.css очень цепко и без метки в адресе
+    может неделями показывать старое приложение. Метка в ссылке — это новый
+    адрес, мимо любого кэша.
+    """
+    stamp = 0.0
+    for name in VERSIONED:
+        path = STATIC_DIR / name
+        if path.exists():
+            stamp = max(stamp, path.stat().st_mtime)
+    return f"{int(stamp)}"
+
+
 async def index(request: web.Request) -> web.Response:
-    return web.FileResponse(STATIC_DIR / "index.html")
+    page = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    version = asset_version()
+    for name in VERSIONED:
+        page = page.replace(f"/static/{name}", f"/static/{name}?v={version}")
+
+    return web.Response(
+        text=page,
+        content_type="text/html",
+        charset="utf-8",
+        # Саму страницу не кэшируем никогда: она и раздаёт новые версии
+        # остальных файлов.
+        headers={"Cache-Control": "no-store, must-revalidate"},
+    )
 
 
 async def healthcheck(request: web.Request) -> web.Response:
