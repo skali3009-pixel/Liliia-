@@ -13,8 +13,9 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 import config
 from db import init_models
 from services.artwork import ensure_artwork
-from handlers import (food, menu, onboarding, progress, suggestions, supplements,
-                      water, workouts)
+from handlers import (access, food, menu, onboarding, progress, suggestions,
+                      supplements, water, workouts)
+from middlewares.access import AccessMiddleware
 from scheduler import start_scheduler
 from webapp.server import start_webapp
 
@@ -24,6 +25,12 @@ logger = logging.getLogger(__name__)
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
 
+# Проверка доступа стоит до всех обработчиков: без подписки бот отвечает
+# только про оплату.
+dp.message.outer_middleware(AccessMiddleware())
+dp.callback_query.outer_middleware(AccessMiddleware())
+
+dp.include_router(access.router)
 dp.include_router(onboarding.router)
 dp.include_router(food.router)
 dp.include_router(water.router)

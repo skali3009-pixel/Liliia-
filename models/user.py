@@ -54,6 +54,8 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False)
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # Метка из ссылки-приглашения: t.me/бот?start=МЕТКА — видно, кто откуда пришёл.
+    referral: Mapped[str | None] = mapped_column(String(64), nullable=True)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # --- Анкета онбординга ---

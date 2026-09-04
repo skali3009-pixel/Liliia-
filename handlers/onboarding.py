@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 
+import config
 from aiogram import F, Router
-from aiogram.filters import CommandStart
+from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
@@ -18,6 +19,7 @@ from keyboards.onboarding import (
     goal_keyboard,
 )
 from models import ActivityLevelEnum, DietTypeEnum, GenderEnum, GoalEnum, User
+from services.subscriptions import check_access, ensure_trial
 from states.onboarding import OnboardingStates
 from utils.formulas import ActivityLevel, Gender, Goal, calculate_macros, daily_water_ml
 from utils.parsing import parse_float, parse_int
@@ -33,22 +35,42 @@ GENDER_RU = {GenderEnum.MALE.value: "мужской", GenderEnum.FEMALE.value: "
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext) -> None:
+async def cmd_start(message: Message, state: FSMContext, command: CommandObject) -> None:
+    """Первое знакомство: заводим человека, выдаём пробный период, ведём в анкету.
+
+    Метка из ссылки (t.me/бот?start=МЕТКА) сохраняется, чтобы было видно,
+    из какого поста или рекламы пришёл человек.
+    """
     async with get_session() as session:
         user = await session.get(User, message.from_user.id)
+        if user is None:
+            user = User(id=message.from_user.id)
+            session.add(user)
 
-    if user is not None and user.onboarding_completed:
-        await message.answer(
-            "С возвращением! 👋 Чем займёмся сегодня?",
-            reply_markup=main_menu_keyboard(),
-        )
+        user.username = message.from_user.username
+        user.full_name = message.from_user.full_name
+        if command.args and not user.referral:
+            user.referral = command.args[:64]
+        await session.commit()
+
+        # Пробный период отсчитывается от первого «Привет», а не от конца анкеты.
+        await ensure_trial(session, user.id)
+        access = await check_access(session, user.id)
+        completed = user.onboarding_completed
+
+    if completed:
+        greeting = "С возвращением! 👋 Чем займёмся сегодня?"
+        if access.allowed and access.is_trial:
+            greeting += f"\n\nПробный период: осталось {access.days_left} дн."
+        await message.answer(greeting, reply_markup=main_menu_keyboard())
         return
 
     await state.clear()
     await state.set_state(OnboardingStates.gender)
     await message.answer(
         "Привет! Я помогу с питанием и тренировками 💪\n\n"
-        "Сначала настроим профиль — это займёт 1-2 минуты.\n\n"
+        f"Первые {config.TRIAL_DAYS} дней — бесплатно, знакомься спокойно.\n"
+        "Сначала настроим профиль: это займёт 1-2 минуты.\n\n"
         "Укажи свой пол:",
         reply_markup=gender_keyboard(),
     )

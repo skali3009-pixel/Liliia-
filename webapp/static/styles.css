@@ -733,3 +733,7 @@ select.fact-input { text-align: left; width: 130px; }
 .state-opt.wide { flex: 1 1 44%; }
 .state-opt.on { border-color: var(--violet); background: rgba(139, 92, 246, .22); }
 .state-opt:active { transform: scale(.97); }
+
+/* Экран подписки шире обычного окна: в нём есть текст, а не только кнопка. */
+.pop-card.wide { max-width: 330px; }
+.pop-text { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 12px 0 4px; }

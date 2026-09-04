@@ -44,6 +44,23 @@ WEBAPP_URL = os.getenv("WEBAPP_URL", "")
 # Подпись кнопки мини-приложения рядом с полем ввода в чате.
 WEBAPP_BUTTON = os.getenv("WEBAPP_BUTTON", "Кабинет")[:16]
 
+# --- Платный доступ ---------------------------------------------------------
+# Кто владеет ботом: у этих людей доступ всегда, им же приходит /admin.
+ADMIN_IDS = {
+    int(part) for part in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",") if part
+}
+
+# Сколько дней бесплатного знакомства даётся новому человеку.
+TRIAL_DAYS = int(os.getenv("TRIAL_DAYS", "7"))
+
+# Цена месяца в звёздах Telegram и длительность оплаченного периода.
+# 30 дней — единственный период, который Telegram умеет списывать сам.
+SUB_PRICE_STARS = int(os.getenv("SUB_PRICE_STARS", "499"))
+SUB_PERIOD_DAYS = 30
+
+# Платный доступ можно выключить: тогда бот открыт всем, как раньше.
+PAYWALL = os.getenv("PAYWALL", "1") not in {"0", "false", "no"}
+
 # Бот сам подтягивает обновления из git. Выключается AUTO_UPDATE=0.
 AUTO_UPDATE = os.getenv("AUTO_UPDATE", "1") not in {"0", "false", "no"}
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "127.0.0.1")

@@ -13,7 +13,9 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 import config
 import db as db_module
-from models import Base, DietTypeEnum, GenderEnum, GoalEnum, MealSourceEnum, MealTypeEnum, User
+from models import (Base, DietTypeEnum, GenderEnum, GoalEnum, MealSourceEnum, MealTypeEnum,
+                    SubscriptionSource, User)
+from services.subscriptions import activate
 from services.food_vision import FoodAnalysis
 from services.meals import save_meal
 
@@ -37,12 +39,16 @@ def init_data(user_id: int = USER_ID) -> str:
 
 import contextlib
 
+# Тестам иногда нужно залезть в базу мимо API — например, состарить подписку.
+maker_holder: dict = {}
+
 
 @contextlib.asynccontextmanager
 async def webapp_client():
     """Приложение с базой в памяти, двумя пользователями и одной записью еды."""
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     maker = async_sessionmaker(engine, expire_on_commit=False)
+    maker_holder["maker"] = maker
 
     @contextlib.asynccontextmanager
     async def get_session():
@@ -68,6 +74,9 @@ async def webapp_client():
                 daily_carbs_g=160, daily_fiber_g=22, daily_water_ml=2100,
                 onboarding_completed=True))
         await session.commit()
+        # Приложение живёт по подписке — в тестах она у обоих есть.
+        for uid in (USER_ID, OTHER_ID):
+            await activate(session, uid, days=30, source=SubscriptionSource.MANUAL)
         meal = await save_meal(
             session, user_id=USER_ID,
             analysis=FoodAnalysis(name="Овсянка", weight_g=250, calories=320, protein_g=9,
@@ -224,6 +233,30 @@ def test_checkin_rejects_empty_and_out_of_range():
             assert (await call(client, "POST", "/api/checkin", json_body={})).status == 400
             assert (await call(client, "POST", "/api/checkin",
                                json_body={"energy": 42})).status == 400
+    run(scenario)
+
+
+def test_app_is_closed_without_a_subscription():
+    """Кончилась подписка — данные на месте, но приложение просит оплату."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services.subscriptions import now
+            from models import Subscription
+            from datetime import timedelta
+            from sqlalchemy import select
+
+            async with maker_holder["maker"]() as session:
+                row = (await session.execute(
+                    select(Subscription).where(Subscription.user_id == USER_ID)
+                )).scalar_one()
+                row.expires_at = now() - timedelta(days=1)
+                await session.commit()
+
+            response = await call(client, "GET", "/api/today")
+            assert response.status == 402
+            body = await response.json()
+            assert body["need_subscription"] is True
+            assert body["price_stars"] > 0
     run(scenario)
 
 

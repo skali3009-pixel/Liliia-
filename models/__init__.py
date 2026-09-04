@@ -16,6 +16,12 @@ from models.user import (
     GoalEnum,
     User,
 )
+from models.subscription import (
+    Payment,
+    Subscription,
+    SubscriptionSource,
+    SubscriptionStatus,
+)
 from models.supplement import ScheduleTypeEnum, Supplement, SupplementLog
 from models.water import WaterLog
 from models.workout import LevelEnum, LocationEnum, Workout, WorkoutLog, WorkoutTypeEnum
@@ -41,6 +47,10 @@ __all__ = [
     "Achievement",
     "DayStat",
     "Checkin",
+    "Subscription",
+    "SubscriptionStatus",
+    "SubscriptionSource",
+    "Payment",
     "Supplement",
     "SupplementLog",
     "ScheduleTypeEnum",

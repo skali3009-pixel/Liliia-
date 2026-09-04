@@ -431,6 +431,17 @@
 
 <!-- Отметить состояние в два тапа: раньше это можно было только рассказать
      словами, и плитки стояли пустыми. -->
+<!-- Экран подписки: закрыт доступ — данные остаются, но приложение просит
+     вернуться в чат, потому что счёт выставляет бот. -->
+<div id="paywall" class="pop" hidden>
+  <div class="pop-card wide">
+    <div class="pop-icon">🔒</div>
+    <div class="pop-title" id="paywall-title">Доступ закрыт</div>
+    <p class="pop-text" id="paywall-text"></p>
+    <button class="btn" id="paywall-open">Открыть чат и продлить</button>
+  </div>
+</div>
+
 <div id="state-sheet" class="sheet" hidden>
   <div class="sheet-card">
     <div class="sheet-head">

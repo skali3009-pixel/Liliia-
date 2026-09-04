@@ -19,9 +19,26 @@ async function api(path, options = {}) {
   });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
+    // Подписка кончилась — показываем экран оплаты вместо любого другого ответа.
+    if (response.status === 402 && body.need_subscription) {
+      showPaywall(body);
+      throw new Error('Подписка закончилась');
+    }
     throw new Error(body.error || `Ошибка ${response.status}`);
   }
   return response.json();
+}
+
+function showPaywall(body) {
+  const price = body.price_stars ? `${body.price_stars} ⭐ в месяц` : 'подписка';
+  const trial = body.access?.is_trial;
+  document.getElementById('paywall-title').textContent =
+    trial ? 'Пробный период закончился' : 'Доступ закрыт';
+  document.getElementById('paywall-text').textContent =
+    `Всё записанное сохранено и ждёт тебя. Чтобы продолжить, оформи доступ — ` +
+    `${price}. Счёт выставляет бот в чате.`;
+  document.getElementById('paywall').hidden = false;
+  document.getElementById('loading').hidden = true;
 }
 
 function toast(text) {
@@ -1229,6 +1246,7 @@ async function init() {
   };
 
   document.getElementById('moment-open').onclick = openMoment;
+  document.getElementById('paywall-open').onclick = () => tg?.close?.();
   document.getElementById('state-close').onclick = () => {
     document.getElementById('state-sheet').hidden = true;
   };
@@ -1285,6 +1303,7 @@ async function init() {
     document.getElementById('loading').hidden = true;
     document.getElementById('app').hidden = false;
   } catch (e) {
+    if (e.message.includes('Подписка')) return;   // экран оплаты уже показан
     document.getElementById('loading').textContent =
       e.message.includes('Профиль')
         ? 'Сначала пройди анкету в чате: /start'

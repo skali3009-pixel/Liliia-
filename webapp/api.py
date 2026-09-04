@@ -28,6 +28,7 @@ from services.progress import (
     photos_dir,
     save_photo,
 )
+from services.subscriptions import check_access
 from services.suggestions import suggest_meals
 from services.timeline import day_timeline
 from services.supplements import add_supplement, list_due_today, mark
@@ -84,6 +85,22 @@ async def auth_middleware(request: web.Request, handler):
             return web.json_response(
                 {"error": "Профиль не настроен", "need_onboarding": True}, status=403
             )
+
+        # Приложение — часть подписки: без неё показываем экран оплаты, но
+        # данные не трогаем, они дождутся возвращения.
+        if config.PAYWALL:
+            access = await check_access(session, user.id)
+            if not access.allowed:
+                return web.json_response(
+                    {
+                        "error": "Подписка закончилась",
+                        "need_subscription": True,
+                        "access": access.to_dict(),
+                        "price_stars": config.SUB_PRICE_STARS,
+                    },
+                    status=402,
+                )
+
         request["user_id"] = user.id
         request["timezone"] = user.timezone
 
