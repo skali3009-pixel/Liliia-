@@ -12,6 +12,7 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 import config
 from db import init_models
+from services.artwork import ensure_artwork
 from handlers import (food, menu, onboarding, progress, suggestions, supplements,
                       water, workouts)
 from scheduler import start_scheduler
@@ -49,6 +50,10 @@ async def main() -> None:
     logger.info("Инициализация базы данных...")
     await init_models()
 
+    # Картинки качаются фоном: без них приложение работает, а ждать их
+    # на старте незачем. Ссылку держим, чтобы задачу не собрал сборщик.
+    artwork_task = asyncio.create_task(ensure_artwork())
+
     runner = await start_webapp()
     scheduler = start_scheduler(bot)
     try:
@@ -56,6 +61,7 @@ async def main() -> None:
         logger.info("Бот запускается...")
         await dp.start_polling(bot)
     finally:
+        artwork_task.cancel()
         scheduler.shutdown(wait=False)
         if runner is not None:
             await runner.cleanup()

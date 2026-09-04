@@ -7,9 +7,11 @@ import logging
 from aiogram import Bot
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
+import config
 from db import get_session
 from keyboards.supplements import reminder_keyboard
 from services.reminders import collect_due_reminders
+from services.selfupdate import run_update
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +53,13 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(send_due_reminders, "cron", minute="*", args=[bot], id="supplements")
     scheduler.add_job(clear_sent_marks, "cron", hour=0, minute=1, id="cleanup")
+
+    if config.AUTO_UPDATE:
+        # Раз в полчаса — не чаще: обновление перезапускает бота, и делать
+        # это посреди разговора незачем.
+        scheduler.add_job(run_update, "interval", minutes=30, id="selfupdate")
+        logger.info("Автообновление включено (раз в 30 минут)")
+
     scheduler.start()
     logger.info("Планировщик напоминаний запущен")
     return scheduler
