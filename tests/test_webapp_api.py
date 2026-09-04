@@ -115,6 +115,37 @@ def test_today_returns_norms_meals_and_water():
     run(scenario)
 
 
+def test_today_includes_game_state_with_quests():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            data = await (await call(client, "GET", "/api/today")).json()
+            game = data["game"]
+            assert game["level"] == 1
+            assert game["quests_total"] >= 5
+            # Один приём пищи из трёх — задание про еду ещё не закрыто.
+            quests = {q["code"]: q for q in game["quests"]}
+            assert quests["meals"]["done"] is False
+            assert quests["meals"]["hint"] == "1 из 3"
+            # Первая запись еды — это уже награда.
+            assert {a["code"] for a in game["new_awards"]} == {"first_step"}
+    run(scenario)
+
+
+def test_closing_a_quest_gives_xp_and_a_streak():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            for _ in range(2):
+                await call(client, "POST", "/api/meals", json_body={
+                    "name": "Салат", "weight_g": 200, "calories": 150,
+                    "protein_g": 4, "fat_g": 9, "carbs_g": 10, "fiber_g": 5})
+
+            game = (await (await call(client, "GET", "/api/today")).json())["game"]
+            assert "meals" in game["just_completed"]
+            assert game["xp_today"] == 15
+            assert game["streak"] == 1
+    run(scenario)
+
+
 def test_request_without_signature_is_rejected():
     async def scenario():
         async with webapp_client() as (client, _):

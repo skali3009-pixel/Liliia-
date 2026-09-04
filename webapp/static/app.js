@@ -3,6 +3,7 @@
 
 const tg = window.Telegram?.WebApp;
 const RING_LENGTH = 327; // длина окружности радиуса 52
+const DIAL_LENGTH = 113; // длина окружности радиуса 18
 
 let state = null;
 
@@ -49,19 +50,22 @@ function renderToday(data) {
   const ratio = norms.calories ? Math.min(totals.calories / norms.calories, 1) : 0;
   const ring = document.getElementById('ring-fill');
   ring.style.strokeDashoffset = RING_LENGTH * (1 - ratio);
-  ring.style.stroke = over ? 'var(--over)' : ratio > 0.85 ? 'var(--warn)' : 'var(--ok)';
+  // Обычный день — фиолетовый градиент; подход к норме и перебор красим
+  // сплошным цветом, чтобы предупреждение читалось однозначно.
+  ring.style.stroke = over ? 'var(--over)' : ratio > 0.9 ? 'var(--warn)' : 'url(#ring-gradient)';
 
+  // Клетчатка — четвёртое кольцо: калорий не даёт, но цель у неё своя.
   const macros = [
     ['p', totals.protein_g, norms.protein_g],
     ['f', totals.fat_g, norms.fat_g],
     ['c', totals.carbs_g, norms.carbs_g],
+    ['fib', totals.fiber_g ?? 0, norms.fiber_g ?? 0],
   ];
-  // Клетчатка идёт отдельной строкой: у неё своя цель, а не доля калорий.
-  macros.push(['fib', totals.fiber_g ?? 0, norms.fiber_g ?? 0]);
   for (const [key, value, norm] of macros) {
-    document.getElementById(`bar-${key}`).style.width =
-      norm ? `${Math.min((value / norm) * 100, 100)}%` : '0%';
-    document.getElementById(`val-${key}`).textContent = `${value} / ${norm} г`;
+    const share = norm ? Math.min(value / norm, 1) : 0;
+    document.getElementById(`dial-${key}`).style.strokeDashoffset = DIAL_LENGTH * (1 - share);
+    document.getElementById(`val-${key}`).textContent = Math.round(value);
+    document.getElementById(`norm-${key}`).textContent = `/ ${norm} г`;
   }
 
   document.getElementById('water-val').textContent =
@@ -95,6 +99,102 @@ function renderToday(data) {
     deleteBtn.onclick = () => removeMeal(meal);
     list.appendChild(row);
   }
+}
+
+/* --- игра: уровень, кристалл, задания дня --- */
+function renderGame(game) {
+  if (!game) return;
+
+  document.getElementById('crystal').dataset.stage = game.crystal;
+  document.getElementById('hud-level').textContent = `Уровень ${game.level}`;
+  document.getElementById('hud-streak').textContent =
+    game.streak ? `🔥 ${game.streak} ${plural(game.streak, 'день', 'дня', 'дней')} подряд` : '';
+  document.getElementById('xp-fill').style.width = `${Math.round(game.level_share * 100)}%`;
+  document.getElementById('xp-text').textContent =
+    `${game.xp_in_level} / ${game.xp_to_next} 💎`;
+  document.getElementById('xp-today').textContent =
+    game.xp_today ? `+${game.xp_today} сегодня` : '';
+
+  document.getElementById('quest-count').textContent =
+    `${game.quests_done} из ${game.quests_total}`;
+
+  const box = document.getElementById('quests');
+  box.innerHTML = '';
+  for (const quest of game.quests) {
+    const row = document.createElement('div');
+    row.className = `quest${quest.done ? ' done' : ''}`;
+    row.innerHTML = `
+      <span class="q-icon"></span>
+      <div class="q-main">
+        <div class="q-title"></div>
+        <div class="q-line">
+          <div class="q-track"><i></i></div>
+          <span class="q-hint"></span>
+        </div>
+      </div>
+      <span class="q-xp"></span>`;
+    row.querySelector('.q-icon').textContent = quest.done ? '✓' : quest.icon;
+    row.querySelector('.q-title').textContent = quest.title;
+    row.querySelector('.q-track i').style.width = `${Math.round(quest.share * 100)}%`;
+    row.querySelector('.q-hint').textContent = quest.hint;
+    row.querySelector('.q-xp').textContent = `+${quest.xp}`;
+    box.appendChild(row);
+  }
+}
+
+function plural(count, one, few, many) {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+function renderAwards(awards) {
+  if (!awards) return;
+  const box = document.getElementById('awards');
+  box.innerHTML = '';
+  for (const award of awards) {
+    const tile = document.createElement('div');
+    tile.className = `award${award.earned ? ' earned' : ''}`;
+    tile.innerHTML = `
+      <div class="a-icon"></div><div class="a-title"></div><div class="a-goal"></div>`;
+    tile.querySelector('.a-icon').textContent = award.icon;
+    tile.querySelector('.a-title').textContent = award.title;
+    tile.querySelector('.a-goal').textContent = award.goal;
+    box.appendChild(tile);
+  }
+  document.getElementById('award-count').textContent =
+    `${awards.filter((a) => a.earned).length} из ${awards.length}`;
+}
+
+/* Награда — редкое событие, поэтому единственное окно в приложении.
+   Если их пришло несколько, показываем по очереди. */
+function celebrate(game) {
+  if (!game) return;
+  // Тосты не накапливаются, поэтому про первое задание говорим словами,
+  // а про остальные — числом.
+  const closed = (game.just_completed || [])
+    .map((code) => game.quests.find((q) => q.code === code))
+    .filter(Boolean);
+  if (closed.length) {
+    const extra = closed.length > 1 ? ` и ещё ${closed.length - 1}` : '';
+    toast(`${closed[0].icon} ${closed[0].title} — готово${extra}, +${game.xp_today} 💎`);
+    haptic('medium');
+  }
+
+  const queue = [...(game.new_awards || [])];
+  const pop = document.getElementById('award-pop');
+  const showNext = () => {
+    const award = queue.shift();
+    if (!award) { pop.hidden = true; return; }
+    document.getElementById('pop-icon').textContent = award.icon;
+    document.getElementById('pop-title').textContent = award.title;
+    pop.hidden = false;
+    tg?.HapticFeedback?.notificationOccurred?.('success');
+  };
+  document.getElementById('pop-close').onclick = showNext;
+  if (queue.length) showNext();
 }
 
 function renderPills(supplements) {
@@ -368,6 +468,7 @@ async function refreshProgress() {
   document.getElementById('stat-change').textContent =
     s.changed > 0 ? `+${fmt(s.changed)}` : fmt(s.changed || 0);
   document.getElementById('stat-streak').textContent = s.streak;
+  renderAwards(progress.awards);
   document.getElementById('chart-title').textContent = progress.title;
 
   buildChart(progress);
@@ -660,7 +761,11 @@ function renderSuggestions(items) {
 async function refresh() {
   state = await api('/api/today');
   renderToday(state);
+  renderGame(state.game);
   renderPills(state.supplements);
+  // Награда и закрытое задание приходят от сервера ровно один раз — если не
+  // показать их сейчас, пользователь о них не узнает.
+  celebrate(state.game);
 }
 
 function switchScreen(name) {

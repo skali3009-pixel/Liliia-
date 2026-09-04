@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Дневник</title>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&family=Unbounded:wght@500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
@@ -12,9 +15,48 @@
 
 <div id="app" hidden>
   <main id="screen-today" class="screen">
+    <!-- Кристалл — единственная «игрушка» на экране: он растёт с уровнем
+         и потому заменяет собой любые бейджи и медальки в шапке. -->
+    <header class="hud">
+      <svg class="crystal" id="crystal" viewBox="0 0 44 60" data-stage="1" aria-hidden="true">
+        <defs>
+          <linearGradient id="crystal-gradient" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#C4B5FD"/>
+            <stop offset="55%" stop-color="#8B5CF6"/>
+            <stop offset="100%" stop-color="#4F46E5"/>
+          </linearGradient>
+        </defs>
+        <path class="c-face c-left" d="M22 2 L6 20 L11 46 L22 58 Z"/>
+        <path class="c-face c-right" d="M22 2 L38 20 L33 46 L22 58 Z"/>
+        <path class="c-face c-top" d="M22 2 L6 20 L22 25 L38 20 Z"/>
+        <g class="sparks">
+          <circle cx="5" cy="9" r="1.6"/>
+          <circle cx="40" cy="13" r="1.2"/>
+          <circle cx="35" cy="53" r="1.4"/>
+        </g>
+      </svg>
+      <div class="hud-main">
+        <div class="hud-top">
+          <span class="hud-level" id="hud-level">Уровень 1</span>
+          <span class="hud-streak" id="hud-streak"></span>
+        </div>
+        <div class="xp-track"><i id="xp-fill"></i></div>
+        <div class="hud-sub">
+          <span id="xp-text">0 / 100 💎</span>
+          <span class="hud-gain" id="xp-today"></span>
+        </div>
+      </div>
+    </header>
+
     <section class="ring-card">
       <div class="ring-wrap">
         <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+          <defs>
+            <linearGradient id="ring-gradient" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#C4B5FD"/>
+              <stop offset="100%" stop-color="#8B5CF6"/>
+            </linearGradient>
+          </defs>
           <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
           <circle id="ring-fill" class="ring-fill" cx="60" cy="60" r="52"></circle>
         </svg>
@@ -24,18 +66,58 @@
         </div>
       </div>
       <div id="kcal-sub" class="muted"></div>
+
+      <div class="dials">
+        <div class="dial" data-key="p">
+          <div class="dial-wrap">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dial-bg" cx="22" cy="22" r="18"></circle>
+              <circle class="dial-fill" id="dial-p" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <div class="dial-val" id="val-p">—</div>
+          </div>
+          <div class="dial-name">Белки</div>
+          <div class="dial-norm" id="norm-p"></div>
+        </div>
+        <div class="dial" data-key="f">
+          <div class="dial-wrap">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dial-bg" cx="22" cy="22" r="18"></circle>
+              <circle class="dial-fill" id="dial-f" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <div class="dial-val" id="val-f">—</div>
+          </div>
+          <div class="dial-name">Жиры</div>
+          <div class="dial-norm" id="norm-f"></div>
+        </div>
+        <div class="dial" data-key="c">
+          <div class="dial-wrap">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dial-bg" cx="22" cy="22" r="18"></circle>
+              <circle class="dial-fill" id="dial-c" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <div class="dial-val" id="val-c">—</div>
+          </div>
+          <div class="dial-name">Углеводы</div>
+          <div class="dial-norm" id="norm-c"></div>
+        </div>
+        <div class="dial" data-key="fib">
+          <div class="dial-wrap">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dial-bg" cx="22" cy="22" r="18"></circle>
+              <circle class="dial-fill" id="dial-fib" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <div class="dial-val" id="val-fib">—</div>
+          </div>
+          <div class="dial-name">Клетчатка</div>
+          <div class="dial-norm" id="norm-fib"></div>
+        </div>
+      </div>
     </section>
 
-    <section class="macros">
-      <div class="macro"><span class="macro-name">Белки</span>
-        <div class="bar"><i id="bar-p"></i></div><span id="val-p" class="macro-val">—</span></div>
-      <div class="macro"><span class="macro-name">Жиры</span>
-        <div class="bar"><i id="bar-f"></i></div><span id="val-f" class="macro-val">—</span></div>
-      <div class="macro"><span class="macro-name">Углеводы</span>
-        <div class="bar"><i id="bar-c"></i></div><span id="val-c" class="macro-val">—</span></div>
-      <!-- Клетчатка не делит калории с БЖУ, поэтому отделена чертой. -->
-      <div class="macro fiber"><span class="macro-name">🥦 Клетчатка</span>
-        <div class="bar"><i id="bar-fib"></i></div><span id="val-fib" class="macro-val">—</span></div>
+    <section class="card">
+      <div class="card-head"><h2>Задания дня</h2><span id="quest-count" class="muted"></span></div>
+      <div id="quests"></div>
     </section>
 
     <section class="card">
@@ -135,6 +217,11 @@
     </section>
 
     <section class="card">
+      <div class="card-head"><h2>Награды</h2><span id="award-count" class="muted"></span></div>
+      <div id="awards" class="awards"></div>
+    </section>
+
+    <section class="card">
       <div class="card-head"><h2>Новый замер</h2></div>
       <div class="grid2">
         <input id="m-weight" class="input" type="number" step="0.1" placeholder="Вес, кг">
@@ -195,11 +282,27 @@
   </div>
 
   <nav class="tabs">
-    <button class="tab active" data-screen="today">📊 День</button>
-    <button class="tab" data-screen="progress">📈 Прогресс</button>
-    <button class="tab" data-screen="gym">🏋️ Спорт</button>
-    <button class="tab" data-screen="pills">💊 Добавки</button>
+    <button class="tab active" data-screen="today">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/>
+        <path d="M12 4a8 8 0 0 1 7 4"/></svg>День</button>
+    <button class="tab" data-screen="progress">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l5-5 4 3 7-8"/>
+        <path d="M4 20h16"/></svg>Прогресс</button>
+    <button class="tab" data-screen="gym">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6M8 7v10M16 7v10M20 9v6M8 12h8"/></svg>Спорт</button>
+    <button class="tab" data-screen="pills">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="8" width="18" height="8" rx="4"/>
+        <path d="M12 8v8"/></svg>Добавки</button>
   </nav>
+</div>
+
+<div id="award-pop" class="pop" hidden>
+  <div class="pop-card">
+    <div class="pop-icon" id="pop-icon">🏆</div>
+    <div class="pop-title" id="pop-title"></div>
+    <div class="pop-sub" id="pop-sub">Новая награда</div>
+    <button class="btn" id="pop-close">Класс</button>
+  </div>
 </div>
 
 <div id="toast" class="toast" hidden></div>

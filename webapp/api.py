@@ -13,6 +13,7 @@ from db import get_session
 from models import (Meal, MealSourceEnum, ProgressPhoto, ScheduleTypeEnum, Supplement, User,
                     WorkoutTypeEnum)
 from services.food_vision import FoodAnalysis, FoodRecognitionError
+from services.gamification import awards_summary, sync_today
 from services.meals import get_today_totals, list_today_meals, save_meal
 from services.progress import (
     MEASURE_FIELDS,
@@ -125,6 +126,15 @@ async def get_today(request: web.Request) -> web.Response:
         meals = await list_today_meals(session, user_id, timezone_name=tz)
         water = await today_total_ml(session, user_id, timezone_name=tz)
         supplements = await list_due_today(session, user_id, timezone_name=tz)
+        game = await sync_today(
+            session,
+            user,
+            meals_count=len(meals),
+            calories=totals.calories,
+            fiber_g=totals.fiber_g,
+            water_ml=water,
+            timezone_name=tz,
+        )
 
         return web.json_response(
             {
@@ -152,6 +162,7 @@ async def get_today(request: web.Request) -> web.Response:
                 },
                 "meals": [_meal_json(m, tz) for m in meals],
                 "supplements": [_supplement_json(s) for s in supplements],
+                "game": game,
             }
         )
 
@@ -315,6 +326,7 @@ async def get_progress(request: web.Request) -> web.Response:
             await meal_days(session, user_id, timezone_name=tz), today=today_in(tz)
         )
         photos = await list_photos(session, user_id)
+        awards = await awards_summary(session, user_id)
 
     first_weight = all_weight[0].value if all_weight else user.current_weight_kg
     last_weight = all_weight[-1].value if all_weight else user.current_weight_kg
@@ -337,6 +349,7 @@ async def get_progress(request: web.Request) -> web.Response:
                 {"id": photo.id, "date": photo.taken_at.astimezone(get_zone(tz)).strftime("%d.%m.%Y")}
                 for photo in photos
             ],
+            "awards": awards,
         }
     )
 

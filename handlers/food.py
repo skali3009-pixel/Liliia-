@@ -32,8 +32,10 @@ from services.food_vision import (
     analyze_photo,
     analyze_text,
 )
-from services.meals import get_today_totals, save_meal
+from services.gamification import sync_today
+from services.meals import get_today_totals, list_today_meals, save_meal
 from services.transcription import TranscriptionError, VoiceNotConfigured, transcribe
+from services.water import today_total_ml
 from states.food import FoodStates
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.parsing import parse_float
@@ -380,17 +382,49 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
             user.daily_carbs_g,
             user.daily_fiber_g,
         )
+        # Игровой итог считаем здесь же: запись еды может закрыть задание дня,
+        # и узнать об этом приятнее сразу, а не при следующем входе в приложение.
+        game = await sync_today(
+            session,
+            user,
+            meals_count=len(await list_today_meals(session, user.id, timezone_name=user.timezone)),
+            calories=totals.calories,
+            fiber_g=totals.fiber_g,
+            water_ml=await today_total_ml(session, user.id, timezone_name=user.timezone),
+            timezone_name=user.timezone,
+        )
 
     await state.clear()
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
-        _render_day_summary(analysis, MEAL_TYPE_RU[meal_type], totals, norms),
+        _render_day_summary(analysis, MEAL_TYPE_RU[meal_type], totals, norms, game),
         reply_markup=main_menu_keyboard(),
     )
     await callback.answer("Сохранено ✅")
 
 
-def _render_day_summary(analysis, meal_type_label, totals, norms) -> str:
+def _render_game_lines(game: dict) -> list[str]:
+    """Уровень, стрик и только что закрытые задания — короткой припиской."""
+    if not game:
+        return []
+
+    lines = [""]
+    for code in game.get("just_completed", []):
+        quest = next((q for q in game["quests"] if q["code"] == code), None)
+        if quest:
+            lines.append(f"✅ Задание закрыто: {quest['title']} +{quest['xp']} 💎")
+
+    for award in game.get("new_awards", []):
+        lines.append(f"{award['icon']} Новая награда: {award['title']}")
+
+    progress = f"💎 Уровень {game['level']} · {game['xp_in_level']}/{game['xp_to_next']}"
+    if game.get("streak"):
+        progress += f" · 🔥 {game['streak']} дней подряд"
+    lines.append(progress)
+    return lines
+
+
+def _render_day_summary(analysis, meal_type_label, totals, norms, game=None) -> str:
     calories_norm, protein_norm, fat_norm, carbs_norm, fiber_norm = norms
     lines = [f"✅ Записал: {analysis.name} ({meal_type_label})", ""]
 
@@ -407,6 +441,7 @@ def _render_day_summary(analysis, meal_type_label, totals, norms) -> str:
         f"🍚 У {_num(totals.carbs_g)} / {carbs_norm or '—'} г",
         f"🥦 Клетчатка {_num(totals.fiber_g)} / {fiber_norm or '—'} г",
     ]
+    lines += _render_game_lines(game)
     return "\n".join(lines)
 
 
