@@ -622,6 +622,383 @@ async function loadPhoto(id, img) {
   img.src = URL.createObjectURL(await response.blob());
 }
 
+/* --- Фигура тела на экране «Прогресс» -----------------------------------
+
+   Силуэт не картинка, а расчёт: API отдаёт полуширины в долях высоты фигуры,
+   поэтому тело меняется вместе с замерами, а фигура-цель отличается от
+   нынешней ровно настолько, насколько отличается вес.
+*/
+
+/* Вертикальные ориентиры фигуры в системе координат 200 × 470.
+   Расставлены по канону: макушка — пол это рост, талия на 64% от пола,
+   промежность на 47%, колено на 24%. С «на глаз» фигура выглядит бочкой —
+   проверено. */
+const FIG = {
+  cx: 100, top: 36, bottom: 446,
+  bunY: 34, bunR: 10,
+  headCy: 58, headRx: 16, headRy: 22,
+  chin: 80, shoulder: 112, bust: 144, underbust: 166, waist: 186,
+  hip: 232, crotch: 254, thighMid: 302, knee: 346, calf: 374, ankle: 428,
+};
+const FIG_H = FIG.bottom - FIG.top;
+
+let bodyMode = 'goal';
+let bodyZone = 'waist';
+
+const n1 = (value) => Math.round(value * 10) / 10;
+const pt = (x, y) => `${n1(x)} ${n1(y)}`;
+const between = (from, to, share) => from + (to - from) * share;
+
+/* Половину контура задаём явно, вторая получается отражением — так фигура
+   гарантированно симметрична, и править нужно только одну сторону. */
+function mirrored(axis, start, segs) {
+  const flip = ([x, y]) => [2 * axis - x, y];
+  const out = [`M ${pt(...start)}`];
+  for (const [c1, c2, end] of segs) out.push(`C ${pt(...c1)} ${pt(...c2)} ${pt(...end)}`);
+
+  const last = segs.length ? segs[segs.length - 1][2] : start;
+  out.push(`L ${pt(...flip(last))}`);
+  for (let i = segs.length - 1; i >= 0; i--) {
+    const prev = i ? segs[i - 1][2] : start;
+    // У обратного кубика контрольные точки меняются местами.
+    out.push(`C ${pt(...flip(segs[i][1]))} ${pt(...flip(segs[i][0]))} ${pt(...flip(prev))}`);
+  }
+  return `${out.join(' ')} Z`;
+}
+
+/* Конечность: опорные точки [y, центр, полуширина] сверху вниз. Центр может
+   смещаться — так нога сходится к щиколотке, а рука идёт вдоль тела. */
+function taperPath(stops) {
+  const side = (sign, up) => {
+    const list = up ? [...stops].reverse() : stops;
+    const out = [];
+    for (let i = 1; i < list.length; i++) {
+      const [y0, c0, w0] = list[i - 1];
+      const [y1, c1, w1] = list[i];
+      const lean = (y1 - y0) * 0.4;
+      out.push(`C ${pt(c0 + sign * w0, y0 + lean)} ${pt(c1 + sign * w1, y1 - lean)} ` +
+               `${pt(c1 + sign * w1, y1)}`);
+    }
+    return out;
+  };
+  const first = stops[0];
+  const last = stops[stops.length - 1];
+  return [
+    `M ${pt(first[1] + first[2], first[0])}`,
+    ...side(1, false),
+    `L ${pt(last[1] - last[2], last[0])}`,
+    ...side(-1, true),
+    'Z',
+  ].join(' ');
+}
+
+function torsoPath(s) {
+  const c = FIG.cx;
+  const sh = s.shoulder * FIG_H;
+  const bu = s.bust * FIG_H;
+  const wa = s.waist * FIG_H;
+  const hi = s.hip * FIG_H;
+  return mirrored(c, [c, FIG.chin + 4], [
+    [[c + sh * 0.5, FIG.chin + 8], [c + sh * 0.8, FIG.shoulder - 10], [c + sh * 0.85, FIG.shoulder + 4]],
+    [[c + sh * 0.85, FIG.shoulder + 18], [c + bu, FIG.bust - 20], [c + bu, FIG.bust]],
+    [[c + bu, FIG.underbust + 4], [c + wa, FIG.waist - 20], [c + wa, FIG.waist]],
+    [[c + wa, FIG.waist + 18], [c + hi, FIG.hip - 22], [c + hi, FIG.hip]],
+    [[c + hi, FIG.hip + 16], [c + hi * 0.95, FIG.crotch - 10], [c + hi * 0.78, FIG.crotch]],
+  ]);
+}
+
+/* Ноги стоят почти отвесно: если сводить их центры к щиколоткам, просвет
+   между ними исчезает и получается одна тумба. Просвет должен рождаться
+   сужением самой ноги, а не сведением центров. */
+function legStops(s, side) {
+  const hi = s.hip * FIG_H;
+  const th = s.thigh * FIG_H;
+  const top = FIG.cx + side * hi * 0.44;
+  const foot = FIG.cx + side * hi * 0.36;
+  const at = (y) => between(top, foot, (y - FIG.crotch) / (FIG.ankle - FIG.crotch));
+  return [
+    [FIG.crotch - 14, at(FIG.crotch - 14), th * 0.99],
+    [FIG.thighMid, at(FIG.thighMid), th * 0.9],
+    [FIG.knee, at(FIG.knee), th * 0.56],
+    [FIG.calf, at(FIG.calf), th * 0.62],
+    [FIG.ankle, at(FIG.ankle), th * 0.28],
+  ];
+}
+
+/* Рука отведена от тела чуть сильнее, чем в жизни. Это сознательно: если
+   опустить её анатомически близко, рука закрывает талию и бёдра — то самое,
+   ради чего фигуру и рисуем. В макете руки тоже висят с просветом. */
+function armStops(s, side) {
+  const sh = s.shoulder * FIG_H;
+  const ar = s.arm * FIG_H;
+  const hi = s.hip * FIG_H;
+  // Плечо — на линии плеч, кисть чуть дальше от тела: рука слегка отведена,
+  // и между предплечьем и талией появляется просвет.
+  const top = FIG.cx + side * (sh - ar * 0.3);
+  const wrist = FIG.cx + side * Math.max(hi + ar * 0.2, sh + ar * 0.6);
+  const wristY = FIG.crotch - 4;
+  const at = (y) => between(top, wrist, (y - FIG.shoulder) / (wristY - FIG.shoulder));
+  return [
+    [FIG.shoulder - 2, at(FIG.shoulder - 2), ar * 0.98],
+    [FIG.bust + 8, at(FIG.bust + 8), ar * 0.9],
+    [FIG.waist + 10, at(FIG.waist + 10), ar * 0.66],
+    [wristY, at(wristY), ar * 0.46],
+  ];
+}
+
+/* Тело одной фигурой: голова, шея, торс, руки и ноги отдельными формами.
+   Заливка у всех одна, поэтому в глазах они сливаются в один силуэт, но
+   каждая часть при этом живёт по своему замеру. */
+function bodyShapes(s) {
+  const th = s.thigh * FIG_H;
+  const ar = s.arm * FIG_H;
+  const neck = s.neck * FIG_H;
+  const legs = [-1, 1].map((side) => legStops(s, side));
+  const arms = [-1, 1].map((side) => armStops(s, side));
+
+  const parts = [
+    `<circle cx="${FIG.cx}" cy="${FIG.bunY}" r="${n1(FIG.bunR)}"/>`,
+    `<ellipse cx="${FIG.cx}" cy="${FIG.headCy}" rx="${FIG.headRx}" ry="${FIG.headRy}"/>`,
+    `<path d="${taperPath([
+      [FIG.chin - 6, FIG.cx, neck],
+      [FIG.shoulder + 2, FIG.cx, neck * 1.35],
+    ])}"/>`,
+    `<path d="${torsoPath(s)}"/>`,
+  ];
+  for (const stops of legs) {
+    const foot = stops[stops.length - 1];
+    parts.push(`<path d="${taperPath(stops)}"/>`);
+    // Стопа перекрывает срез голени, иначе она висит отдельным камешком.
+    parts.push(`<ellipse cx="${n1(foot[1])}" cy="${FIG.bottom - 7}" ` +
+               `rx="${n1(th * 0.32)}" ry="7"/>`);
+  }
+  for (const stops of arms) {
+    const top = stops[0];
+    const hand = stops[stops.length - 1];
+    // Круглая «дельта» на плече: без неё верх руки срезан по прямой и на
+    // контуре видна горизонтальная черта поперёк плеча.
+    parts.push(`<circle cx="${n1(top[1])}" cy="${n1(top[0] + 4)}" r="${n1(top[2] * 0.86)}"/>`);
+    parts.push(`<path d="${taperPath(stops)}"/>`);
+    parts.push(`<ellipse cx="${n1(hand[1])}" cy="${n1(hand[0] + 7)}" ` +
+               `rx="${n1(ar * 0.45)}" ry="8"/>`);
+  }
+  return parts.join('');
+}
+
+/* Ноги вплотную сходятся у промежности: без тёмного шва они читаются одной
+   тумбой. Линия идёт по оси и гаснет там, где ноги и так расходятся. */
+function legSeam(s) {
+  const th = s.thigh * FIG_H;
+  return `<path class="fig-seam" d="M ${FIG.cx} ${n1(FIG.crotch - th * 0.45)} ` +
+         `L ${FIG.cx} ${n1(FIG.thighMid + 24)}"/>`;
+}
+
+/* Ореол за головой, кольцо на полу и золотые точки — из макета. */
+function figureDecor() {
+  const floor = FIG.bottom - 2;
+  return `
+    <circle cx="${FIG.cx}" cy="${FIG.headCy}" r="52" class="fig-halo"/>
+    <circle cx="${FIG.cx}" cy="${FIG.headCy}" r="60" class="fig-halo dotted"/>
+    <ellipse cx="${FIG.cx}" cy="${floor}" rx="88" ry="15" class="fig-ring"/>
+    <ellipse cx="${FIG.cx}" cy="${floor}" rx="66" ry="11" class="fig-ring faint"/>
+    <circle cx="${FIG.cx}" cy="8" r="2.5" class="fig-spark"/>
+    <circle cx="${FIG.cx - 52}" cy="${FIG.headCy}" r="2.5" class="fig-spark"/>
+    <circle cx="${FIG.cx + 52}" cy="${FIG.headCy}" r="2.5" class="fig-spark"/>
+    <circle cx="${FIG.cx - 88}" cy="${floor}" r="2.5" class="fig-spark"/>
+    <circle cx="${FIG.cx + 88}" cy="${floor}" r="2.5" class="fig-spark"/>`;
+}
+
+/* Подсветка зон из второго макета: полосы на талии, груди и бёдрах,
+   панели на руках и ногах. Выбранная зона горит, остальные приглушены. */
+function zoneShapes(s, active) {
+  const hi = s.hip * FIG_H;
+  const th = s.thigh * FIG_H;
+  const ar = s.arm * FIG_H;
+  const band = (code, y, halfWidth) =>
+    `<g class="zone${code === active ? ' on' : ''}" data-zone="${code}">
+       <ellipse cx="${FIG.cx}" cy="${y}" rx="${n1(halfWidth + 4)}" ry="7"/>
+       <ellipse cx="${FIG.cx}" cy="${y}" rx="${n1(halfWidth + 4)}" ry="7" class="dotted"/>
+     </g>`;
+
+  /* Подсветка конечности — не четырёхугольник по её краям (получаются
+     коробки поперёк ноги), а толстая линия по оси со скруглёнными концами:
+     она сама повторяет форму руки или бедра. */
+  const limbs = (code, pick, grow) =>
+    `<g class="zone${code === active ? ' on' : ''}" data-zone="${code}">` +
+    [-1, 1].map((side) => {
+      const [from, to] = pick(side);
+      return `<path class="zone-cap" d="M ${pt(from[1], from[0])} L ${pt(to[1], to[0])}" ` +
+             `stroke-width="${n1(from[2] + to[2] + grow * 2)}"/>`;
+    }).join('') +
+    '</g>';
+
+  return [
+    limbs('arm', (side) => armStops(s, side).slice(0, 2), 2),
+    band('bust', FIG.bust, s.bust * FIG_H),
+    band('waist', FIG.waist, s.waist * FIG_H),
+    band('hip', FIG.hip, hi),
+    limbs('thigh', (side) => legStops(s, side).slice(0, 2), 2),
+  ].join('');
+}
+
+function figureGroup(s, { dx = 0, dim = false, zones = '' } = {}) {
+  const shapes = bodyShapes(s);
+  // Отражение под полом: тот же силуэт, сжатый и почти прозрачный.
+  const mirror = FIG.bottom + 0.35 * FIG.bottom;
+  // Контур берём фильтром по всей фигуре, а не обводкой каждой детали:
+  // иначе внутри силуэта видны швы между рукой, торсом и шеей.
+  return `
+    <g transform="translate(${dx} 0)" class="figure${dim ? ' dim' : ''}">
+      ${figureDecor()}
+      <g transform="translate(0 ${n1(mirror)}) scale(1 -0.35)" class="fig-mirror">${shapes}</g>
+      <g class="fig-glow">${shapes}</g>
+      <g class="fig-rim">${shapes}</g>
+      <g class="fig-body">${shapes}${legSeam(s)}</g>
+      ${zones}
+    </g>`;
+}
+
+/* Фиолетовый поток между фигурами — из первого макета. */
+function nebula(x) {
+  const sparks = [[-42, -60], [-14, 18], [26, -28], [54, 44], [-64, 74], [70, -70]]
+    .map(([sx, sy], index) =>
+      `<circle cx="${x + sx}" cy="${FIG.waist + sy}" r="${1 + (index % 3) * 0.6}" class="fig-spark"/>`)
+    .join('');
+  return `
+    <g class="nebula">
+      <path d="M ${x - 96} ${FIG.waist + 40} C ${x - 40} ${FIG.waist - 30}
+               ${x + 40} ${FIG.waist + 70} ${x + 96} ${FIG.waist - 20}"/>
+      <path d="M ${x - 88} ${FIG.waist + 66} C ${x - 30} ${FIG.waist}
+               ${x + 34} ${FIG.waist + 96} ${x + 90} ${FIG.waist + 14}" class="thin"/>
+    </g>${sparks}`;
+}
+
+const FIG_DEFS = `
+  <defs>
+    <linearGradient id="fig-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C4B5FD" stop-opacity=".34"/>
+      <stop offset="55%" stop-color="#8B5CF6" stop-opacity=".20"/>
+      <stop offset="1" stop-color="#5B6CFF" stop-opacity=".10"/>
+    </linearGradient>
+    <linearGradient id="fig-mirror-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#C4B5FD" stop-opacity=".22"/>
+      <stop offset="1" stop-color="#C4B5FD" stop-opacity="0"/>
+    </linearGradient>
+    <filter id="fig-blur" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <!-- Кромка света по краю всей фигуры. Именно кольцо: расширенный силуэт
+         минус исходный. Без вычитания фильтр заливает фигуру целиком —
+         полупрозрачное тело поверх такую заливку не скрывает. -->
+    <filter id="fig-rim" x="-20%" y="-20%" width="140%" height="140%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="1.2" result="fat"/>
+      <feComposite in="fat" in2="SourceAlpha" operator="out" result="ring"/>
+      <feGaussianBlur in="ring" stdDeviation=".6" result="soft"/>
+      <feFlood flood-color="#EDEAFB" flood-opacity=".85"/>
+      <feComposite operator="in" in2="soft"/>
+    </filter>
+    <filter id="fig-blur-soft" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="3"/>
+    </filter>
+    <filter id="fig-nebula" x="-40%" y="-60%" width="180%" height="220%">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+  </defs>`;
+
+function renderBody(data) {
+  const stage = document.getElementById('body-stage');
+  const note = document.getElementById('body-note');
+  const chips = document.getElementById('body-zones');
+  if (!data) { stage.innerHTML = ''; return; }
+
+  note.textContent = data.estimated ? 'примерно — нет замеров' : '';
+
+  // Ширина системы координат одна на оба режима: иначе одинокая фигура
+  // растягивается на всю карточку и та вырастает вдвое при переключении.
+  const STAGE_W = 430;
+
+  if (bodyMode === 'zones') {
+    chips.hidden = false;
+    stage.innerHTML = `
+      <svg class="fig-svg" viewBox="0 0 ${STAGE_W} 470" preserveAspectRatio="xMidYMid meet">
+        ${FIG_DEFS}
+        ${figureGroup(data.now, {
+          dx: STAGE_W / 2 - FIG.cx,
+          zones: zoneShapes(data.now, bodyZone),
+        })}
+      </svg>`;
+    renderZoneChips(data.zones);
+  } else {
+    chips.hidden = true;
+    const gap = 230;
+    stage.innerHTML = `
+      <svg class="fig-svg" viewBox="0 0 ${STAGE_W} 470" preserveAspectRatio="xMidYMid meet">
+        ${FIG_DEFS}
+        ${data.goal ? nebula(215) : ''}
+        ${figureGroup(data.now, { dx: data.goal ? 0 : STAGE_W / 2 - FIG.cx })}
+        ${data.goal ? figureGroup(data.goal, { dx: gap, dim: true }) : ''}
+      </svg>
+      <div class="fig-captions${data.goal ? '' : ' single'}">
+        <div><b>Сейчас</b><span>${progress?.summary?.current_weight
+          ? `${fmt(progress.summary.current_weight)} кг` : 'вес не записан'}</span></div>
+        ${data.goal ? `<div><b>Цель</b><span>${fmt(progress.summary.target_weight)} кг</span></div>` : ''}
+      </div>
+      ${data.goal ? '' : '<p class="hint">Поставь цель по весу в анкете — покажу, ' +
+        'как будет выглядеть фигура.</p>'}`;
+  }
+
+  renderInsights(data.insights);
+  for (const group of stage.querySelectorAll('.zone')) {
+    group.onclick = () => {
+      bodyZone = group.dataset.zone;
+      const zone = (data.zones || []).find((item) => item.code === bodyZone);
+      if (zone) setMetric(zone.metric);
+      renderBody(data);
+    };
+  }
+}
+
+function renderZoneChips(zones) {
+  const box = document.getElementById('body-zones');
+  box.innerHTML = '';
+  for (const zone of zones || []) {
+    const button = document.createElement('button');
+    button.className = `chip-btn${zone.code === bodyZone ? ' active' : ''}`;
+    button.textContent = zone.has_data ? `${zone.label} ${fmt(zone.value)}` : zone.label;
+    button.onclick = () => {
+      bodyZone = zone.code;
+      setMetric(zone.metric);
+      renderBody(progress.body);
+    };
+    box.appendChild(button);
+  }
+}
+
+function renderInsights(items) {
+  const box = document.getElementById('body-insights');
+  box.innerHTML = '';
+  for (const item of items || []) {
+    const row = document.createElement('div');
+    row.className = 'insight';
+    row.innerHTML = '<div class="insight-icon"></div><div class="insight-main">' +
+      '<div class="insight-title"></div><div class="insight-text"></div></div>';
+    row.querySelector('.insight-icon').textContent = item.icon;
+    row.querySelector('.insight-title').textContent = item.title;
+    row.querySelector('.insight-text').textContent = item.text;
+    box.appendChild(row);
+  }
+}
+
+/* Выбор зоны переключает и график: нажал на талию — видишь её динамику. */
+function setMetric(next) {
+  if (metric === next) return;
+  metric = next;
+  for (const button of document.querySelectorAll('#metric-switch .chip-btn')) {
+    button.classList.toggle('active', button.dataset.metric === next);
+  }
+  refreshProgress().catch((e) => toast(e.message));
+}
+
 async function refreshProgress() {
   progress = await api(`/api/progress?metric=${metric}&period=${period}`);
 
@@ -634,6 +1011,7 @@ async function refreshProgress() {
     `${plural(s.streak, 'день', 'дня', 'дней')} подряд`;
   document.getElementById('chart-title').textContent = progress.title;
 
+  renderBody(progress.body);
   buildChart(progress);
   buildTable(progress);
   await renderPhotos(progress.photos);
@@ -1268,6 +1646,14 @@ async function init() {
       document.querySelectorAll('#metric-switch .chip-btn').forEach((b) => b.classList.remove('active'));
       button.classList.add('active');
       refreshProgress().catch((e) => toast(e.message));
+    };
+  }
+  for (const button of document.querySelectorAll('#body-switch .seg-btn')) {
+    button.onclick = () => {
+      bodyMode = button.dataset.body;
+      document.querySelectorAll('#body-switch .seg-btn').forEach((b) => b.classList.remove('active'));
+      button.classList.add('active');
+      renderBody(progress?.body);
     };
   }
   for (const button of document.querySelectorAll('#period-switch .seg-btn')) {

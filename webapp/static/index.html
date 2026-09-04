@@ -275,6 +275,20 @@
         <div class="stat-label" id="stat-streak-label">дней подряд</div></div>
     </section>
 
+    <section class="card body-card">
+      <div class="card-head">
+        <h2>Твоё тело</h2>
+        <span id="body-note" class="muted"></span>
+      </div>
+      <div class="seg" id="body-switch">
+        <button class="seg-btn active" data-body="goal">Сейчас и цель</button>
+        <button class="seg-btn" data-body="zones">Зоны</button>
+      </div>
+      <div id="body-stage" class="body-stage"></div>
+      <div id="body-zones" class="chips" hidden></div>
+      <div id="body-insights" class="insights"></div>
+    </section>
+
     <div class="filters">
       <!-- Замеров больше, чем помещается в переключатель, — ряд прокручивается. -->
       <div class="chips" id="metric-switch">

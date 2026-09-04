@@ -285,6 +285,73 @@ button:focus-visible, .tab:focus-visible {
 .rest-label { font-size: 15px; color: var(--muted); }
 .rest-time { font-size: 76px; font-weight: 700; letter-spacing: -2px; margin: 6px 0 22px; }
 
+/* --- Фигура тела на экране «Прогресс» ---------------------------------
+   Силуэт рисуется кодом по замерам, поэтому здесь только свет и цвет:
+   заливка, свечение, ореолы и отражение в полу. */
+.body-card { padding-bottom: 14px; }
+.body-card .seg { margin-bottom: 6px; }
+.body-stage { margin: 4px -4px 0; }
+
+.fig-svg { display: block; width: 100%; height: auto; }
+
+.fig-body path, .fig-body ellipse, .fig-body circle {
+  fill: url(#fig-fill); stroke: none;
+}
+/* Шов между ногами — единственная линия внутри силуэта. */
+.fig-body .fig-seam {
+  fill: none; stroke: var(--void); stroke-opacity: .32; stroke-width: 1.4;
+  stroke-linecap: round; filter: url(#fig-blur-soft);
+}
+.fig-rim { filter: url(#fig-rim); }
+/* Дублёр под телом: размытая копия даёт объём и свет вокруг фигуры. */
+.fig-glow path, .fig-glow ellipse, .fig-glow circle {
+  fill: var(--violet); stroke: none;
+}
+.fig-glow { opacity: .34; filter: url(#fig-blur); }
+.fig-mirror { filter: url(#fig-blur-soft); }
+.fig-mirror path, .fig-mirror ellipse, .fig-mirror circle {
+  fill: url(#fig-mirror-fill); stroke: none; opacity: .5;
+}
+/* Фигура-цель светит слабее: главная — та, что сейчас. */
+.figure.dim .fig-rim { opacity: .6; }
+.figure.dim .fig-glow { opacity: .2; }
+.figure.dim .fig-body { opacity: .75; }
+
+.fig-halo { fill: none; stroke: var(--lilac); stroke-opacity: .16; stroke-width: 1; }
+.fig-halo.dotted { stroke-dasharray: 1 7; stroke-opacity: .3; }
+.fig-ring { fill: none; stroke: var(--violet); stroke-opacity: .45; stroke-width: 1; }
+.fig-ring.faint { stroke: var(--lilac); stroke-opacity: .2; }
+.fig-spark { fill: var(--gold); opacity: .85; }
+
+.nebula path { fill: none; stroke: var(--violet); stroke-width: 26; stroke-opacity: .34;
+  filter: url(#fig-nebula); stroke-linecap: round; }
+.nebula path.thin { stroke: var(--lilac); stroke-width: 12; stroke-opacity: .22; }
+
+/* Зоны: выбранная горит, остальные едва намечены. */
+.zone { cursor: pointer; }
+.zone ellipse { fill: var(--lilac); fill-opacity: .07; stroke: var(--lilac);
+  stroke-opacity: .3; stroke-width: 1; }
+.zone .dotted { fill: none; stroke-dasharray: 2 4; stroke-opacity: .5; }
+.zone .zone-cap { fill: none; stroke: var(--lilac); stroke-opacity: .22; stroke-linecap: round; }
+.zone.on ellipse { fill-opacity: .2; stroke-opacity: .85; }
+.zone.on .zone-cap { stroke-opacity: .5; }
+
+.fig-captions { display: flex; gap: 10px; margin-top: 2px; }
+.fig-captions.single { justify-content: center; }
+.fig-captions > div {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.fig-captions b { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.fig-captions span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.insights { display: grid; gap: 8px; margin-top: 14px; }
+.insight { display: flex; gap: 10px; align-items: flex-start;
+  background: var(--surface-2); border-radius: 14px; padding: 10px 12px; }
+.insight-icon { font-size: 15px; line-height: 1.2; }
+.insight-title { font-size: 12px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--lilac); }
+.insight-text { font-size: 13px; color: var(--fg); margin-top: 1px; }
+
 /* --- Правило тарелки и рекомендации --- */
 .plate-row { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; }
 .plate { width: 96px; height: 96px; flex: 0 0 96px; }

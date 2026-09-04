@@ -87,6 +87,34 @@ async def measure_points(
     return [Point(day, value) for day, value in sorted(by_day.items())]
 
 
+async def latest_measures(session: AsyncSession, user_id: int) -> dict[str, float]:
+    """Последнее известное значение по каждому обхвату.
+
+    По каждому полю отдельно: человек редко меряет всё сразу, и талия из
+    вчерашней записи не должна пропадать из-за того, что сегодня записан
+    только вес.
+    """
+    rows = (
+        (
+            await session.execute(
+                select(BodyMeasurement)
+                .where(BodyMeasurement.user_id == user_id)
+                .order_by(BodyMeasurement.measured_at)
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    latest: dict[str, float] = {}
+    for row in rows:
+        for key, (column_name, _, _) in MEASURE_FIELDS.items():
+            value = getattr(row, column_name)
+            if value is not None:
+                latest[key] = float(value)
+    return latest
+
+
 async def calorie_points(
     session: AsyncSession,
     user_id: int,

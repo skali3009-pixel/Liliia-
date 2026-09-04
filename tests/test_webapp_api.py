@@ -140,6 +140,37 @@ def test_today_includes_game_state_with_quests():
     run(scenario)
 
 
+def test_progress_carries_the_body_figure():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            data = await (await call(client, "GET", "/api/progress")).json()
+            body = data["body"]
+
+            assert body["now"]["hip"] > body["now"]["waist"]
+            # Цель 55 кг при весе 60 — фигура-ориентир должна быть уже.
+            assert body["goal"]["waist"] < body["now"]["waist"]
+            # Замеров ещё нет, значит фигура примерная и так и помечена.
+            assert body["estimated"] is True
+            assert any("До твоей цели" in item["title"] for item in body["insights"])
+    run(scenario)
+
+
+def test_measurement_reshapes_the_figure():
+    """Ради этого фигура и считается, а не рисуется картинкой."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            before = (await (await call(client, "GET", "/api/progress")).json())["body"]
+
+            await call(client, "POST", "/api/measurements", json_body={"waist_cm": 62})
+
+            after = (await (await call(client, "GET", "/api/progress")).json())["body"]
+            assert after["now"]["waist"] < before["now"]["waist"]
+
+            waist_zone = next(z for z in after["zones"] if z["code"] == "waist")
+            assert waist_zone["has_data"] is True and waist_zone["value"] == 62
+    run(scenario)
+
+
 def test_marking_stress_closes_its_quest():
     """Пожелание из живого теста: стресс тоже влияет на вес — по нему должен
     быть свой квест, и он закрывается той же кнопкой, что и остальное

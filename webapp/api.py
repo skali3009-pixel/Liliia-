@@ -22,6 +22,7 @@ from services.progress import (
     add_measurement,
     calorie_points,
     compute_streak,
+    latest_measures,
     list_photos,
     measure_points,
     meal_days,
@@ -42,6 +43,7 @@ from services.workouts import (
     week_summary,
 )
 from services.water import add_water, today_total_ml, undo_last
+from utils.body import build_insights, build_silhouette, goal_silhouette, zones
 from utils.macros import GAP_LABELS, dominant_gap, remaining
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, scale_nutrition
@@ -332,6 +334,47 @@ PERIODS = {"week": 7, "month": 30}
 MAX_PHOTO_BYTES = 10 * 1024 * 1024
 
 
+# Замеры в базе названы по-своему («chest», «hips»), а фигура рисуется по
+# анатомическим именам — держим перевод в одном месте.
+BODY_KEYS = {"chest": "bust", "hips": "hip", "waist": "waist", "thigh": "thigh", "arm": "arm"}
+
+
+def _body_block(user: User, measures: dict[str, float], *, weight_kg: float | None) -> dict:
+    """Данные для фигуры на экране прогресса: силуэт, ориентир, зоны, выводы."""
+    height_cm = user.height_cm or 0
+    weight = weight_kg or user.current_weight_kg or 0
+    body_measures = {
+        body_key: measures[measure_key]
+        for measure_key, body_key in BODY_KEYS.items()
+        if measures.get(measure_key)
+    }
+
+    now, estimated = build_silhouette(
+        measures=body_measures, height_cm=height_cm, weight_kg=weight
+    )
+    goal = goal_silhouette(
+        now, weight_kg=weight, target_weight_kg=user.target_weight_kg or 0
+    )
+
+    return {
+        "now": now.to_dict(),
+        "goal": goal.to_dict() if goal else None,
+        "estimated": estimated,
+        "zones": zones(body_measures),
+        "insights": [
+            item.to_dict()
+            for item in build_insights(
+                weight_kg=weight,
+                target_weight_kg=user.target_weight_kg,
+                height_cm=height_cm,
+                waist_cm=body_measures.get("waist"),
+                protein_g=user.daily_protein_g,
+                water_ml=user.daily_water_ml,
+            )
+        ],
+    }
+
+
 async def get_progress(request: web.Request) -> web.Response:
     """Данные для экрана прогресса: график, сводка, стрик, фото."""
     user_id, tz = request["user_id"], request["timezone"]
@@ -358,6 +401,7 @@ async def get_progress(request: web.Request) -> web.Response:
         )
         photos = await list_photos(session, user_id)
         awards = await awards_summary(session, user_id)
+        measures = await latest_measures(session, user_id)
 
     first_weight = all_weight[0].value if all_weight else user.current_weight_kg
     last_weight = all_weight[-1].value if all_weight else user.current_weight_kg
@@ -376,6 +420,7 @@ async def get_progress(request: web.Request) -> web.Response:
                 "changed": round((last_weight or 0) - (first_weight or 0), 1),
                 "streak": streak,
             },
+            "body": _body_block(user, measures, weight_kg=last_weight),
             "photos": [
                 {"id": photo.id, "date": to_local(photo.taken_at, tz).strftime("%d.%m.%Y")}
                 for photo in photos
