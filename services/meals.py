@@ -20,6 +20,7 @@ class DayTotals:
     protein_g: float
     fat_g: float
     carbs_g: float
+    fiber_g: float
 
 
 async def save_meal(
@@ -41,6 +42,7 @@ async def save_meal(
         protein_g=analysis.protein_g,
         fat_g=analysis.fat_g,
         carbs_g=analysis.carbs_g,
+        fiber_g=analysis.fiber_g,
         source=source,
         photo_file_id=photo_file_id,
     )
@@ -59,14 +61,16 @@ async def get_today_totals(
         func.coalesce(func.sum(Meal.protein_g), 0.0),
         func.coalesce(func.sum(Meal.fat_g), 0.0),
         func.coalesce(func.sum(Meal.carbs_g), 0.0),
+        func.coalesce(func.sum(Meal.fiber_g), 0.0),
     ).where(Meal.user_id == user_id, Meal.logged_at >= start, Meal.logged_at < end)
 
-    calories, protein_g, fat_g, carbs_g = (await session.execute(stmt)).one()
+    calories, protein_g, fat_g, carbs_g, fiber_g = (await session.execute(stmt)).one()
     return DayTotals(
         calories=float(calories),
         protein_g=float(protein_g),
         fat_g=float(fat_g),
         carbs_g=float(carbs_g),
+        fiber_g=float(fiber_g),
     )
 
 

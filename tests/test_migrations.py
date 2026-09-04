@@ -20,7 +20,8 @@ def test_missing_column_is_added_and_rerun_is_safe():
             await conn.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, age INTEGER)"))
 
             applied = await apply_column_additions(conn)
-            assert applied == ["users.timezone"]
+            # Все колонки users, добавленные после первого релиза.
+            assert applied == ["users.timezone", "users.daily_fiber_g"]
             assert "timezone" in await conn.run_sync(_columns, "users")
 
             # Повторный запуск ничего не делает и не падает.
@@ -39,7 +40,8 @@ def test_existing_column_is_left_alone():
             )
             await conn.execute(text("INSERT INTO users VALUES (1, 'Asia/Yekaterinburg')"))
 
-            assert await apply_column_additions(conn) == []
+            # Существующую колонку не трогаем — добавляем только недостающие.
+            assert "users.timezone" not in await apply_column_additions(conn)
             # Значение не затёрто значением по умолчанию.
             value = (await conn.execute(text("SELECT timezone FROM users"))).scalar_one()
             assert value == "Asia/Yekaterinburg"

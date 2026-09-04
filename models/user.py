@@ -83,6 +83,8 @@ class User(Base):
     daily_protein_g: Mapped[int | None] = mapped_column(Integer, nullable=True)
     daily_fat_g: Mapped[int | None] = mapped_column(Integer, nullable=True)
     daily_carbs_g: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Клетчатка — отдельная цель, в калорийность рациона не входит.
+    daily_fiber_g: Mapped[int | None] = mapped_column(Integer, nullable=True)
     daily_water_ml: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

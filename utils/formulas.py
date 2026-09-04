@@ -11,6 +11,10 @@
   MVP: без разделения на тощую массу тела); углеводы — остаток калорий.
 - Норма воды — 30-40 мл/кг веса, нижняя граница для низкой активности,
   верхняя — для высокой (плюс дополнительная жидкость на тренировках).
+- Клетчатка не входит в калорийность и не делит калории с БЖУ: это отдельный
+  ориентир, 14 г на 1000 ккал (Dietary Guidelines for Americans). На дефиците
+  пропорция даёт слишком мало, поэтому норма не опускается ниже 20 г и не
+  поднимается выше 40 г (ВОЗ рекомендует взрослым не меньше 25 г).
 """
 
 from __future__ import annotations
@@ -81,6 +85,11 @@ GOAL_FAT_G_PER_KG: dict[Goal, float] = {
     Goal.RECOMPOSITION: 0.9,
 }
 
+# Клетчатка: г на 1000 ккал рациона и границы разумного диапазона.
+FIBER_G_PER_1000_KCAL = 14.0
+MIN_FIBER_G = 20
+MAX_FIBER_G = 40
+
 KCAL_PER_G_PROTEIN = 4
 KCAL_PER_G_FAT = 9
 KCAL_PER_G_CARBS = 4
@@ -92,6 +101,7 @@ class Macros:
     protein_g: int
     fat_g: int
     carbs_g: int
+    fiber_g: int
 
 
 def bmr_mifflin_st_jeor(
@@ -119,6 +129,18 @@ def daily_water_ml(*, weight_kg: float, activity_level: ActivityLevel) -> int:
     if weight_kg <= 0:
         raise ValueError("weight_kg должен быть положительным")
     return round(weight_kg * WATER_ML_PER_KG[activity_level])
+
+
+def daily_fiber_g(*, calories: float) -> int:
+    """Суточная норма клетчатки, г — 14 г на 1000 ккал, но в границах 20-40 г.
+
+    Клетчатка не даёт калорий и не вычитается из углеводов: это отдельный
+    показатель, у которого своя дневная цель.
+    """
+    if calories <= 0:
+        raise ValueError("calories должен быть положительным")
+    proportional = calories / 1000 * FIBER_G_PER_1000_KCAL
+    return round(min(max(proportional, MIN_FIBER_G), MAX_FIBER_G))
 
 
 def calculate_macros(
@@ -151,4 +173,5 @@ def calculate_macros(
         protein_g=round(protein_g),
         fat_g=round(fat_g),
         carbs_g=round(carbs_g),
+        fiber_g=daily_fiber_g(calories=calories),
     )

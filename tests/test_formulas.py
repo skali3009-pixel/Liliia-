@@ -3,11 +3,14 @@
 import pytest
 
 from utils.formulas import (
+    MAX_FIBER_G,
+    MIN_FIBER_G,
     ActivityLevel,
     Gender,
     Goal,
     bmr_mifflin_st_jeor,
     calculate_macros,
+    daily_fiber_g,
     daily_water_ml,
     tdee,
 )
@@ -106,6 +109,33 @@ def test_calculate_macros_carbs_never_negative():
         goal=Goal.LOSE_WEIGHT,
     )
     assert macros.carbs_g >= 0
+
+
+def test_fiber_norm_scales_with_calories():
+    """14 г клетчатки на 1000 ккал — стандартный ориентир."""
+    assert daily_fiber_g(calories=2000) == 28
+
+
+def test_fiber_norm_has_floor_and_ceiling():
+    # На жёстком дефиците пропорция даёт слишком мало — держим нижнюю границу.
+    assert daily_fiber_g(calories=1000) == MIN_FIBER_G
+    # И не требуем невыполнимого на очень калорийном рационе.
+    assert daily_fiber_g(calories=4000) == MAX_FIBER_G
+
+
+def test_fiber_norm_is_not_part_of_calories():
+    """Клетчатка идёт отдельно и не отнимает калории у БЖУ."""
+    macros = calculate_macros(
+        gender=Gender.FEMALE,
+        weight_kg=62,
+        height_cm=165,
+        age_years=30,
+        activity_level=ActivityLevel.MODERATE,
+        goal=Goal.LOSE_WEIGHT,
+    )
+    assert macros.fiber_g > 0
+    recomputed = macros.protein_g * 4 + macros.fat_g * 9 + macros.carbs_g * 4
+    assert recomputed == pytest.approx(macros.calories, abs=5)
 
 
 def test_calculate_macros_macros_sum_to_calories():

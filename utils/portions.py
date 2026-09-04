@@ -13,7 +13,7 @@ PORTION_STEP = 0.25
 MIN_WEIGHT_G = 5.0
 MAX_WEIGHT_G = 3000.0
 
-NUTRITION_KEYS = ("calories", "protein_g", "fat_g", "carbs_g")
+NUTRITION_KEYS = ("calories", "protein_g", "fat_g", "carbs_g", "fiber_g")
 
 
 def clamp_weight(weight_g: float) -> float:
@@ -35,7 +35,7 @@ def scale_nutrition(
 ) -> dict[str, float]:
     """Пересчитать калории и БЖУ пропорционально новому весу порции.
 
-    Возвращает новый словарь с ключами calories/protein_g/fat_g/carbs_g,
+    Возвращает новый словарь с ключами calories/protein_g/fat_g/carbs_g/fiber_g,
     округлёнными до одного знака.
     """
     if from_weight_g <= 0:

@@ -56,6 +56,8 @@ function renderToday(data) {
     ['f', totals.fat_g, norms.fat_g],
     ['c', totals.carbs_g, norms.carbs_g],
   ];
+  // Клетчатка идёт отдельной строкой: у неё своя цель, а не доля калорий.
+  macros.push(['fib', totals.fiber_g ?? 0, norms.fiber_g ?? 0]);
   for (const [key, value, norm] of macros) {
     document.getElementById(`bar-${key}`).style.width =
       norm ? `${Math.min((value / norm) * 100, 100)}%` : '0%';
@@ -85,7 +87,8 @@ function renderToday(data) {
       <button class="icon-btn" title="Удалить">🗑</button>`;
     row.querySelector('.meal-name').textContent = meal.name;
     row.querySelector('.meal-sub').textContent =
-      `${meal.time} · ${meal.weight_g} г · Б ${meal.protein_g} Ж ${meal.fat_g} У ${meal.carbs_g}`;
+      `${meal.time} · ${meal.weight_g} г · Б ${meal.protein_g} Ж ${meal.fat_g} У ${meal.carbs_g}` +
+      (meal.fiber_g ? ` · 🥦 ${meal.fiber_g}` : '');
 
     const [editBtn, deleteBtn] = row.querySelectorAll('.icon-btn');
     editBtn.onclick = () => editWeight(meal);
@@ -636,7 +639,8 @@ function renderSuggestions(items) {
     row.querySelector('.sug-name').textContent = item.name;
     row.querySelector('.sug-macros').textContent =
       `${Math.round(item.weight_g)} г · Б ${Math.round(item.protein_g)} · ` +
-      `Ж ${Math.round(item.fat_g)} · У ${Math.round(item.carbs_g)}`;
+      `Ж ${Math.round(item.fat_g)} · У ${Math.round(item.carbs_g)}` +
+      (item.fiber_g ? ` · 🥦 ${Math.round(item.fiber_g)}` : '');
     row.querySelector('.sug-why').textContent = item.why;
 
     row.querySelector('.sug-eat').onclick = async () => {

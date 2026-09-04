@@ -96,6 +96,7 @@ def _meal_json(meal: Meal, timezone_name: str) -> dict:
         "protein_g": round(meal.protein_g),
         "fat_g": round(meal.fat_g),
         "carbs_g": round(meal.carbs_g),
+        "fiber_g": round(meal.fiber_g or 0),
         "meal_type": MEAL_TYPE_RU.get(meal.meal_type, "") if meal.meal_type else "",
         "time": meal.logged_at.astimezone(zone).strftime("%H:%M") if meal.logged_at else "",
         "source": meal.source.value if meal.source else "text",
@@ -138,6 +139,7 @@ async def get_today(request: web.Request) -> web.Response:
                     "protein_g": user.daily_protein_g or 0,
                     "fat_g": user.daily_fat_g or 0,
                     "carbs_g": user.daily_carbs_g or 0,
+                    "fiber_g": user.daily_fiber_g or 0,
                     "water_ml": user.daily_water_ml or 0,
                 },
                 "totals": {
@@ -145,6 +147,7 @@ async def get_today(request: web.Request) -> web.Response:
                     "protein_g": round(totals.protein_g),
                     "fat_g": round(totals.fat_g),
                     "carbs_g": round(totals.carbs_g),
+                    "fiber_g": round(totals.fiber_g),
                     "water_ml": water,
                 },
                 "meals": [_meal_json(m, tz) for m in meals],
@@ -193,6 +196,7 @@ async def update_meal(request: web.Request) -> web.Response:
                 "protein_g": meal.protein_g,
                 "fat_g": meal.fat_g,
                 "carbs_g": meal.carbs_g,
+                "fiber_g": meal.fiber_g or 0,
             },
             from_weight_g=meal.weight_g,
             to_weight_g=weight,
@@ -202,6 +206,7 @@ async def update_meal(request: web.Request) -> web.Response:
         meal.protein_g = scaled["protein_g"]
         meal.fat_g = scaled["fat_g"]
         meal.carbs_g = scaled["carbs_g"]
+        meal.fiber_g = scaled["fiber_g"]
         await session.commit()
         return web.json_response(_meal_json(meal, request["timezone"]))
 
@@ -367,6 +372,7 @@ async def post_measurement(request: web.Request) -> web.Response:
             "protein_g": user.daily_protein_g,
             "fat_g": user.daily_fat_g,
             "carbs_g": user.daily_carbs_g,
+            "fiber_g": user.daily_fiber_g,
             "water_ml": user.daily_water_ml,
         }
 
@@ -539,11 +545,12 @@ async def post_suggestions(request: web.Request) -> web.Response:
             "protein_g": user.daily_protein_g or 0,
             "fat_g": user.daily_fat_g or 0,
             "carbs_g": user.daily_carbs_g or 0,
+            "fiber_g": user.daily_fiber_g or 0,
         }
 
     left = remaining(
         {"calories": totals.calories, "protein_g": totals.protein_g,
-         "fat_g": totals.fat_g, "carbs_g": totals.carbs_g},
+         "fat_g": totals.fat_g, "carbs_g": totals.carbs_g, "fiber_g": totals.fiber_g},
         norms,
     )
 
@@ -557,7 +564,7 @@ async def post_suggestions(request: web.Request) -> web.Response:
         {
             "remaining": {
                 "calories": left.calories, "protein_g": left.protein_g,
-                "fat_g": left.fat_g, "carbs_g": left.carbs_g,
+                "fat_g": left.fat_g, "carbs_g": left.carbs_g, "fiber_g": left.fiber_g,
             },
             "gap": GAP_LABELS.get(gap) if gap else None,
             "suggestions": [item.to_dict() for item in suggestions],
@@ -585,6 +592,7 @@ async def post_meal(request: web.Request) -> web.Response:
         protein_g=number("protein_g"),
         fat_g=number("fat_g"),
         carbs_g=number("carbs_g"),
+        fiber_g=number("fiber_g"),
         confidence="medium",
         comment="",
     )

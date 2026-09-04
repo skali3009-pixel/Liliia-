@@ -49,11 +49,12 @@ async def what_to_eat(message: Message) -> None:
             "protein_g": user.daily_protein_g or 0,
             "fat_g": user.daily_fat_g or 0,
             "carbs_g": user.daily_carbs_g or 0,
+            "fiber_g": user.daily_fiber_g or 0,
         }
 
     left = remaining(
         {"calories": totals.calories, "protein_g": totals.protein_g,
-         "fat_g": totals.fat_g, "carbs_g": totals.carbs_g},
+         "fat_g": totals.fat_g, "carbs_g": totals.carbs_g, "fiber_g": totals.fiber_g},
         norms,
     )
     gap = dominant_gap(left, norms)
@@ -61,6 +62,7 @@ async def what_to_eat(message: Message) -> None:
     header = [
         f"🍽 Осталось на сегодня: {left.calories} ккал",
         f"Б {left.protein_g} · Ж {left.fat_g} · У {left.carbs_g} г",
+        f"🥦 Клетчатки: {left.fiber_g} г",
     ]
     if gap:
         header.append(f"Сильнее всего не хватает {GAP_LABELS[gap]}.")
@@ -89,7 +91,8 @@ async def what_to_eat(message: Message) -> None:
         await message.answer(
             f"🍽 {item.name}\n"
             f"{round(item.weight_g)} г · {round(item.calories)} ккал\n"
-            f"Б {round(item.protein_g)} · Ж {round(item.fat_g)} · У {round(item.carbs_g)} г\n\n"
+            f"Б {round(item.protein_g)} · Ж {round(item.fat_g)} · У {round(item.carbs_g)} г\n"
+            f"🥦 Клетчатка {round(item.fiber_g)} г\n\n"
             f"💬 {item.why}",
             reply_markup=_keyboard(key),
         )
@@ -115,6 +118,7 @@ async def eat_suggestion(callback: CallbackQuery) -> None:
             analysis=FoodAnalysis(
                 name=item.name, weight_g=item.weight_g, calories=item.calories,
                 protein_g=item.protein_g, fat_g=item.fat_g, carbs_g=item.carbs_g,
+                fiber_g=item.fiber_g,
                 confidence="medium", comment="",
             ),
             source=MealSourceEnum.TEXT,

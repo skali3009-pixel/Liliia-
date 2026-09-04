@@ -43,7 +43,10 @@ SYSTEM_PROMPT = (
     "- Обязательно соблюдай ограничения по питанию и аллергии — это жёсткое условие, "
     "а не пожелание.\n"
     "- Учитывай время суток: утром не предлагай тяжёлый ужин, вечером — сладкие каши.\n"
-    "- Указывай реалистичный вес порции и её КБЖУ.\n"
+    "- Указывай реалистичный вес порции, её КБЖУ и клетчатку. В carbs_g — усвояемые "
+    "углеводы без клетчатки, в fiber_g — пищевые волокна.\n"
+    "- Если не хватает клетчатки, добавляй в варианты овощи, зелень, бобовые, ягоды "
+    "или цельнозерновые — но не в ущерб остальным условиям.\n"
     "- В поле why — одна короткая фраза, чем этот вариант хорош именно сейчас "
     "(например, «закроет недобор белка, всего 320 ккал»).\n"
     "- Названия и объяснения — на русском языке.\n"
@@ -70,11 +73,14 @@ SUGGEST_TOOL: dict[str, Any] = {
                         "calories": {"type": "number"},
                         "protein_g": {"type": "number"},
                         "fat_g": {"type": "number"},
-                        "carbs_g": {"type": "number"},
+                        "carbs_g": {"type": "number",
+                                    "description": "Углеводы без клетчатки, г"},
+                        "fiber_g": {"type": "number",
+                                    "description": "Клетчатка, г; 0, если её нет"},
                         "why": {"type": "string", "description": "Одна фраза: чем хорош сейчас"},
                     },
                     "required": ["name", "weight_g", "calories", "protein_g", "fat_g",
-                                 "carbs_g", "why"],
+                                 "carbs_g", "fiber_g", "why"],
                     "additionalProperties": False,
                 },
             }
@@ -94,6 +100,7 @@ class Suggestion:
     fat_g: float
     carbs_g: float
     why: str
+    fiber_g: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -121,6 +128,7 @@ def build_request(user: User, left: Remaining, norms: dict[str, float]) -> str:
         f"Сейчас {now.strftime('%H:%M')}, ближайший приём пищи — {meal_type}.\n"
         f"Осталось на сегодня: {left.calories} ккал, "
         f"белки {left.protein_g} г, жиры {left.fat_g} г, углеводы {left.carbs_g} г.\n"
+        f"Клетчатки до дневной цели осталось {left.fiber_g} г.\n"
         f"{gap_line}\n"
         f"Ограничения: {'; '.join(limits) if limits else 'нет'}.\n"
         f"Цель: {user.goal.value if user.goal else 'поддержание'}."
@@ -152,6 +160,7 @@ async def suggest_meals(user: User, left: Remaining, norms: dict[str, float]) ->
             protein_g=max(float(meal.get("protein_g", 0)), 0),
             fat_g=max(float(meal.get("fat_g", 0)), 0),
             carbs_g=max(float(meal.get("carbs_g", 0)), 0),
+            fiber_g=max(float(meal.get("fiber_g", 0)), 0),
             why=str(meal.get("why", "")).strip()[:160],
         )
         for meal in meals

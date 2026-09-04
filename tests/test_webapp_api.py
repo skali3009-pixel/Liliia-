@@ -65,12 +65,14 @@ async def webapp_client():
                 current_weight_kg=60, target_weight_kg=55, goal=GoalEnum.LOSE_WEIGHT,
                 diet_type=DietTypeEnum.REGULAR, timezone="Europe/Moscow",
                 daily_calories=1600, daily_protein_g=120, daily_fat_g=48,
-                daily_carbs_g=160, daily_water_ml=2100, onboarding_completed=True))
+                daily_carbs_g=160, daily_fiber_g=22, daily_water_ml=2100,
+                onboarding_completed=True))
         await session.commit()
         meal = await save_meal(
             session, user_id=USER_ID,
             analysis=FoodAnalysis(name="Овсянка", weight_g=250, calories=320, protein_g=9,
-                                  fat_g=7, carbs_g=55, confidence="medium", comment=""),
+                                  fat_g=7, carbs_g=55, fiber_g=6, confidence="medium",
+                                  comment=""),
             source=MealSourceEnum.PHOTO, meal_type=MealTypeEnum.BREAKFAST)
         meal_id = meal.id
 
@@ -106,6 +108,10 @@ def test_today_returns_norms_meals_and_water():
             assert len(data["meals"]) == 1
             assert data["meals"][0]["name"] == "Овсянка"
             assert data["totals"]["water_ml"] == 0
+            # Клетчатка — отдельная цель со своей нормой, не часть калорий.
+            assert data["norms"]["fiber_g"] == 22
+            assert data["totals"]["fiber_g"] == 6
+            assert data["meals"][0]["fiber_g"] == 6
     run(scenario)
 
 
@@ -146,6 +152,7 @@ def test_meal_weight_edit_rescales_nutrition():
             data = await response.json()
             assert data["weight_g"] == 125
             assert data["calories"] == 160  # половина порции — половина калорий
+            assert data["fiber_g"] == 3      # и половина клетчатки
     run(scenario)
 
 

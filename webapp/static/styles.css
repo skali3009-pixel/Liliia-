@@ -62,12 +62,17 @@ h2 { font-size: 15px; font-weight: 600; margin: 0; }
 
 /* Полоски БЖУ */
 .macros { display: grid; gap: 10px; margin-top: 12px; }
-.macro { display: grid; grid-template-columns: 68px 1fr 74px; align-items: center; gap: 10px; }
+/* Первая колонка шире 68px, чтобы «Клетчатка» помещалась в строку. */
+.macro { display: grid; grid-template-columns: 88px 1fr 74px; align-items: center; gap: 10px; }
 .macro-name { font-size: 13px; color: var(--muted); }
 .macro-val { font-size: 12px; color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 .bar { height: 7px; background: var(--card); border-radius: 99px; overflow: hidden; }
 .bar.big { height: 9px; background: var(--bg); margin-bottom: 12px; }
 .bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 99px; transition: width .4s ease; }
+
+/* Клетчатка — не макронутриент из калорийного бюджета, а отдельная цель. */
+.macro.fiber { margin-top: 4px; padding-top: 10px; border-top: 1px solid var(--card); }
+.macro.fiber .bar i { background: var(--ok); }
 
 .row { display: flex; gap: 8px; }
 .row.wrap { flex-wrap: wrap; }

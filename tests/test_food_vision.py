@@ -25,6 +25,7 @@ VALID_PAYLOAD = {
     "protein_g": 9,
     "fat_g": 7,
     "carbs_g": 55,
+    "fiber_g": 6,
     "confidence": "medium",
     "comment": "оценил как порцию каши на молоке",
 }
@@ -36,6 +37,22 @@ def test_build_analysis_maps_payload():
     assert analysis.weight_g == 250
     assert analysis.calories == 320
     assert analysis.confidence == "medium"
+
+
+def test_build_analysis_reads_fiber():
+    assert _build_analysis(VALID_PAYLOAD).fiber_g == 6
+
+
+def test_build_analysis_defaults_fiber_to_zero_when_missing():
+    """Модель обязана вернуть fiber_g, но нолём это не ломается."""
+    payload = {k: v for k, v in VALID_PAYLOAD.items() if k != "fiber_g"}
+    assert _build_analysis(payload).fiber_g == 0.0
+
+
+def test_analysis_from_old_fsm_data_without_fiber():
+    """Карточки, сохранённые до появления клетчатки, ещё лежат в FSM."""
+    old = {k: v for k, v in _build_analysis(VALID_PAYLOAD).to_dict().items() if k != "fiber_g"}
+    assert FoodAnalysis.from_dict(old).fiber_g == 0.0
 
 
 def test_build_analysis_raises_when_no_food_recognized():
@@ -117,6 +134,8 @@ def test_analyze_photo_sends_image_and_tool(monkeypatch):
     # Структурированный ответ обеспечивается strict-инструментом.
     assert captured["tools"][0]["name"] == "record_food_analysis"
     assert captured["tools"][0]["strict"] is True
+    # Клетчатку модель обязана заполнять, а не «если получится».
+    assert "fiber_g" in captured["tools"][0]["input_schema"]["required"]
 
 
 def test_analyze_photo_passes_user_hint_into_prompt(monkeypatch):

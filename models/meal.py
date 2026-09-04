@@ -49,6 +49,8 @@ class Meal(Base):
     protein_g: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     fat_g: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     carbs_g: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    # Клетчатка учитывается отдельно от углеводов и не даёт калорий.
+    fiber_g: Mapped[float] = mapped_column(Float, default=0, nullable=False)
 
     source: Mapped[MealSourceEnum] = mapped_column(
         Enum(MealSourceEnum, name="meal_source_enum"), default=MealSourceEnum.TEXT, nullable=False

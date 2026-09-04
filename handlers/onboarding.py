@@ -191,6 +191,7 @@ async def _finish_onboarding(message: Message, state: FSMContext) -> None:
         user.daily_protein_g = macros.protein_g
         user.daily_fat_g = macros.fat_g
         user.daily_carbs_g = macros.carbs_g
+        user.daily_fiber_g = macros.fiber_g
         user.daily_water_ml = water_ml
         user.onboarding_completed = True
 
@@ -204,6 +205,7 @@ async def _finish_onboarding(message: Message, state: FSMContext) -> None:
         f"🥩 Белки: {macros.protein_g} г\n"
         f"🥑 Жиры: {macros.fat_g} г\n"
         f"🍚 Углеводы: {macros.carbs_g} г\n"
+        f"🥦 Клетчатка: {macros.fiber_g} г\n"
         f"💧 Вода: {water_ml} мл\n\n"
         "Дальше можно фотографировать еду, отмечать воду и тренироваться — "
         "жми на кнопки в меню 👇",

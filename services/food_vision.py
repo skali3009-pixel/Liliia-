@@ -33,6 +33,11 @@ SYSTEM_PROMPT = (
     "столовых приборов, стакана, руки.\n"
     "- Если на фото несколько блюд — объединяй их в одно название и суммируй КБЖУ.\n"
     "- Учитывай способ приготовления (жарка на масле добавляет жиры) и заправки/соусы.\n"
+    "- Клетчатку (пищевые волокна) считай отдельным полем fiber_g. В carbs_g указывай "
+    "усвояемые углеводы БЕЗ клетчатки — как на российских этикетках.\n"
+    "- Клетчатка есть в овощах, зелени, квашеной капусте, бобовых, фруктах, ягодах, "
+    "цельнозерновых крупах, хлебе, орехах и семенах. В мясе, рыбе, яйцах, молочном "
+    "и масле её нет — там fiber_g=0.\n"
     "- Название блюда — на русском языке, коротко (до 60 символов).\n"
     "- confidence: high — блюдо и порция очевидны; medium — есть сомнения в составе или весе; "
     "low — плохо видно, много скрытых ингредиентов.\n"
@@ -66,7 +71,14 @@ FOOD_ANALYSIS_TOOL: dict[str, Any] = {
             "calories": {"type": "number", "description": "Калорийность всей порции, ккал"},
             "protein_g": {"type": "number", "description": "Белки всей порции, г"},
             "fat_g": {"type": "number", "description": "Жиры всей порции, г"},
-            "carbs_g": {"type": "number", "description": "Углеводы всей порции, г"},
+            "carbs_g": {
+                "type": "number",
+                "description": "Усвояемые углеводы всей порции без клетчатки, г",
+            },
+            "fiber_g": {
+                "type": "number",
+                "description": "Клетчатка (пищевые волокна) всей порции, г; 0, если её нет",
+            },
             "confidence": {
                 "type": "string",
                 "enum": ["high", "medium", "low"],
@@ -85,6 +97,7 @@ FOOD_ANALYSIS_TOOL: dict[str, Any] = {
             "protein_g",
             "fat_g",
             "carbs_g",
+            "fiber_g",
             "confidence",
             "comment",
         ],
@@ -134,6 +147,7 @@ class FoodAnalysis:
     carbs_g: float
     confidence: str
     comment: str
+    fiber_g: float = 0.0
 
     def to_dict(self) -> dict[str, Any]:
         """Для хранения в FSM-хранилище (там нужны простые типы)."""
@@ -141,7 +155,8 @@ class FoodAnalysis:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "FoodAnalysis":
-        return cls(**data)
+        # Карточки, сохранённые до появления клетчатки, всё ещё лежат в FSM.
+        return cls(**{"fiber_g": 0.0, **data})
 
 
 def _positive(value: Any) -> float:
@@ -172,6 +187,7 @@ def _build_analysis(payload: dict[str, Any]) -> FoodAnalysis:
         protein_g=_positive(payload.get("protein_g")),
         fat_g=_positive(payload.get("fat_g")),
         carbs_g=_positive(payload.get("carbs_g")),
+        fiber_g=_positive(payload.get("fiber_g")),
         confidence=str(payload.get("confidence") or "medium"),
         comment=str(payload.get("comment") or "").strip(),
     )
@@ -243,10 +259,10 @@ async def analyze_photo(
     """Распознать блюдо по фото. `hint` — уточнение пользователя («это не борщ, а солянка»)."""
     encoded = base64.standard_b64encode(image_bytes).decode("utf-8")
 
-    text = "Что это за блюдо и сколько в нём КБЖУ?"
+    text = "Что это за блюдо, сколько в нём КБЖУ и клетчатки?"
     if hint:
         text = (
-            f"Что это за блюдо и сколько в нём КБЖУ?\n"
+            f"Что это за блюдо, сколько в нём КБЖУ и клетчатки?\n"
             f"Пользователь уточнил, что на фото: {hint}. "
             f"Доверься уточнению в названии, а вес порции по-прежнему оцени по фото."
         )
@@ -269,7 +285,7 @@ async def analyze_text(description: str) -> FoodAnalysis:
             {
                 "type": "text",
                 "text": (
-                    "Оцени КБЖУ по описанию пользователя. Если порция не указана — "
+                    "Оцени КБЖУ и клетчатку по описанию пользователя. Если порция не указана — "
                     "считай её стандартной для этого блюда.\n\n"
                     f"Описание: {description}"
                 ),

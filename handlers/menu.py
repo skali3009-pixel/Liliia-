@@ -57,5 +57,6 @@ async def handle_profile(message: Message) -> None:
         f"Аллергии: {user.allergies or 'нет'}\n\n"
         f"🔥 Норма: {user.daily_calories} ккал | "
         f"Б {user.daily_protein_g} / Ж {user.daily_fat_g} / У {user.daily_carbs_g} г\n"
+        f"🥦 Клетчатка: {user.daily_fiber_g or '—'} г\n"
         f"💧 Вода: {user.daily_water_ml} мл"
     )

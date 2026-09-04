@@ -68,6 +68,7 @@ def _render_card(analysis: FoodAnalysis, meal_type_label: str) -> str:
         f"🔥 {_num(analysis.calories)} ккал",
         f"🥩 Б {_num(analysis.protein_g)} · 🥑 Ж {_num(analysis.fat_g)} · "
         f"🍚 У {_num(analysis.carbs_g)} г",
+        f"🥦 Клетчатка {_num(analysis.fiber_g)} г",
     ]
     if analysis.comment:
         lines += ["", f"💬 {analysis.comment}"]
@@ -247,6 +248,7 @@ def _rescaled(analysis: FoodAnalysis, new_weight_g: float) -> FoodAnalysis:
             "protein_g": analysis.protein_g,
             "fat_g": analysis.fat_g,
             "carbs_g": analysis.carbs_g,
+            "fiber_g": analysis.fiber_g,
         },
         from_weight_g=analysis.weight_g,
         to_weight_g=new_weight_g,
@@ -258,6 +260,7 @@ def _rescaled(analysis: FoodAnalysis, new_weight_g: float) -> FoodAnalysis:
         protein_g=scaled["protein_g"],
         fat_g=scaled["fat_g"],
         carbs_g=scaled["carbs_g"],
+        fiber_g=scaled["fiber_g"],
         confidence=analysis.confidence,
         comment=analysis.comment,
     )
@@ -375,6 +378,7 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
             user.daily_protein_g,
             user.daily_fat_g,
             user.daily_carbs_g,
+            user.daily_fiber_g,
         )
 
     await state.clear()
@@ -387,7 +391,7 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
 
 
 def _render_day_summary(analysis, meal_type_label, totals, norms) -> str:
-    calories_norm, protein_norm, fat_norm, carbs_norm = norms
+    calories_norm, protein_norm, fat_norm, carbs_norm, fiber_norm = norms
     lines = [f"✅ Записал: {analysis.name} ({meal_type_label})", ""]
 
     if calories_norm:
@@ -401,6 +405,7 @@ def _render_day_summary(analysis, meal_type_label, totals, norms) -> str:
         f"🥩 Б {_num(totals.protein_g)} / {protein_norm or '—'} г",
         f"🥑 Ж {_num(totals.fat_g)} / {fat_norm or '—'} г",
         f"🍚 У {_num(totals.carbs_g)} / {carbs_norm or '—'} г",
+        f"🥦 Клетчатка {_num(totals.fiber_g)} / {fiber_norm or '—'} г",
     ]
     return "\n".join(lines)
 

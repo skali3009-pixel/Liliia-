@@ -14,6 +14,7 @@ class Remaining:
     protein_g: int
     fat_g: int
     carbs_g: int
+    fiber_g: int = 0
 
     @property
     def all_done(self) -> bool:
@@ -27,6 +28,7 @@ def remaining(totals: dict[str, float], norms: dict[str, float]) -> Remaining:
         protein_g=max(round(norms.get("protein_g", 0) - totals.get("protein_g", 0)), 0),
         fat_g=max(round(norms.get("fat_g", 0) - totals.get("fat_g", 0)), 0),
         carbs_g=max(round(norms.get("carbs_g", 0) - totals.get("carbs_g", 0)), 0),
+        fiber_g=max(round(norms.get("fiber_g", 0) - totals.get("fiber_g", 0)), 0),
     )
 
 
@@ -34,7 +36,8 @@ def dominant_gap(left: Remaining, norms: dict[str, float]) -> str | None:
     """Какого макронутриента не хватает сильнее всего — по доле от нормы.
 
     Сравниваем именно доли: 40 г белка и 40 г углеводов при разных нормах
-    означают разную степень недобора.
+    означают разную степень недобора. Клетчатку здесь не учитываем: она не
+    делит с БЖУ калорийность, у неё своя отдельная цель.
     """
     shares: dict[str, float] = {}
     for key, value in (("protein_g", left.protein_g), ("fat_g", left.fat_g),

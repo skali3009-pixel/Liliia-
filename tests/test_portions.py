@@ -5,12 +5,14 @@ import pytest
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, adjust_weight, clamp_weight, scale_nutrition
 from utils.progress import format_remaining, render_progress_bar
 
-NUTRITION = {"calories": 300.0, "protein_g": 10.0, "fat_g": 8.0, "carbs_g": 45.0}
+NUTRITION = {"calories": 300.0, "protein_g": 10.0, "fat_g": 8.0, "carbs_g": 45.0,
+             "fiber_g": 6.0}
 
 
 def test_scale_nutrition_doubles_with_weight():
     scaled = scale_nutrition(NUTRITION, from_weight_g=200, to_weight_g=400)
-    assert scaled == {"calories": 600.0, "protein_g": 20.0, "fat_g": 16.0, "carbs_g": 90.0}
+    assert scaled == {"calories": 600.0, "protein_g": 20.0, "fat_g": 16.0, "carbs_g": 90.0,
+                      "fiber_g": 12.0}
 
 
 def test_scale_nutrition_halves_with_weight():
@@ -22,6 +24,18 @@ def test_scale_nutrition_halves_with_weight():
 def test_scale_nutrition_same_weight_is_identity():
     scaled = scale_nutrition(NUTRITION, from_weight_g=250, to_weight_g=250)
     assert scaled == NUTRITION
+
+
+def test_scale_nutrition_scales_fiber_too():
+    """Клетчатка пересчитывается вместе с остальным — она часть порции."""
+    scaled = scale_nutrition(NUTRITION, from_weight_g=200, to_weight_g=300)
+    assert scaled["fiber_g"] == 9.0
+
+
+def test_scale_nutrition_missing_fiber_becomes_zero():
+    """Записи, сделанные до появления клетчатки, не ломают пересчёт."""
+    old_meal = {"calories": 300.0, "protein_g": 10.0, "fat_g": 8.0, "carbs_g": 45.0}
+    assert scale_nutrition(old_meal, from_weight_g=200, to_weight_g=400)["fiber_g"] == 0.0
 
 
 @pytest.mark.parametrize("from_w,to_w", [(0, 100), (100, 0), (-5, 100)])

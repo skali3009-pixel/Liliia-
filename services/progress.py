@@ -164,6 +164,7 @@ async def add_measurement(
         user.daily_protein_g = macros.protein_g
         user.daily_fat_g = macros.fat_g
         user.daily_carbs_g = macros.carbs_g
+        user.daily_fiber_g = macros.fiber_g
         user.daily_water_ml = daily_water_ml(
             weight_kg=weight_kg, activity_level=ActivityLevel(user.activity_level.value)
         )
