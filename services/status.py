@@ -57,7 +57,7 @@ def _legal_lines() -> list[str]:
     lines = [f"📄 Документы: редакция {LEGAL_VERSION}, реквизиты заполнены — "
              f"{YES if filled else NO}"]
     if not filled:
-        lines.append("   Заполни LEGAL_OWNER, LEGAL_REQUISITES, LEGAL_EMAIL в .env")
+        lines.append("   Заполнить: bash set-legal.sh — спросит имя, реквизиты и почту")
     if not config.WEBAPP_URL:
         lines.append("   Нет WEBAPP_URL — ссылки на документы в боте не показываются")
     return lines
