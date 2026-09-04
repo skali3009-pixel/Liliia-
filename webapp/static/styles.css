@@ -716,3 +716,20 @@ select.fact-input { text-align: left; width: 130px; }
 .steps i.on { border-color: var(--gold); color: var(--gold); }
 .steps b { flex: 1; height: 1px; background: var(--stroke); }
 .steps b.on { background: rgba(201, 169, 97, .6); }
+
+/* --- Быстрая отметка состояния --- */
+.state { cursor: pointer; }
+.state:active { transform: scale(.97); }
+/* Пустая плитка приглашает нажать, а не выглядит сломанной. */
+.state-value.empty { color: var(--lilac); font-weight: 600; opacity: .55; }
+
+.state-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.state-opt {
+  flex: 1 1 auto; min-width: 54px; padding: 13px 10px; cursor: pointer;
+  border: 1px solid var(--stroke); border-radius: 13px;
+  background: var(--surface-2); color: var(--fg);
+  font-family: inherit; font-size: 15px; font-weight: 600;
+}
+.state-opt.wide { flex: 1 1 44%; }
+.state-opt.on { border-color: var(--violet); background: rgba(139, 92, 246, .22); }
+.state-opt:active { transform: scale(.97); }

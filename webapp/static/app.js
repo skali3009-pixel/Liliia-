@@ -88,16 +88,19 @@ function renderHero(data) {
   document.getElementById('hero-sub').textContent = parts.join(' · ');
 
   const tiles = [
-    { icon: '⚡', label: 'Энергия', value: state.energy ? `${state.energy}` : null, suffix: '/10' },
-    { icon: '🤍', label: 'Настроение', value: state.mood || null, text: true },
-    { icon: '🎯', label: 'Фокус', value: state.focus ? `${state.focus}` : null, suffix: '/10' },
-    { icon: '〰️', label: 'Стресс', value: state.stress || null, text: true },
+    { key: 'energy', icon: '⚡', label: 'Энергия',
+      value: state.energy ? `${state.energy}` : null, suffix: '/10' },
+    { key: 'mood', icon: '🤍', label: 'Настроение', value: state.mood || null, text: true },
+    { key: 'focus', icon: '🎯', label: 'Фокус',
+      value: state.focus ? `${state.focus}` : null, suffix: '/10' },
+    { key: 'stress', icon: '〰️', label: 'Стресс', value: state.stress || null, text: true },
   ];
   const grid = document.getElementById('state-grid');
   grid.innerHTML = '';
   for (const tile of tiles) {
     const box = document.createElement('div');
     box.className = 'state';
+    box.onclick = () => openState(tile.key);
     const filled = tile.value !== null;
     box.innerHTML = `
       <div class="state-icon"></div>
@@ -105,7 +108,7 @@ function renderHero(data) {
       <div class="state-label"></div>`;
     box.querySelector('.state-icon').textContent = tile.icon;
     const value = box.querySelector('.state-value');
-    value.textContent = filled ? tile.value + (tile.suffix || '') : '—';
+    value.textContent = filled ? tile.value + (tile.suffix || '') : '＋';
     value.classList.toggle('text', Boolean(tile.text) && filled);
     value.classList.toggle('empty', !filled);
     box.querySelector('.state-label').textContent = tile.label;
@@ -610,6 +613,8 @@ async function refreshProgress() {
   document.getElementById('stat-change').textContent =
     s.changed > 0 ? `+${fmt(s.changed)}` : fmt(s.changed || 0);
   document.getElementById('stat-streak').textContent = s.streak;
+  document.getElementById('stat-streak-label').textContent =
+    `${plural(s.streak, 'день', 'дня', 'дней')} подряд`;
   document.getElementById('chart-title').textContent = progress.title;
 
   buildChart(progress);
@@ -670,6 +675,8 @@ function renderWorkouts(data) {
   document.getElementById('program-title').textContent = program ? program.title : 'Программа';
   document.getElementById('program-sub').textContent = program ? program.subtitle : '';
   document.getElementById('gym-count').textContent = data.week.workouts;
+  document.getElementById('gym-count-label').textContent =
+    plural(data.week.workouts, 'тренировка', 'тренировки', 'тренировок');
   document.getElementById('gym-kcal').textContent = data.week.calories;
 
   renderChips('category-switch', data.categories, category, (code) => {
@@ -896,6 +903,67 @@ function renderSuggestions(items) {
       } catch (e) { toast(e.message); }
     };
     box.appendChild(row);
+  }
+}
+
+/* --- Быстрая отметка состояния прямо с плитки --- */
+const STATE_FIELDS = {
+  energy: {
+    title: 'Энергия',
+    hint: '1 — на нуле, 10 — полна сил. Отметится текущим временем.',
+    scale: 10,
+  },
+  focus: {
+    title: 'Фокус',
+    hint: '1 — мысли разбегаются, 10 — собрана.',
+    scale: 10,
+  },
+  mood: {
+    title: 'Настроение',
+    hint: 'Выбери то, что ближе всего.',
+    options: ['спокойно', 'бодро', 'радостно', 'устала', 'тревожно', 'грустно', 'раздражённо'],
+  },
+  stress: {
+    title: 'Стресс',
+    hint: 'Насколько напряжённым получился день.',
+    options: ['низкий', 'средний', 'высокий'],
+  },
+};
+
+function openState(key) {
+  const field = STATE_FIELDS[key];
+  if (!field) return;
+
+  document.getElementById('state-head').textContent = field.title;
+  document.getElementById('state-hint').textContent = field.hint;
+
+  const box = document.getElementById('state-options');
+  box.innerHTML = '';
+  const current = state?.state?.[key];
+  const values = field.scale
+    ? Array.from({ length: field.scale }, (_, i) => i + 1)
+    : field.options;
+
+  for (const value of values) {
+    const button = document.createElement('button');
+    button.className = `state-opt${field.options ? ' wide' : ''}` +
+      (String(value) === String(current) ? ' on' : '');
+    button.textContent = value;
+    button.onclick = () => saveState(key, value);
+    box.appendChild(button);
+  }
+  document.getElementById('state-sheet').hidden = false;
+}
+
+async function saveState(key, value) {
+  try {
+    await api('/api/checkin', { method: 'POST', body: JSON.stringify({ [key]: value }) });
+    document.getElementById('state-sheet').hidden = true;
+    haptic('medium');
+    toast(`${STATE_FIELDS[key].title}: ${value}`);
+    await refresh();
+  } catch (e) {
+    toast(e.message);
   }
 }
 
@@ -1161,6 +1229,9 @@ async function init() {
   };
 
   document.getElementById('moment-open').onclick = openMoment;
+  document.getElementById('state-close').onclick = () => {
+    document.getElementById('state-sheet').hidden = true;
+  };
   startParallax();
   document.getElementById('moment-close').onclick = closeMoment;
   document.getElementById('moment-send').onclick = recognizeMoment;

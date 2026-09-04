@@ -272,7 +272,7 @@
       <div class="stat"><div id="stat-change" class="stat-value">—</div>
         <div class="stat-label">изменение</div></div>
       <div class="stat"><div id="stat-streak" class="stat-value">—</div>
-        <div class="stat-label">дней подряд</div></div>
+        <div class="stat-label" id="stat-streak-label">дней подряд</div></div>
     </section>
 
     <div class="filters">
@@ -338,7 +338,7 @@
 
     <section class="stats">
       <div class="stat"><div id="gym-count" class="stat-value">—</div>
-        <div class="stat-label">тренировок</div></div>
+        <div class="stat-label" id="gym-count-label">тренировок</div></div>
       <div class="stat"><div id="gym-kcal" class="stat-value">—</div>
         <div class="stat-label">ккал за неделю</div></div>
     </section>
@@ -426,6 +426,19 @@
         <button class="btn narrow" id="moment-save">Всё верно</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Отметить состояние в два тапа: раньше это можно было только рассказать
+     словами, и плитки стояли пустыми. -->
+<div id="state-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="state-head">Энергия</h2>
+      <button class="icon-btn" id="state-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div id="state-options" class="state-options"></div>
+    <p class="hint" id="state-hint"></p>
   </div>
 </div>
 
