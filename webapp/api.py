@@ -24,6 +24,21 @@ INIT_DATA_HEADER = "X-Telegram-Init-Data"
 
 
 @web.middleware
+async def error_middleware(request: web.Request, handler):
+    """Любая необработанная ошибка — в лог с трассировкой, пользователю —
+    человеческий текст вместо голого «500»."""
+    try:
+        return await handler(request)
+    except web.HTTPException:
+        raise
+    except Exception:
+        logger.exception("Ошибка в %s %s", request.method, request.path)
+        return web.json_response(
+            {"error": "Что-то сломалось на сервере. Загляни в логи бота."}, status=500
+        )
+
+
+@web.middleware
 async def auth_middleware(request: web.Request, handler):
     """Пускаем к данным только с действительной подписью Telegram."""
     if not request.path.startswith("/api/"):

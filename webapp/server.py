@@ -12,7 +12,7 @@ from pathlib import Path
 from aiohttp import web
 
 import config
-from webapp.api import add_routes, auth_middleware
+from webapp.api import add_routes, auth_middleware, error_middleware
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,8 @@ async def healthcheck(request: web.Request) -> web.Response:
 
 
 def create_app() -> web.Application:
-    app = web.Application(middlewares=[auth_middleware])
+    # Порядок важен: ошибки ловим снаружи, авторизацию проверяем внутри.
+    app = web.Application(middlewares=[error_middleware, auth_middleware])
     add_routes(app)
     app.router.add_get("/", index)
     app.router.add_get("/health", healthcheck)

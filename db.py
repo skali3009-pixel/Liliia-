@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 import config
+
+logger = logging.getLogger(__name__)
 
 engine = create_async_engine(config.DATABASE_URL, echo=False, future=True)
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -21,12 +24,18 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 
 async def init_models() -> None:
-    """Создать таблицы в БД, если их ещё нет.
+    """Создать недостающие таблицы и дописать новые колонки в существующие.
 
-    Годится для разработки и первого запуска. Для продакшена и последующих
-    изменений схемы — миграции (например, Alembic), а не auto-create.
+    create_all() сам по себе не меняет уже созданные таблицы, поэтому после
+    него применяются мини-миграции — иначе новое поле в модели ломает
+    работающую базу.
     """
+    from migrations import apply_column_additions
     from models import Base  # локальный импорт: гарантирует, что все модели уже загружены
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        applied = await apply_column_additions(conn)
+
+    if applied:
+        logger.info("Схема БД обновлена: %s", ", ".join(applied))
