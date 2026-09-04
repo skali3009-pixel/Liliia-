@@ -12,7 +12,8 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 import config
 from db import init_models
-from handlers import food, menu, onboarding, water
+from handlers import food, menu, onboarding, supplements, water
+from scheduler import start_scheduler
 from webapp.server import start_webapp
 
 logging.basicConfig(level=logging.INFO)
@@ -24,6 +25,7 @@ dp = Dispatcher()
 dp.include_router(onboarding.router)
 dp.include_router(food.router)
 dp.include_router(water.router)
+dp.include_router(supplements.router)
 dp.include_router(menu.router)
 
 
@@ -44,11 +46,13 @@ async def main() -> None:
     await init_models()
 
     runner = await start_webapp()
+    scheduler = start_scheduler(bot)
     try:
         await setup_menu_button()
         logger.info("Бот запускается...")
         await dp.start_polling(bot)
     finally:
+        scheduler.shutdown(wait=False)
         if runner is not None:
             await runner.cleanup()
 
