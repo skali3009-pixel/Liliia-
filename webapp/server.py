@@ -27,12 +27,27 @@ async def healthcheck(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def legal_page(request: web.Request) -> web.Response:
+    """Оферта, политика и согласия — открытые страницы без авторизации.
+
+    Ссылки на них лежат в кнопках бота, и человек должен открыть их до того,
+    как согласится: требовать для этого вход было бы бессмысленно.
+    """
+    from services.legal import render
+
+    page = render(request.match_info.get("slug", ""))
+    if page is None:
+        raise web.HTTPNotFound(text="Документ не найден")
+    return web.Response(text=page, content_type="text/html", charset="utf-8")
+
+
 def create_app() -> web.Application:
     # Порядок важен: ошибки ловим снаружи, авторизацию проверяем внутри.
     app = web.Application(middlewares=[error_middleware, auth_middleware])
     add_routes(app)
     app.router.add_get("/", index)
     app.router.add_get("/health", healthcheck)
+    app.router.add_get("/legal/{slug}", legal_page)
     app.router.add_static("/static/", STATIC_DIR, name="static")
     return app
 

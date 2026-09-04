@@ -56,6 +56,15 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Метка из ссылки-приглашения: t.me/бот?start=МЕТКА — видно, кто откуда пришёл.
     referral: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # Согласие с офертой и политикой данных: какая редакция принята и когда.
+    # Пустая версия означает, что человек ещё не соглашался.
+    legal_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    legal_accepted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    # Реклама — отдельное добровольное согласие, на доступ не влияет.
+    marketing_consent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     # --- Анкета онбординга ---

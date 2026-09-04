@@ -32,6 +32,9 @@ COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
     ("users", "daily_fiber_g", "INTEGER"),
     ("body_measurements", "thigh_cm", "DOUBLE PRECISION"),
     ("users", "referral", "VARCHAR(64)"),
+    ("users", "legal_version", "VARCHAR(20)"),
+    ("users", "legal_accepted_at", "TIMESTAMP WITH TIME ZONE"),
+    ("users", "marketing_consent", "BOOLEAN NOT NULL DEFAULT FALSE"),
 ]
 
 

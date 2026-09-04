@@ -19,6 +19,7 @@ from keyboards.onboarding import (
     goal_keyboard,
 )
 from models import ActivityLevelEnum, DietTypeEnum, GenderEnum, GoalEnum, User
+from handlers.legal import consent_keyboard, needs_consent, welcome_text
 from services.subscriptions import check_access, ensure_trial
 from states.onboarding import OnboardingStates
 from utils.formulas import ActivityLevel, Gender, Goal, calculate_macros, daily_water_ml
@@ -57,6 +58,14 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         await ensure_trial(session, user.id)
         access = await check_access(session, user.id)
         completed = user.onboarding_completed
+        ask_consent = await needs_consent(user)
+
+    # Пока человек не согласился с условиями, дальше не идём.
+    if ask_consent:
+        await state.clear()
+        await message.answer(welcome_text(), reply_markup=consent_keyboard(),
+                             disable_web_page_preview=True)
+        return
 
     if completed:
         greeting = "С возвращением! 👋 Чем займёмся сегодня?"
@@ -66,11 +75,24 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         return
 
     await state.clear()
+    await begin_onboarding(message, state, message.from_user.id)
+
+
+async def begin_onboarding(message: Message, state: FSMContext, user_id: int) -> None:
+    """Начать анкету. Вызывается и из /start, и сразу после согласия."""
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        completed = bool(user and user.onboarding_completed)
+
+    if completed:
+        await message.answer("С возвращением! 👋 Чем займёмся сегодня?",
+                             reply_markup=main_menu_keyboard())
+        return
+
     await state.set_state(OnboardingStates.gender)
     await message.answer(
-        "Привет! Я помогу с питанием и тренировками 💪\n\n"
-        f"Первые {config.TRIAL_DAYS} дней — бесплатно, знакомься спокойно.\n"
-        "Сначала настроим профиль: это займёт 1-2 минуты.\n\n"
+        f"Настроим профиль — это 1-2 минуты.\n"
+        f"Первые {config.TRIAL_DAYS} дней бесплатно.\n\n"
         "Укажи свой пол:",
         reply_markup=gender_keyboard(),
     )

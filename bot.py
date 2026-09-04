@@ -13,8 +13,8 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 import config
 from db import init_models
 from services.artwork import ensure_artwork
-from handlers import (access, food, menu, onboarding, progress, suggestions,
-                      supplements, water, workouts)
+from handlers import (access, food, legal, menu, onboarding, progress,
+                      suggestions, supplements, water, workouts)
 from middlewares.access import AccessMiddleware
 from scheduler import start_scheduler
 from webapp.server import start_webapp
@@ -30,6 +30,7 @@ dp = Dispatcher()
 dp.message.outer_middleware(AccessMiddleware())
 dp.callback_query.outer_middleware(AccessMiddleware())
 
+dp.include_router(legal.router)
 dp.include_router(access.router)
 dp.include_router(onboarding.router)
 dp.include_router(food.router)
@@ -53,7 +54,22 @@ async def setup_menu_button() -> None:
     logger.info("Кнопка мини-приложения включена: %s", config.WEBAPP_URL)
 
 
+def warn_about_setup() -> None:
+    """Сказать вслух то, что владелец иначе заметит только от юриста."""
+    if config.PAYWALL and not config.LEGAL_OWNER:
+        logger.warning(
+            "Платный доступ включён, но LEGAL_OWNER пуст: оферта выйдет без "
+            "реквизитов. Заполни LEGAL_OWNER, LEGAL_REQUISITES и LEGAL_EMAIL в .env."
+        )
+    if config.LEGAL_OWNER and not config.WEBAPP_URL:
+        logger.warning(
+            "Документы некуда публиковать: не задан WEBAPP_URL, ссылки в боте "
+            "показаны не будут."
+        )
+
+
 async def main() -> None:
+    warn_about_setup()
     logger.info("Инициализация базы данных...")
     await init_models()
 

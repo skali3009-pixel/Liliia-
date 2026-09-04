@@ -21,7 +21,12 @@ from services.subscriptions import check_access
 logger = logging.getLogger(__name__)
 
 # Команды, которые работают всегда — иначе из закрытого бота не выбраться.
-OPEN_COMMANDS = {"/start", "/subscription", "/admin", "/grant", "/help"}
+OPEN_COMMANDS = {
+    "/start", "/subscription", "/admin", "/grant", "/help",
+    # Документы, отзыв согласия и отказ от рекламы должны работать всегда:
+    # закон не спрашивает, оплачена ли подписка.
+    "/legal", "/delete", "/stop_ads",
+}
 
 
 def _is_open(event: TelegramObject) -> bool:
@@ -34,7 +39,8 @@ def _is_open(event: TelegramObject) -> bool:
         return text.split()[0].split("@")[0] in OPEN_COMMANDS if text.startswith("/") else False
 
     if isinstance(event, CallbackQuery):
-        return (event.data or "").startswith(CB_BUY)
+        data = event.data or ""
+        return data.startswith(CB_BUY) or data.startswith("legal:")
 
     return False
 

@@ -21,7 +21,10 @@ def test_missing_column_is_added_and_rerun_is_safe():
 
             applied = await apply_column_additions(conn)
             # Все колонки users, добавленные после первого релиза.
-            assert applied == ["users.timezone", "users.daily_fiber_g", "users.referral"]
+            assert applied == [
+                "users.timezone", "users.daily_fiber_g", "users.referral",
+                "users.legal_version", "users.legal_accepted_at", "users.marketing_consent",
+            ]
             assert "timezone" in await conn.run_sync(_columns, "users")
 
             # Повторный запуск ничего не делает и не падает.
