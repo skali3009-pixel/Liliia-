@@ -39,6 +39,7 @@ from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.parsing import parse_float
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, adjust_weight, scale_nutrition
 from utils.progress import format_remaining, render_progress_bar
+from utils.timeframe import DEFAULT_TIMEZONE, get_zone
 
 logger = logging.getLogger(__name__)
 router = Router(name="food")
@@ -74,8 +75,9 @@ def _render_card(analysis: FoodAnalysis, meal_type_label: str) -> str:
     return "\n".join(lines)
 
 
-def _current_meal_label() -> str:
-    return MEAL_TYPE_RU[guess_meal_type(datetime.now(timezone.utc))]
+def _current_meal_label(timezone_name: str = DEFAULT_TIMEZONE) -> str:
+    """Завтрак/обед/ужин определяем по местному времени пользователя."""
+    return MEAL_TYPE_RU[guess_meal_type(datetime.now(get_zone(timezone_name)))]
 
 
 async def _show_card(
@@ -351,7 +353,7 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
 
     data = await state.get_data()
     photo_file_id = data.get("photo_file_id")
-    meal_type = guess_meal_type(datetime.now(timezone.utc))
+    meal_type = guess_meal_type(datetime.now(get_zone(DEFAULT_TIMEZONE)))
 
     async with get_session() as session:
         user = await session.get(User, callback.from_user.id)
@@ -367,7 +369,7 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
             meal_type=meal_type,
             photo_file_id=photo_file_id,
         )
-        totals = await get_today_totals(session, user.id)
+        totals = await get_today_totals(session, user.id, timezone_name=user.timezone)
         norms = (
             user.daily_calories,
             user.daily_protein_g,

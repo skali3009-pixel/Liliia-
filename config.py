@@ -36,6 +36,13 @@ VOICE_API_KEY = os.getenv("VOICE_API_KEY", "")
 VOICE_BASE_URL = os.getenv("VOICE_BASE_URL", "https://api.groq.com/openai/v1")
 VOICE_MODEL = os.getenv("VOICE_MODEL", "whisper-large-v3")
 
+# Мини-приложение внутри Telegram. WEBAPP_URL — публичный адрес с HTTPS,
+# который выдаёт setup-webapp.sh; пока он пуст, приложение не подключается
+# и бот работает как обычно.
+WEBAPP_URL = os.getenv("WEBAPP_URL", "")
+WEBAPP_HOST = os.getenv("WEBAPP_HOST", "127.0.0.1")
+WEBAPP_PORT = int(os.getenv("WEBAPP_PORT", "8080"))
+
 # Строка подключения к PostgreSQL (профиль пользователя, питание,
 # тренировки, прогресс). Формат — SQLAlchemy + asyncpg.
 DATABASE_URL = os.getenv(

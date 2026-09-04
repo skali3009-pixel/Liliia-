@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Meal, MealSourceEnum, MealTypeEnum
 from services.food_vision import FoodAnalysis
+from utils.timeframe import DEFAULT_TIMEZONE, day_bounds
 
 
 @dataclass(frozen=True)
@@ -20,16 +20,6 @@ class DayTotals:
     protein_g: float
     fat_g: float
     carbs_g: float
-
-
-def _day_start_utc(now: datetime | None = None) -> datetime:
-    """Начало текущих суток в UTC.
-
-    MVP: сутки считаются по UTC. Персональные часовые пояса — отдельная
-    задача (нужно поле timezone в users и запрос его в онбординге).
-    """
-    moment = now or datetime.now(timezone.utc)
-    return moment.replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 async def save_meal(
@@ -59,14 +49,17 @@ async def save_meal(
     return meal
 
 
-async def get_today_totals(session: AsyncSession, user_id: int) -> DayTotals:
-    """Суммарные КБЖУ за сегодня."""
+async def get_today_totals(
+    session: AsyncSession, user_id: int, *, timezone_name: str = DEFAULT_TIMEZONE
+) -> DayTotals:
+    """Суммарные КБЖУ за сегодня — по местному времени пользователя."""
+    start, end = day_bounds(timezone_name)
     stmt = select(
         func.coalesce(func.sum(Meal.calories), 0.0),
         func.coalesce(func.sum(Meal.protein_g), 0.0),
         func.coalesce(func.sum(Meal.fat_g), 0.0),
         func.coalesce(func.sum(Meal.carbs_g), 0.0),
-    ).where(Meal.user_id == user_id, Meal.logged_at >= _day_start_utc())
+    ).where(Meal.user_id == user_id, Meal.logged_at >= start, Meal.logged_at < end)
 
     calories, protein_g, fat_g, carbs_g = (await session.execute(stmt)).one()
     return DayTotals(
@@ -83,6 +76,14 @@ async def delete_meal(session: AsyncSession, meal: Meal) -> None:
     await session.commit()
 
 
-def yesterday_utc() -> datetime:
-    """Граница «последние сутки» — пригодится для сводок и стрика."""
-    return datetime.now(timezone.utc) - timedelta(days=1)
+async def list_today_meals(
+    session: AsyncSession, user_id: int, *, timezone_name: str = DEFAULT_TIMEZONE
+) -> list[Meal]:
+    """Съеденное за сегодня — по времени записи, от раннего к позднему."""
+    start, end = day_bounds(timezone_name)
+    stmt = (
+        select(Meal)
+        .where(Meal.user_id == user_id, Meal.logged_at >= start, Meal.logged_at < end)
+        .order_by(Meal.logged_at, Meal.id)
+    )
+    return list((await session.execute(stmt)).scalars().all())

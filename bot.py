@@ -8,10 +8,12 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.types import MenuButtonWebApp, WebAppInfo
 
 import config
 from db import init_models
-from handlers import food, menu, onboarding
+from handlers import food, menu, onboarding, water
+from webapp.server import start_webapp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -21,15 +23,34 @@ dp = Dispatcher()
 
 dp.include_router(onboarding.router)
 dp.include_router(food.router)
+dp.include_router(water.router)
 dp.include_router(menu.router)
+
+
+async def setup_menu_button() -> None:
+    """Кнопка «Открыть приложение» рядом с полем ввода в чате."""
+    if not config.WEBAPP_URL:
+        return
+    await bot.set_chat_menu_button(
+        menu_button=MenuButtonWebApp(
+            text="Дневник", web_app=WebAppInfo(url=config.WEBAPP_URL)
+        )
+    )
+    logger.info("Кнопка мини-приложения включена: %s", config.WEBAPP_URL)
 
 
 async def main() -> None:
     logger.info("Инициализация базы данных...")
     await init_models()
 
-    logger.info("Бот запускается...")
-    await dp.start_polling(bot)
+    runner = await start_webapp()
+    try:
+        await setup_menu_button()
+        logger.info("Бот запускается...")
+        await dp.start_polling(bot)
+    finally:
+        if runner is not None:
+            await runner.cleanup()
 
 
 if __name__ == "__main__":

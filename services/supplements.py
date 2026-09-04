@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
-from zoneinfo import ZoneInfo
+from datetime import date, time
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import ScheduleTypeEnum, Supplement, SupplementLog
 from utils.schedules import describe, is_due
+from utils.timeframe import DEFAULT_TIMEZONE, day_bounds, today_in
 
 
 @dataclass(frozen=True)
@@ -32,29 +32,15 @@ class DueSupplement:
 
 def user_today(timezone_name: str) -> date:
     """Сегодняшняя дата в часовом поясе пользователя."""
-    try:
-        tz = ZoneInfo(timezone_name)
-    except Exception:
-        tz = ZoneInfo("UTC")
-    return datetime.now(tz).date()
-
-
-def _day_bounds_utc(day: date, timezone_name: str) -> tuple[datetime, datetime]:
-    """Начало и конец суток пользователя, переведённые в UTC."""
-    try:
-        tz = ZoneInfo(timezone_name)
-    except Exception:
-        tz = ZoneInfo("UTC")
-    start_local = datetime.combine(day, time.min, tzinfo=tz)
-    return start_local, start_local + timedelta(days=1)
+    return today_in(timezone_name)
 
 
 async def list_due_today(
-    session: AsyncSession, user_id: int, *, timezone_name: str = "Europe/Moscow"
+    session: AsyncSession, user_id: int, *, timezone_name: str = DEFAULT_TIMEZONE
 ) -> list[DueSupplement]:
     """Препараты на сегодня — с пометкой, приняты они уже или нет."""
     today = user_today(timezone_name)
-    day_start, day_end = _day_bounds_utc(today, timezone_name)
+    day_start, day_end = day_bounds(timezone_name, day=today)
 
     supplements = (
         (
@@ -137,7 +123,7 @@ async def mark(
     user_id: int,
     supplement_id: int,
     skipped: bool = False,
-    timezone_name: str = "Europe/Moscow",
+    timezone_name: str = DEFAULT_TIMEZONE,
 ) -> SupplementLog:
     """Отметить приём (или пропуск). Повторная отметка за день перезаписывается.
 
@@ -148,7 +134,7 @@ async def mark(
     if supplement is None or supplement.user_id != user_id:
         raise ValueError("Препарат не найден")
 
-    day_start, day_end = _day_bounds_utc(user_today(timezone_name), timezone_name)
+    day_start, day_end = day_bounds(timezone_name)
     existing = (
         await session.execute(
             select(SupplementLog).where(
