@@ -28,6 +28,18 @@ def today_in(timezone_name: str | None, *, now: datetime | None = None) -> date:
     return moment.date()
 
 
+def to_local(moment: datetime, timezone_name: str | None) -> datetime:
+    """Момент из базы — в местное время пользователя.
+
+    Часть драйверов (SQLite) возвращает время без зоны. Такое значение
+    всегда хранится в UTC, поэтому и трактуем его как UTC: иначе время
+    события уезжало бы на несколько часов.
+    """
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return moment.astimezone(get_zone(timezone_name))
+
+
 def day_bounds(
     timezone_name: str | None, *, day: date | None = None, now: datetime | None = None
 ) -> tuple[datetime, datetime]:

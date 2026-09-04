@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Supplement, SupplementLog, User
 from utils.schedules import is_due
-from utils.timeframe import day_bounds, get_zone
+from utils.timeframe import day_bounds, get_zone, to_local
 
 logger = logging.getLogger(__name__)
 
@@ -72,7 +72,7 @@ async def collect_due_reminders(
 
     reminders: list[Reminder] = []
     for supplement, user in rows:
-        local_now = moment.astimezone(get_zone(user.timezone))
+        local_now = to_local(moment, user.timezone)
         start, end = day_bounds(user.timezone, day=local_now.date())
 
         logged = (

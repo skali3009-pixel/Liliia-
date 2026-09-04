@@ -63,9 +63,11 @@ body {
 
 /* Надпись-указатель над заголовком: маленькая, разрядкой, золотом. */
 .eyebrow {
-  font-size: 10px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase;
+  font-size: 9px; font-weight: 600; letter-spacing: .24em; text-transform: uppercase;
   color: var(--gold); margin-bottom: 6px;
 }
+/* Не .center: этот класс занят экраном загрузки. */
+.eyebrow.mid { text-align: center; margin-bottom: 14px; }
 
 .center { display: flex; height: 70vh; align-items: center; justify-content: center; color: var(--muted); }
 .muted { color: var(--muted); font-size: 13px; }
@@ -483,9 +485,19 @@ button:focus-visible, .tab:focus-visible {
   background: linear-gradient(180deg, rgba(10, 9, 18, .25) 0%, rgba(10, 9, 18, .1) 30%,
               rgba(10, 9, 18, .82) 72%, var(--void) 100%);
 }
-.hero-body, .world-body { position: relative; z-index: 1; padding: 132px 16px 16px; }
+.hero-body, .world-body { position: relative; z-index: 1; padding: 118px 16px 18px; }
 .world-body { padding-top: 200px; }
-.hero-title { font-size: 30px; margin: 0; }
+/* «СЕГОДНЯ» набрано вразрядку и упирается в портрет — как в макете. */
+.hero-title {
+  font-size: 34px; margin: 0; letter-spacing: .08em; text-transform: uppercase;
+  line-height: 1;
+}
+.hero-greeting { font-size: 15px; line-height: 1.35; margin: 18px 0 0; max-width: 15em;
+                 white-space: pre-line; }
+.hero-state { display: flex; align-items: center; gap: 11px; margin-top: 14px; }
+.hero-state-icon { font-size: 19px; line-height: 1; }
+.hero-state-title { font-size: 14px; font-weight: 600; }
+.hero-state-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
 .world-title { font-size: 32px; margin: 0; }
 .hero-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
 .world-sub { font-size: 13px; color: var(--muted); margin: 8px 0 0; max-width: 22em; }
@@ -524,7 +536,8 @@ button:focus-visible, .tab:focus-visible {
 .event[data-kind="workout"] .event-dot { border-color: rgba(45, 212, 191, .5); }
 .event-main { flex: 1; min-width: 0; padding-top: 1px; }
 .event-time { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.event-title { font-size: 14px; font-weight: 600; margin-top: 1px; }
+.event-title { font-size: 14px; font-weight: 600; margin-top: 1px;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .event-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .event-value { font-size: 13px; font-weight: 700; white-space: nowrap; padding-top: 14px;
                font-variant-numeric: tabular-nums; }
@@ -561,7 +574,8 @@ button:focus-visible, .tab:focus-visible {
 }
 @keyframes sheet-up { from { transform: translateY(16%); } to { transform: translateY(0); } }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
-.sheet-head h2 { font-size: 17px; }
+.sheet-head h2 { font-size: 15px; letter-spacing: .12em; text-transform: uppercase;
+                 font-weight: 600; }
 .input.area { resize: none; line-height: 1.4; font-family: inherit; }
 
 .quote {
@@ -579,4 +593,103 @@ button:focus-visible, .tab:focus-visible {
 .fact-value { font-size: 14px; font-weight: 600; text-align: right; }
 .btn.narrow { flex: 1; margin-top: 0; }
 .row .chip { flex: 0 0 40%; }
-.event-actions { display: flex; align-items: flex-start; padding-top: 10px; }
+.event-actions { display: flex; align-items: flex-start; padding-top: 8px; }
+.event-actions .icon-btn { font-size: 14px; padding: 4px; }
+
+/* --- Блок записи: волна, микрофон, камера и «плюс» --- */
+.capture {
+  margin-top: 14px; padding: 18px 16px 14px; text-align: center;
+  border-radius: var(--radius); border: 1px solid var(--stroke);
+  background: linear-gradient(180deg, #1A1633, var(--surface));
+}
+
+/* Волна — украшение, а не индикатор: она статична и не притворяется записью. */
+.wave { display: flex; align-items: center; justify-content: center; gap: 3px; height: 34px; }
+.wave i {
+  width: 2px; border-radius: 2px; background: var(--lilac); opacity: .5;
+  animation: wave 2.4s ease-in-out infinite;
+}
+.wave i:nth-child(3n) { height: 60%; animation-delay: .2s; }
+.wave i:nth-child(3n+1) { height: 30%; animation-delay: .5s; }
+.wave i:nth-child(3n+2) { height: 90%; animation-delay: .8s; }
+.wave i:nth-child(4n) { opacity: .3; }
+@keyframes wave { 0%, 100% { transform: scaleY(.55); } 50% { transform: scaleY(1); } }
+
+.capture-row { display: flex; align-items: center; justify-content: center; gap: 26px;
+               margin-top: 14px; }
+.round-btn {
+  width: 46px; height: 46px; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--stroke); background: var(--surface-2); color: var(--fg);
+  font-family: inherit; font-size: 19px; line-height: 1;
+}
+.mic-btn {
+  width: 74px; height: 74px; border-radius: 50%; cursor: pointer;
+  border: 1.5px solid var(--gold); padding: 0;
+  background: radial-gradient(circle at 50% 35%, #A78BFA, #6D28D9 70%);
+  box-shadow: 0 0 0 6px rgba(139, 92, 246, .16), 0 12px 30px rgba(88, 44, 190, .45);
+  display: flex; align-items: center; justify-content: center;
+}
+.mic-btn svg { width: 28px; height: 28px; fill: none; stroke: #fff; stroke-width: 1.6;
+               stroke-linecap: round; stroke-linejoin: round; }
+.mic-btn:active, .round-btn:active { transform: scale(.96); }
+.capture-hint { font-size: 11px; color: var(--muted); margin: 14px 0 0; }
+
+/* --- Лента дня в стиле макета: кружок, время, название, галочка --- */
+.event-dot { border-color: rgba(139, 92, 246, .45); }
+.event-check {
+  width: 26px; height: 26px; flex: 0 0 26px; margin-top: 12px; border-radius: 50%;
+  border: 1px solid rgba(139, 92, 246, .5); color: var(--lilac);
+  display: flex; align-items: center; justify-content: center; font-size: 13px;
+}
+
+/* Заголовок раздела с линией — как в макете «Распознанные факты ————» */
+.eyebrow.ruled { display: flex; align-items: center; gap: 10px; margin: 18px 0 4px; }
+.eyebrow.ruled::after { content: ''; flex: 1; height: 1px; background: var(--stroke); }
+
+.quote { position: relative; padding-left: 22px; }
+.quote::before {
+  content: '“'; position: absolute; left: 0; top: 6px;
+  font-family: var(--display); font-size: 34px; line-height: 1; color: var(--gold); opacity: .8;
+}
+
+/* Строка факта: карандаш появляется у всего, что можно поправить. */
+.fact-edit { border: none; background: none; cursor: pointer; padding: 4px 0 4px 10px; }
+.fact-edit svg { width: 15px; height: 15px; fill: none; stroke: var(--muted);
+                 stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.fact-edit:active svg { stroke: var(--lilac); }
+.fact-input {
+  width: 108px; padding: 6px 8px; border-radius: 9px; text-align: right;
+  border: 1px solid var(--violet); background: var(--void); color: var(--fg);
+  font-family: inherit; font-size: 14px; font-weight: 600;
+}
+select.fact-input { text-align: left; width: 130px; }
+
+.trust {
+  display: flex; gap: 12px; align-items: flex-start; margin: 4px 0 16px;
+  padding: 14px; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--stroke);
+}
+.trust svg { width: 22px; height: 22px; flex: 0 0 22px; margin-top: 2px; fill: none;
+             stroke: var(--teal); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.trust-value { font-size: 15px; font-weight: 700; }
+.trust-note { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+
+/* --- Карточка последнего открытия --- */
+.discovery { text-align: left; }
+.discovery-title { font-family: var(--display); font-weight: 500; font-size: 26px;
+                   margin: 2px 0 14px; color: var(--gold); }
+.discovery-why { margin: 0; display: grid; gap: 8px; }
+.discovery-why > div { display: flex; gap: 8px; font-size: 13px; }
+.discovery-why dt { color: var(--muted); flex: 0 0 60px; }
+.discovery-why dd { margin: 0; flex: 1; }
+
+/* Путь к следующему открытию: пройденные шаги горят золотом. */
+.steps { display: flex; align-items: center; gap: 6px; margin-top: 18px; }
+.steps i {
+  width: 22px; height: 22px; flex: 0 0 22px; border-radius: 50%;
+  border: 1px solid var(--stroke); color: var(--muted);
+  display: flex; align-items: center; justify-content: center; font-size: 11px; font-style: normal;
+}
+.steps i.on { border-color: var(--gold); color: var(--gold); }
+.steps b { flex: 1; height: 1px; background: var(--stroke); }
+.steps b.on { background: rgba(201, 169, 97, .6); }

@@ -161,7 +161,7 @@ def test_moment_is_recognized_but_not_saved_until_confirmed():
             }
 
             async def fake_analyze(text, **kwargs):
-                return build_moment(payload, text=text)
+                return build_moment(payload, text=text, at="08:40")
 
             original = api_module.analyze_moment
             api_module.analyze_moment = fake_analyze
@@ -171,7 +171,8 @@ def test_moment_is_recognized_but_not_saved_until_confirmed():
                 data = await (await call(client, "POST", "/api/moment", json_body={
                     "text": "Позавтракала овсянкой, чувствую себя бодрее"})).json()
                 assert data["summary"] == "Завтрак"
-                assert {row["label"] for row in data["facts"]} >= {"Еда", "Энергия", "Настроение"}
+                assert {row["label"] for row in data["facts"]} >= {"Событие", "Энергия",
+                                                                   "Настроение", "Время"}
 
                 # Пока не подтвердили — в дневнике ничего не прибавилось.
                 middle = await (await call(client, "GET", "/api/today")).json()
@@ -185,9 +186,12 @@ def test_moment_is_recognized_but_not_saved_until_confirmed():
                 assert after["totals"]["calories"] == before["totals"]["calories"] + 320
                 assert after["state"]["energy"] == 7
                 assert after["state"]["mood"] == "бодро"
-                # Съеденное и самочувствие встали в ленту дня.
+                # Съеденное и самочувствие встали в ленту дня, причём тем
+                # временем, которое стояло в карточке.
                 kinds = {event["kind"] for event in after["timeline"]}
                 assert {"meal", "state"} <= kinds
+                assert any(event["time"] == "08:40" and event["kind"] == "meal"
+                           for event in after["timeline"])
             finally:
                 api_module.analyze_moment = original
     run(scenario)

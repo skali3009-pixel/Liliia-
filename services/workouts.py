@@ -17,7 +17,7 @@ from utils.met import (
     strength_exercise_minutes,
     timed_exercise_minutes,
 )
-from utils.timeframe import DEFAULT_TIMEZONE, day_bounds, today_in
+from utils.timeframe import DEFAULT_TIMEZONE, day_bounds, today_in, to_local
 
 logger = logging.getLogger(__name__)
 
@@ -190,10 +190,7 @@ async def week_summary(
     """Сколько тренировок и калорий за последние 7 дней."""
     logs = await recent_sessions(session, user_id, days=7, timezone_name=timezone_name)
 
-    from utils.timeframe import get_zone
-
-    zone = get_zone(timezone_name)
-    days = {log.completed_at.astimezone(zone).date() for log in logs}
+    days = {to_local(log.completed_at, timezone_name).date() for log in logs}
     return {
         "workouts": len(days),
         "exercises": len(logs),

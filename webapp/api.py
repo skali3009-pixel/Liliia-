@@ -44,7 +44,7 @@ from services.water import add_water, today_total_ml, undo_last
 from utils.macros import GAP_LABELS, dominant_gap, remaining
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, scale_nutrition
-from utils.timeframe import get_zone, today_in
+from utils.timeframe import get_zone, to_local, today_in
 from webapp.auth import AuthError, verify_init_data
 
 logger = logging.getLogger(__name__)
@@ -102,7 +102,7 @@ def _meal_json(meal: Meal, timezone_name: str) -> dict:
         "carbs_g": round(meal.carbs_g),
         "fiber_g": round(meal.fiber_g or 0),
         "meal_type": MEAL_TYPE_RU.get(meal.meal_type, "") if meal.meal_type else "",
-        "time": meal.logged_at.astimezone(zone).strftime("%H:%M") if meal.logged_at else "",
+        "time": to_local(meal.logged_at, timezone_name).strftime("%H:%M") if meal.logged_at else "",
         "source": meal.source.value if meal.source else "text",
     }
 
@@ -359,7 +359,7 @@ async def get_progress(request: web.Request) -> web.Response:
                 "streak": streak,
             },
             "photos": [
-                {"id": photo.id, "date": photo.taken_at.astimezone(get_zone(tz)).strftime("%d.%m.%Y")}
+                {"id": photo.id, "date": to_local(photo.taken_at, tz).strftime("%d.%m.%Y")}
                 for photo in photos
             ],
             "awards": awards,
@@ -665,6 +665,21 @@ async def post_moment(request: web.Request) -> web.Response:
     })
 
 
+def _moment_time(raw: str, timezone_name: str) -> datetime:
+    """Время момента: то, что человек поправил, иначе — сейчас.
+
+    Дата всегда сегодняшняя: моменты записываются день в день.
+    """
+    now = datetime.now(get_zone(timezone_name))
+    try:
+        hours, minutes = (int(part) for part in str(raw).split(":", 1))
+    except (TypeError, ValueError):
+        return now
+    if not (0 <= hours < 24 and 0 <= minutes < 60):
+        return now
+    return now.replace(hour=hours, minute=minutes, second=0, microsecond=0)
+
+
 async def confirm_moment(request: web.Request) -> web.Response:
     """Сохранить подтверждённый момент: еду, состояние или и то, и другое."""
     body = await request.json()
@@ -675,6 +690,7 @@ async def confirm_moment(request: web.Request) -> web.Response:
 
     user_id, tz = request["user_id"], request["timezone"]
     saved = []
+    at = _moment_time(moment.at, tz)
 
     async with get_session() as session:
         if moment.food:
@@ -683,7 +699,8 @@ async def confirm_moment(request: web.Request) -> web.Response:
                 user_id=user_id,
                 analysis=moment.food,
                 source=MealSourceEnum.TEXT,
-                meal_type=guess_meal_type(datetime.now(get_zone(tz))),
+                meal_type=guess_meal_type(at),
+                logged_at=at,
             )
             saved.append("еда")
         if moment.has_state:
@@ -696,10 +713,22 @@ async def confirm_moment(request: web.Request) -> web.Response:
                 stress=moment.stress,
                 sleep_minutes=moment.sleep_minutes,
                 note=moment.text,
+                logged_at=at,
             )
             saved.append("самочувствие")
 
     return web.json_response({"saved": saved})
+
+
+async def recount_moment(request: web.Request) -> web.Response:
+    """Пересобрать факты после правки: список строит сервер, чтобы правила
+    показа и пересчёта жили в одном месте."""
+    body = await request.json()
+    try:
+        moment = Moment.from_dict(body["moment"])
+    except (KeyError, TypeError, ValueError):
+        return web.json_response({"error": "Момент устарел, повтори ввод"}, status=400)
+    return web.json_response({"moment": moment.to_dict(), "facts": moment_facts(moment)})
 
 
 async def post_checkin(request: web.Request) -> web.Response:
@@ -755,4 +784,5 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/meals", post_meal)
     app.router.add_post("/api/moment", post_moment)
     app.router.add_post("/api/moment/confirm", confirm_moment)
+    app.router.add_post("/api/moment/facts", recount_moment)
     app.router.add_post("/api/checkin", post_checkin)

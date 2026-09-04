@@ -91,6 +91,8 @@ class Moment:
     mood: str | None = None
     stress: str | None = None
     sleep_minutes: int | None = None
+    # Время момента «ЧЧ:ММ» — его можно поправить перед сохранением.
+    at: str = ""
 
     @property
     def has_state(self) -> bool:
@@ -135,7 +137,7 @@ def _positive(value: Any) -> float:
         return 0.0
 
 
-def build_moment(payload: dict[str, Any], *, text: str) -> Moment:
+def build_moment(payload: dict[str, Any], *, text: str, at: str = "") -> Moment:
     """Собрать момент из ответа модели."""
     food_name = str(payload.get("food_name") or "").strip()
     food = None
@@ -154,6 +156,7 @@ def build_moment(payload: dict[str, Any], *, text: str) -> Moment:
 
     sleep_hours = _positive(payload.get("sleep_hours"))
     return Moment(
+        at=at or "",
         summary=str(payload.get("summary") or "Момент").strip()[:60],
         text=text.strip()[:500],
         comment=str(payload.get("comment") or "").strip()[:200],
@@ -191,42 +194,49 @@ async def analyze_moment(text: str, *, now: datetime | None = None) -> Moment:
         logger.warning("Модель не вызвала инструмент, stop_reason=%s", response.stop_reason)
         raise FoodRecognitionError("Не получилось разобрать фразу. Попробуй сказать иначе.")
 
-    return build_moment(dict(tool_use.input), text=text)
+    return build_moment(dict(tool_use.input), text=text, at=moment_time)
 
 
-# Порядок фактов в карточке: сначала что съела, потом как себя чувствуешь.
-def facts(moment: Moment) -> list[dict[str, str]]:
+# Порядок фактов в карточке: сначала что съела, потом как себя чувствуешь,
+# и в конце время. Каждый факт можно поправить — поэтому у него есть ключ
+# и тип поля, а не только текст.
+def facts(moment: Moment) -> list[dict[str, Any]]:
     """Распознанные факты для карточки подтверждения."""
-    rows: list[dict[str, str]] = []
+    rows: list[dict[str, Any]] = []
     if moment.food:
-        rows.append({"icon": "🍽", "label": "Еда", "value": moment.food.name})
-        rows.append({
-            "icon": "⚖️",
-            "label": "Порция",
-            "value": f"{round(moment.food.weight_g)} г · {round(moment.food.calories)} ккал",
-        })
-        rows.append({
-            "icon": "🥩",
-            "label": "БЖУ",
-            "value": (
-                f"{round(moment.food.protein_g)} / {round(moment.food.fat_g)} / "
-                f"{round(moment.food.carbs_g)} г"
-            ),
-        })
+        rows.append({"key": "food_name", "icon": "🍽️", "label": "Событие",
+                     "value": moment.food.name, "type": "text", "raw": moment.food.name})
+        rows.append({"key": "weight_g", "icon": "⚖️", "label": "Порция",
+                     "value": f"{round(moment.food.weight_g)} г", "type": "number",
+                     "raw": round(moment.food.weight_g)})
+        rows.append({"key": "calories", "icon": "🔥", "label": "Калории",
+                     "value": f"{round(moment.food.calories)} ккал", "type": "readonly"})
+        rows.append({"key": "macros", "icon": "🥩", "label": "Б / Ж / У",
+                     "value": (f"{round(moment.food.protein_g)} / {round(moment.food.fat_g)} / "
+                               f"{round(moment.food.carbs_g)} г"), "type": "readonly"})
         if moment.food.fiber_g:
-            rows.append({"icon": "🥦", "label": "Клетчатка",
-                         "value": f"{round(moment.food.fiber_g)} г"})
+            rows.append({"key": "fiber_g", "icon": "🥦", "label": "Клетчатка",
+                         "value": f"{round(moment.food.fiber_g)} г", "type": "readonly"})
     if moment.energy:
-        rows.append({"icon": "⚡", "label": "Энергия", "value": f"{moment.energy} из 10"})
+        rows.append({"key": "energy", "icon": "⚡", "label": "Энергия",
+                     "value": f"{moment.energy} из 10", "type": "score", "raw": moment.energy})
     if moment.focus:
-        rows.append({"icon": "🎯", "label": "Фокус", "value": f"{moment.focus} из 10"})
+        rows.append({"key": "focus", "icon": "🎯", "label": "Фокус",
+                     "value": f"{moment.focus} из 10", "type": "score", "raw": moment.focus})
     if moment.mood:
-        rows.append({"icon": "🤍", "label": "Настроение", "value": moment.mood})
+        rows.append({"key": "mood", "icon": "🤍", "label": "Настроение", "value": moment.mood,
+                     "type": "choice", "options": [m for m in MOODS if m], "raw": moment.mood})
     if moment.stress:
-        rows.append({"icon": "〰️", "label": "Стресс", "value": moment.stress})
+        rows.append({"key": "stress", "icon": "〰️", "label": "Стресс", "value": moment.stress,
+                     "type": "choice", "options": [s for s in STRESS_LEVELS if s],
+                     "raw": moment.stress})
     if moment.sleep_minutes:
         hours, minutes = divmod(moment.sleep_minutes, 60)
-        rows.append({"icon": "🌙", "label": "Сон", "value": f"{hours} ч {minutes:02d} мин"})
+        rows.append({"key": "sleep_minutes", "icon": "🌙", "label": "Сон",
+                     "value": f"{hours} ч {minutes:02d} мин", "type": "readonly"})
+    if moment.at:
+        rows.append({"key": "at", "icon": "🕐", "label": "Время", "value": moment.at,
+                     "type": "time", "raw": moment.at})
     return rows
 
 

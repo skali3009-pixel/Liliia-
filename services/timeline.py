@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from models import Checkin, Meal, SupplementLog, WorkoutLog
-from utils.timeframe import DEFAULT_TIMEZONE, day_bounds, get_zone
+from utils.timeframe import DEFAULT_TIMEZONE, day_bounds, to_local
 
 # Упражнения одной тренировки идут подряд; всё, что записано в пределах этого
 # промежутка, считаем одним занятием, а не пятью отдельными событиями.
@@ -32,9 +32,9 @@ class Event:
     # id записи, если событие можно поправить или удалить (пока только еда).
     ref_id: int | None = None
 
-    def to_dict(self, zone) -> dict:
+    def to_dict(self, timezone_name: str) -> dict:
         return {
-            "time": self.at.astimezone(zone).strftime("%H:%M"),
+            "time": to_local(self.at, timezone_name).strftime("%H:%M"),
             "kind": self.kind,
             "icon": self.icon,
             "title": self.title,
@@ -105,7 +105,6 @@ async def day_timeline(
 ) -> list[dict]:
     """События сегодняшнего дня по возрастанию времени."""
     start, end = day_bounds(timezone_name)
-    zone = get_zone(timezone_name)
 
     def today(model, column):
         return select(model).where(model.user_id == user_id, column >= start, column < end)
@@ -149,4 +148,4 @@ async def day_timeline(
     ]
 
     events.sort(key=lambda event: event.at)
-    return [event.to_dict(zone) for event in events]
+    return [event.to_dict(timezone_name) for event in events]

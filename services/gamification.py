@@ -23,7 +23,7 @@ from utils.game import (
     earned_codes,
     level_from_xp,
 )
-from utils.timeframe import DEFAULT_TIMEZONE, day_bounds, get_zone, today_in
+from utils.timeframe import DEFAULT_TIMEZONE, day_bounds, to_local, today_in
 
 logger = logging.getLogger(__name__)
 
@@ -41,8 +41,8 @@ async def _workouts_today(session: AsyncSession, user_id: int, timezone_name: st
 async def _workout_days_total(session: AsyncSession, user_id: int, timezone_name: str) -> int:
     """Тренировкой считаем день с занятием, а не каждое упражнение отдельно."""
     stmt = select(WorkoutLog.completed_at).where(WorkoutLog.user_id == user_id)
-    zone = get_zone(timezone_name)
-    return len({moment.astimezone(zone).date() for moment in (await session.execute(stmt)).scalars()})
+    return len({to_local(moment, timezone_name).date()
+                for moment in (await session.execute(stmt)).scalars()})
 
 
 async def _days_since_measure(
@@ -57,7 +57,7 @@ async def _days_since_measure(
     last = (await session.execute(stmt)).scalar_one_or_none()
     if last is None:
         return None
-    return (today_in(timezone_name) - last.astimezone(get_zone(timezone_name)).date()).days
+    return (today_in(timezone_name) - to_local(last, timezone_name).date()).days
 
 
 async def _losses(session: AsyncSession, user: User) -> tuple[float, float]:

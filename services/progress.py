@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import config
 from models import BodyMeasurement, Meal, ProgressPhoto, User
 from utils.formulas import ActivityLevel, Gender, Goal, calculate_macros, daily_water_ml
-from utils.timeframe import DEFAULT_TIMEZONE, day_bounds, get_zone, today_in
+from utils.timeframe import DEFAULT_TIMEZONE, day_bounds, get_zone, to_local, today_in
 
 logger = logging.getLogger(__name__)
 
@@ -81,10 +81,9 @@ async def measure_points(
         .all()
     )
 
-    zone = get_zone(timezone_name)
     by_day: dict[date, float] = {}
     for row in rows:
-        by_day[row.measured_at.astimezone(zone).date()] = float(getattr(row, column_name))
+        by_day[to_local(row.measured_at, timezone_name).date()] = float(getattr(row, column_name))
     return [Point(day, value) for day, value in sorted(by_day.items())]
 
 
@@ -109,10 +108,9 @@ async def calorie_points(
         .all()
     )
 
-    zone = get_zone(timezone_name)
     totals: dict[date, float] = {}
     for meal in rows:
-        day = meal.logged_at.astimezone(zone).date()
+        day = to_local(meal.logged_at, timezone_name).date()
         totals[day] = totals.get(day, 0.0) + float(meal.calories)
     return [Point(day, round(value)) for day, value in sorted(totals.items())]
 

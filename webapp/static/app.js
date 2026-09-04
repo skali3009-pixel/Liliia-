@@ -39,8 +39,8 @@ function haptic(type = 'light') {
 /* --- отрисовка --- */
 // Время суток и род слова: «спокойное утро», но «спокойный вечер».
 const DAY_TITLES = [
-  [5, 'Ночь', 'f'], [9, 'Утро', 'n'], [12, 'День', 'm'],
-  [17, 'Вечер', 'm'], [24, 'Вечер', 'm'],
+  [5, 'Ночь', 'f'], [12, 'Утро', 'n'], [17, 'День', 'm'],
+  [23, 'Вечер', 'm'], [24, 'Ночь', 'f'],
 ];
 const TONES = {
   'спокойно': ['Спокойное', 'Спокойный', 'Спокойная'],
@@ -61,8 +61,20 @@ function dayTitle(state) {
   return `${tone[{ n: 0, m: 1, f: 2 }[gender]]} ${base.toLowerCase()}`;
 }
 
+const GREETINGS = [
+  [5, '🌙', 'Доброй ночи.'],
+  [12, '☀️', 'Доброе утро,\nты в фокусе.'],
+  [17, '🌤️', 'Добрый день,\nты в ритме.'],
+  [23, '🌘', 'Добрый вечер,\nдень почти собран.'],
+  [24, '🌙', 'Доброй ночи.'],
+];
+
 function renderHero(data) {
   const state = data.state || {};
+  const hour = new Date().getHours();
+  const [, icon, greeting] = GREETINGS.find(([until]) => hour < until) || GREETINGS[0];
+  document.getElementById('hero-greeting').textContent = greeting;
+  document.getElementById('hero-state-icon').textContent = icon;
   document.getElementById('hero-title').textContent = dayTitle(state);
 
   const parts = [];
@@ -72,7 +84,7 @@ function renderHero(data) {
     parts.push(`Сон ${h} ч ${String(m).padStart(2, '0')} м`);
   }
   if (state.energy) parts.push(`Энергия ${state.energy}/10`);
-  parts.push(`${data.totals.calories} из ${data.norms.calories} ккал`);
+  if (!parts.length) parts.push(`${data.totals.calories} из ${data.norms.calories} ккал`);
   document.getElementById('hero-sub').textContent = parts.join(' · ');
 
   const tiles = [
@@ -127,8 +139,14 @@ function renderTimeline(events) {
     row.querySelector('.event-sub').textContent = event.subtitle;
     row.querySelector('.event-value').textContent = event.value;
 
-    // Еду можно поправить прямо в ленте — остальные события правятся там,
-    // где их создали.
+    // У еды справа стоят правка и удаление, у остальных событий — галочка:
+    // они уже случились, и делать с ними в ленте нечего.
+    if (event.kind !== 'meal') {
+      const check = document.createElement('div');
+      check.className = 'event-check';
+      check.textContent = '✓';
+      row.appendChild(check);
+    }
     if (event.kind === 'meal' && event.id) {
       const meal = (state?.meals || []).find((item) => item.id === event.id);
       if (meal) {
@@ -258,6 +276,31 @@ function renderAwards(awards) {
   const next = awards.find((a) => !a.earned);
   document.getElementById('award-next').textContent =
     next ? `Следующее открытие: ${next.title} — ${next.goal}.` : 'Все открытия собраны.';
+
+  // Карточка последнего открытия: чем оно было и что дальше.
+  const last = [...awards].reverse().find((a) => a.earned);
+  document.getElementById('discovery-title').textContent =
+    last ? last.title : 'Первое открытие ждёт';
+  document.getElementById('discovery-why').textContent =
+    last ? last.goal : 'запиши первый приём пищи';
+  document.getElementById('discovery-next').textContent =
+    next ? `${next.title} — ${next.goal}` : 'всё собрано';
+
+  // Три шага до следующего открытия — просто и наглядно.
+  const steps = document.getElementById('discovery-steps');
+  steps.innerHTML = '';
+  const done = Math.min(earned, 3);
+  for (let i = 0; i < 3; i += 1) {
+    if (i) {
+      const line = document.createElement('b');
+      line.className = i <= done - 1 ? 'on' : '';
+      steps.appendChild(line);
+    }
+    const dot = document.createElement('i');
+    dot.className = i < done ? 'on' : '';
+    dot.textContent = i < done ? '✓' : i + 1;
+    steps.appendChild(dot);
+  }
 
   const world = document.getElementById('world-sub');
   if (world) {
@@ -859,6 +902,12 @@ function renderSuggestions(items) {
 /* --- «Расскажи, что происходит»: распознали → показали → сохранили --- */
 let pendingMoment = null;
 
+function toChat(hint) {
+  toast(hint);
+  haptic();
+  setTimeout(() => tg?.close?.(), 900);
+}
+
 function openMoment() {
   pendingMoment = null;
   document.getElementById('moment-head').textContent = 'Что происходит?';
@@ -874,6 +923,114 @@ function closeMoment() {
   pendingMoment = null;
 }
 
+const TRUST_NOTES = {
+  high: 'Эти данные точно отражают твоё сообщение.',
+  medium: 'Порция оценена приблизительно — поправь, если знаешь точнее.',
+  low: 'Оценка грубая: скажи подробнее или поправь цифры.',
+};
+const TRUST_LABELS = { high: 'Высокая', medium: 'Средняя', low: 'Низкая' };
+
+function renderFacts(facts) {
+  const box = document.getElementById('moment-facts');
+  box.innerHTML = '';
+  for (const fact of facts) {
+    const row = document.createElement('div');
+    row.className = 'fact';
+    row.innerHTML = `<div class="fact-icon"></div><div class="fact-label"></div>
+                     <div class="fact-value"></div>`;
+    row.querySelector('.fact-icon').textContent = fact.icon;
+    row.querySelector('.fact-label').textContent = fact.label;
+    row.querySelector('.fact-value').textContent = fact.value;
+
+    if (fact.type && fact.type !== 'readonly') {
+      const pencil = document.createElement('button');
+      pencil.className = 'fact-edit';
+      pencil.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="M4 20h4l10-10-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>`;
+      pencil.title = 'Поправить';
+      pencil.onclick = () => editFact(row, fact);
+      row.appendChild(pencil);
+    }
+    box.appendChild(row);
+  }
+}
+
+/* Правка одного факта: значение превращается в поле, а после ввода
+   момент пересобирает сервер — правила пересчёта живут только там. */
+function editFact(row, fact) {
+  const cell = row.querySelector('.fact-value');
+  const editor = fact.type === 'choice'
+    ? document.createElement('select')
+    : document.createElement('input');
+  editor.className = 'fact-input';
+
+  if (fact.type === 'choice') {
+    for (const option of fact.options || []) {
+      const item = document.createElement('option');
+      item.value = option;
+      item.textContent = option;
+      item.selected = option === fact.raw;
+      editor.appendChild(item);
+    }
+  } else if (fact.type === 'time') {
+    editor.type = 'time';
+    editor.value = fact.raw;
+  } else if (fact.type === 'text') {
+    editor.type = 'text';
+    editor.value = fact.raw;
+  } else {
+    editor.type = 'number';
+    editor.value = fact.raw;
+    editor.min = fact.type === 'score' ? 1 : 1;
+    if (fact.type === 'score') editor.max = 10;
+  }
+
+  cell.replaceWith(editor);
+  editor.focus();
+
+  const apply = async () => {
+    editor.onblur = null;
+    await applyFact(fact, editor.value);
+  };
+  editor.onblur = apply;
+  editor.onchange = () => { if (fact.type === 'choice' || fact.type === 'time') apply(); };
+  editor.onkeydown = (e) => { if (e.key === 'Enter') editor.blur(); };
+}
+
+async function applyFact(fact, value) {
+  const moment = pendingMoment;
+  if (!moment) return;
+
+  if (fact.key === 'weight_g') {
+    // Вес тянет за собой всё остальное: пересчитываем порцию пропорционально.
+    const next = Math.max(Number(value) || 0, 1);
+    const ratio = next / (moment.food.weight_g || next);
+    for (const key of ['calories', 'protein_g', 'fat_g', 'carbs_g', 'fiber_g']) {
+      moment.food[key] = Math.round(moment.food[key] * ratio * 10) / 10;
+    }
+    moment.food.weight_g = next;
+  } else if (fact.key === 'food_name') {
+    moment.food.name = String(value).trim().slice(0, 60) || moment.food.name;
+  } else if (fact.key === 'energy' || fact.key === 'focus') {
+    moment[fact.key] = Math.min(Math.max(Number(value) || 1, 1), 10);
+  } else if (fact.key === 'at') {
+    moment.at = value;
+  } else {
+    moment[fact.key] = value;
+  }
+
+  try {
+    const data = await api('/api/moment/facts', {
+      method: 'POST', body: JSON.stringify({ moment }),
+    });
+    pendingMoment = data.moment;
+    renderFacts(data.facts);
+    haptic();
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
 async function recognizeMoment() {
   const text = document.getElementById('moment-text').value.trim();
   if (!text) { toast('Напиши пару слов'); return; }
@@ -885,21 +1042,14 @@ async function recognizeMoment() {
     const data = await api('/api/moment', { method: 'POST', body: JSON.stringify({ text }) });
     pendingMoment = data.moment;
 
-    document.getElementById('moment-head').textContent = data.summary || 'Проверь момент';
-    document.getElementById('moment-quote').textContent = `«${text}»`;
+    document.getElementById('moment-head').textContent = 'Проверь момент';
+    document.getElementById('moment-quote').textContent = text;
+    renderFacts(data.facts);
 
-    const box = document.getElementById('moment-facts');
-    box.innerHTML = '';
-    for (const fact of data.facts) {
-      const row = document.createElement('div');
-      row.className = 'fact';
-      row.innerHTML = `<div class="fact-icon"></div><div class="fact-label"></div>
-                       <div class="fact-value"></div>`;
-      row.querySelector('.fact-icon').textContent = fact.icon;
-      row.querySelector('.fact-label').textContent = fact.label;
-      row.querySelector('.fact-value').textContent = fact.value;
-      box.appendChild(row);
-    }
+    const trust = data.moment.food ? data.moment.food.confidence : 'high';
+    document.getElementById('moment-trust').textContent = TRUST_LABELS[trust] || 'Средняя';
+    document.getElementById('moment-trust-note').textContent =
+      TRUST_NOTES[trust] || TRUST_NOTES.medium;
 
     document.getElementById('moment-input').hidden = true;
     document.getElementById('moment-result').hidden = false;
@@ -991,6 +1141,10 @@ async function init() {
   };
 
   document.getElementById('moment-open').onclick = openMoment;
+  // Записать голос или снять фото умеет чат: там для этого есть всё, чего
+  // мини-приложению не даёт Telegram. Поэтому просто уходим туда.
+  document.getElementById('capture-voice').onclick = () => toChat('🎤 Зажми микрофон в чате и расскажи');
+  document.getElementById('capture-photo').onclick = () => toChat('📷 Пришли фото еды в чат');
   document.getElementById('moment-close').onclick = closeMoment;
   document.getElementById('moment-send').onclick = recognizeMoment;
   document.getElementById('moment-save').onclick = saveMoment;

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -43,7 +44,13 @@ async def save_checkin(
     stress: str | None = None,
     sleep_minutes: int | None = None,
     note: str | None = None,
+    logged_at: datetime | None = None,
 ) -> Checkin:
+    # В базу время кладём в UTC: драйверы по-разному обходятся с зоной,
+    # а UTC читается одинаково везде.
+    if logged_at is not None and logged_at.tzinfo is not None:
+        logged_at = logged_at.astimezone(timezone.utc)
+
     checkin = Checkin(
         user_id=user_id,
         energy=energy,
@@ -52,6 +59,7 @@ async def save_checkin(
         stress=stress,
         sleep_minutes=sleep_minutes,
         note=note,
+        **({"logged_at": logged_at} if logged_at else {}),
     )
     session.add(checkin)
     await session.commit()

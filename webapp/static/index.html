@@ -15,14 +15,23 @@
 
 <div id="app" hidden>
   <main id="screen-today" class="screen">
-    <!-- Шапка-герой: арт, состояние дня и строка уровня. Это первое, что
-         видно утром, поэтому здесь настроение, а не цифры. -->
+    <!-- Шапка как в макете: крупное «СЕГОДНЯ» разрядкой, гепард справа,
+         приветствие и строка состояния дня. -->
     <section class="hero">
       <div class="hero-art" data-art="hero"></div>
       <div class="hero-body">
-        <div class="eyebrow">Сегодня</div>
-        <h1 class="hero-title" id="hero-title">Новый день</h1>
-        <div class="hero-sub" id="hero-sub"></div>
+        <h1 class="hero-title">Сегодня</h1>
+        <div class="eyebrow">Твоя ежедневная редакция</div>
+
+        <p class="hero-greeting" id="hero-greeting">Доброе утро.</p>
+
+        <div class="hero-state">
+          <span class="hero-state-icon" id="hero-state-icon">☀️</span>
+          <div>
+            <div class="hero-state-title" id="hero-title">Новый день</div>
+            <div class="hero-state-sub" id="hero-sub"></div>
+          </div>
+        </div>
 
         <div class="hud">
           <svg class="crystal" id="crystal" viewBox="0 0 44 60" data-stage="1" aria-hidden="true">
@@ -55,6 +64,27 @@
           </div>
         </div>
       </div>
+    </section>
+
+    <!-- Блок записи стоит сразу под шапкой: это главное действие экрана. -->
+    <section class="capture">
+      <div class="eyebrow mid">Расскажи, что происходит</div>
+      <div class="wave" aria-hidden="true">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="capture-row">
+        <button class="round-btn" id="capture-photo" aria-label="Прислать фото">📷</button>
+        <button class="mic-btn" id="capture-voice" aria-label="Наговорить голосом">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="9" y="3" width="6" height="11" rx="3"/>
+            <path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>
+          </svg>
+        </button>
+        <button class="round-btn" id="moment-open" aria-label="Написать текстом">+</button>
+      </div>
+      <p class="capture-hint">Голосом и фото — через чат с ботом, текстом — здесь.</p>
     </section>
 
     <section class="state-grid" id="state-grid"></section>
@@ -198,9 +228,19 @@
       <div class="world-art" data-art="world"></div>
       <div class="world-body">
         <div class="eyebrow">Мой мир</div>
-        <h1 class="world-title" id="world-title">Твоё место силы</h1>
+        <h1 class="world-title" id="world-title">Место силы</h1>
         <p class="world-sub" id="world-sub">Растёт с каждым закрытым заданием.</p>
       </div>
+    </section>
+
+    <section class="card discovery">
+      <div class="eyebrow">Последнее открытие</div>
+      <h2 class="discovery-title" id="discovery-title">Пока закрыто</h2>
+      <dl class="discovery-why">
+        <div><dt>Почему</dt><dd id="discovery-why">—</dd></div>
+        <div><dt>Дальше</dt><dd id="discovery-next">—</dd></div>
+      </dl>
+      <div class="steps" id="discovery-steps"></div>
     </section>
 
     <section class="card">
@@ -309,11 +349,6 @@
     </section>
   </main>
 
-  <!-- Одна кнопка на все случаи: рассказать словами, что произошло. -->
-  <button class="say" id="moment-open">
-    <span class="say-spark">✦</span> Расскажи, что происходит
-  </button>
-
   <div id="rest-overlay" class="overlay" hidden>
     <div class="rest-card">
       <div class="rest-label">Отдых</div>
@@ -355,9 +390,22 @@
     </div>
 
     <div id="moment-result" hidden>
+      <div class="eyebrow">Твоя фраза</div>
       <div class="quote" id="moment-quote"></div>
-      <div class="eyebrow">Распознала</div>
+
+      <div class="eyebrow ruled">Распознанные факты</div>
       <div class="facts" id="moment-facts"></div>
+
+      <div class="trust">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/>
+          <path d="M9 12l2 2 4-4"/></svg>
+        <div>
+          <div class="eyebrow">Уверенность</div>
+          <div class="trust-value" id="moment-trust">Высокая</div>
+          <div class="trust-note" id="moment-trust-note">Эти данные точно отражают твоё сообщение.</div>
+        </div>
+      </div>
+
       <div class="row">
         <button class="chip" id="moment-edit">Исправить</button>
         <button class="btn narrow" id="moment-save">Всё верно</button>

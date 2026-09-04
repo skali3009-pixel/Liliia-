@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,8 +32,18 @@ async def save_meal(
     source: MealSourceEnum,
     meal_type: MealTypeEnum,
     photo_file_id: str | None = None,
+    logged_at: datetime | None = None,
 ) -> Meal:
-    """Сохранить распознанный приём пищи."""
+    """Сохранить распознанный приём пищи.
+
+    `logged_at` задаётся, когда человек поправил время момента; иначе время
+    ставит база.
+    """
+    # В базу время кладём в UTC: драйверы по-разному обходятся с зоной,
+    # а UTC читается одинаково везде.
+    if logged_at is not None and logged_at.tzinfo is not None:
+        logged_at = logged_at.astimezone(timezone.utc)
+
     meal = Meal(
         user_id=user_id,
         meal_type=meal_type,
@@ -45,6 +56,7 @@ async def save_meal(
         fiber_g=analysis.fiber_g,
         source=source,
         photo_file_id=photo_file_id,
+        **({"logged_at": logged_at} if logged_at else {}),
     )
     session.add(meal)
     await session.commit()

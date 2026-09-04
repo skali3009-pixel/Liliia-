@@ -78,10 +78,21 @@ def test_moment_survives_roundtrip_through_json():
 
 
 def test_facts_list_food_then_state():
-    rows = facts(build_moment(FOOD_AND_STATE, text="…"))
+    rows = facts(build_moment(FOOD_AND_STATE, text="…", at="08:40"))
     labels = [row["label"] for row in rows]
-    assert labels[:3] == ["Еда", "Порция", "БЖУ"]
+    assert labels[:2] == ["Событие", "Порция"]
     assert "Энергия" in labels and "Настроение" in labels
+    assert labels[-1] == "Время"
+
+
+def test_editable_facts_carry_key_and_type():
+    """Карандаш в карточке работает по этим полям, а не по тексту строки."""
+    rows = {row["key"]: row for row in facts(build_moment(FOOD_AND_STATE, text="…", at="08:40"))}
+    assert rows["weight_g"]["type"] == "number" and rows["weight_g"]["raw"] == 300
+    assert rows["energy"]["type"] == "score" and rows["energy"]["raw"] == 7
+    assert rows["mood"]["type"] == "choice" and "бодро" in rows["mood"]["options"]
+    assert rows["calories"]["type"] == "readonly"
+    assert rows["at"]["raw"] == "08:40"
 
 
 class _Block:
