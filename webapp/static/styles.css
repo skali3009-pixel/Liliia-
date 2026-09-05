@@ -825,7 +825,10 @@ button:focus-visible, .tab:focus-visible {
 .fact-label { flex: 1; font-size: 13px; color: var(--muted); }
 .fact-value { font-size: 14px; font-weight: 600; text-align: right; }
 .btn.narrow { flex: 1; margin-top: 0; }
-.row .chip { flex: 0 0 40%; }
+/* Только внутри нижней шторки: «Исправить» уже кнопки «Всё верно».
+   Без ограничения областью это правило растягивало кнопки воды на
+   40% каждая, и вся страница уезжала вбок. */
+.sheet .row .chip { flex: 0 0 40%; }
 .event-actions { display: flex; align-items: flex-start; padding-top: 8px; }
 .event-actions .icon-btn { font-size: 14px; padding: 4px; }
 

@@ -72,28 +72,8 @@
       </div>
     </section>
 
-    <!-- Блок записи стоит сразу под шапкой: это главное действие экрана. -->
-    <section class="capture">
-      <div class="eyebrow mid">Расскажи, что происходит</div>
-      <div class="wave" aria-hidden="true">
-        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-      </div>
-      <div class="capture-row">
-        <button class="mic-btn" id="moment-open" aria-label="Рассказать, что происходит">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M20 12a8 8 0 0 1-8 8H5l1.5-3A8 8 0 1 1 20 12z"/>
-            <path d="M9 11h6M9 14h4"/>
-          </svg>
-        </button>
-      </div>
-      <p class="capture-hint">Фото и голосовое — в чате с ботом: он поймёт так же,
-        а записанное придёт сюда само.</p>
-    </section>
-
-    <section class="state-grid" id="state-grid"></section>
-
+    <!-- Кольцо стоит первым после шапки: «сколько осталось» — то, ради чего
+         приложение открывают, и оно должно попадать на первый экран. -->
     <section class="ring-card">
       <div class="ring-wrap">
         <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
@@ -168,6 +148,29 @@
         <span class="muted">нажми — запишу</span></div>
       <div id="frequent"></div>
     </section>
+
+    <!-- Блок записи идёт сразу за цифрами дня: сначала человек видит,
+         сколько осталось, потом рассказывает, что съел. -->
+    <section class="capture">
+      <div class="eyebrow mid">Расскажи, что происходит</div>
+      <div class="wave" aria-hidden="true">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="capture-row">
+        <button class="mic-btn" id="moment-open" aria-label="Рассказать, что происходит">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12a8 8 0 0 1-8 8H5l1.5-3A8 8 0 1 1 20 12z"/>
+            <path d="M9 11h6M9 14h4"/>
+          </svg>
+        </button>
+      </div>
+      <p class="capture-hint">Фото и голосовое — в чате с ботом: он поймёт так же,
+        а записанное придёт сюда само.</p>
+    </section>
+
+    <section class="state-grid" id="state-grid"></section>
 
     <section class="card">
       <div class="card-head"><h2>Лента дня</h2><span id="timeline-count" class="muted"></span></div>
