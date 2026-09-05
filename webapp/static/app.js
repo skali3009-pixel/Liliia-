@@ -868,16 +868,30 @@ function legSeam(s) {
 /* Ореол за головой, кольцо на полу и золотые точки — из макета. */
 function figureDecor() {
   const floor = FIG.bottom - 2;
+  // Размеры сняты с макета и переведены в систему координат сцены:
+  // ореол r≈115 и эллипс пола 190×45 в исходнике — это 43 и 71×17 здесь.
   return `
-    <circle cx="${FIG.cx}" cy="${FIG.headCy}" r="52" class="fig-halo"/>
-    <circle cx="${FIG.cx}" cy="${FIG.headCy}" r="60" class="fig-halo dotted"/>
-    <ellipse cx="${FIG.cx}" cy="${floor}" rx="88" ry="15" class="fig-ring"/>
-    <ellipse cx="${FIG.cx}" cy="${floor}" rx="66" ry="11" class="fig-ring faint"/>
-    <circle cx="${FIG.cx}" cy="8" r="2.5" class="fig-spark"/>
-    <circle cx="${FIG.cx - 52}" cy="${FIG.headCy}" r="2.5" class="fig-spark"/>
-    <circle cx="${FIG.cx + 52}" cy="${FIG.headCy}" r="2.5" class="fig-spark"/>
-    <circle cx="${FIG.cx - 88}" cy="${floor}" r="2.5" class="fig-spark"/>
-    <circle cx="${FIG.cx + 88}" cy="${floor}" r="2.5" class="fig-spark"/>`;
+    <circle cx="${FIG.cx}" cy="${FIG.headCy}" r="43" class="fig-halo"/>
+    <circle cx="${FIG.cx}" cy="${FIG.headCy}" r="52" class="fig-halo dotted"/>
+    <ellipse cx="${FIG.cx}" cy="${floor}" rx="71" ry="17" class="fig-ring"/>
+    <ellipse cx="${FIG.cx}" cy="${floor}" rx="52" ry="12" class="fig-ring faint"/>
+    <circle cx="${FIG.cx}" cy="10" r="2.6" class="fig-spark"/>
+    <circle cx="${FIG.cx}" cy="30" r="1.8" class="fig-spark"/>
+    <circle cx="${FIG.cx - 43}" cy="${FIG.headCy}" r="2.6" class="fig-spark"/>
+    <circle cx="${FIG.cx + 43}" cy="${FIG.headCy}" r="2.6" class="fig-spark"/>
+    <circle cx="${FIG.cx - 71}" cy="${floor}" r="2.6" class="fig-spark"/>
+    <circle cx="${FIG.cx + 71}" cy="${floor}" r="2.6" class="fig-spark"/>`;
+}
+
+/* Вертикальные панели по краям сцены — как в макете. Скругление только по
+   внутреннему краю: снаружи панель уходит за границу кадра. */
+function stagePanels() {
+  const w = 26;
+  const inset = 14;
+  const panel = (x, flip) =>
+    `<rect class="fig-panel" x="${x}" y="${inset}" width="${w}" height="${470 - inset * 2}" ` +
+    `rx="13" ry="13" transform="${flip ? `translate(${x * 2 + w} 0) scale(-1 1)` : ''}"/>`;
+  return panel(-8, false) + panel(STAGE_W - w + 8, true);
 }
 
 /* --- Рисованная фигура из макета ----------------------------------------
@@ -1098,17 +1112,23 @@ function figureGroup(s, { dx = 0, dim = false, zones = '' } = {}) {
 
 /* Фиолетовый поток между фигурами — из первого макета. */
 function nebula(x) {
-  const sparks = [[-42, -60], [-14, 18], [26, -28], [54, 44], [-64, 74], [70, -70]]
+  const y = FIG.waist + 20;
+  const curves = [
+    [-104, 34, -44, -34, 40, 62, 104, -18, ''],
+    [-96, 62, -34, 2, 40, 88, 96, 12, ' thin'],
+    [-88, 6, -30, 54, 44, 22, 92, 48, ' thin'],
+    [-72, 86, -20, 30, 36, 104, 84, 40, ' hair'],
+  ].map(([x1, y1, c1x, c1y, c2x, c2y, x2, y2, extra]) =>
+    `<path class="${extra.trim()}" d="M ${x + x1} ${y + y1} ` +
+    `C ${x + c1x} ${y + c1y} ${x + c2x} ${y + c2y} ${x + x2} ${y + y2}"/>`).join('');
+
+  const sparks = [[-58, -46], [-22, 14], [18, -34], [46, 40], [-70, 62], [66, -58],
+                  [-8, 70], [34, 74]]
     .map(([sx, sy], index) =>
-      `<circle cx="${x + sx}" cy="${FIG.waist + sy}" r="${1 + (index % 3) * 0.6}" class="fig-spark"/>`)
+      `<circle cx="${x + sx}" cy="${y + sy}" r="${0.9 + (index % 3) * 0.5}" class="fig-spark"/>`)
     .join('');
-  return `
-    <g class="nebula">
-      <path d="M ${x - 96} ${FIG.waist + 40} C ${x - 40} ${FIG.waist - 30}
-               ${x + 40} ${FIG.waist + 70} ${x + 96} ${FIG.waist - 20}"/>
-      <path d="M ${x - 88} ${FIG.waist + 66} C ${x - 30} ${FIG.waist}
-               ${x + 34} ${FIG.waist + 96} ${x + 90} ${FIG.waist + 14}" class="thin"/>
-    </g>${sparks}`;
+
+  return `<g class="nebula">${curves}</g>${sparks}`;
 }
 
 const FIG_DEFS = `
@@ -1153,7 +1173,7 @@ const FIG_DEFS = `
       <feMorphology in="SourceAlpha" operator="dilate" radius="1.2" result="fat"/>
       <feComposite in="fat" in2="SourceAlpha" operator="out" result="ring"/>
       <feGaussianBlur in="ring" stdDeviation=".6" result="soft"/>
-      <feFlood flood-color="#EDEAFB" flood-opacity=".85"/>
+      <feFlood flood-color="#C9B8E8" flood-opacity=".85"/>
       <feComposite operator="in" in2="soft"/>
     </filter>
     <filter id="fig-blur-soft" x="-30%" y="-30%" width="160%" height="160%">
@@ -1182,6 +1202,7 @@ async function renderBody(data) {
   const overlay = `
     <svg class="fig-svg" viewBox="0 0 ${STAGE_W} 470" preserveAspectRatio="xMidYMid meet">
       ${FIG_DEFS}
+      ${stagePanels()}
       ${!single && data.goal ? nebula(215) : ''}
       <g transform="translate(${single ? middle : 0} 0)">${figureDecor()}</g>
       ${!single ? `<g transform="translate(230 0)">${figureDecor()}</g>` : ''}

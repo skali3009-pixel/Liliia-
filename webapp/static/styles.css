@@ -338,15 +338,25 @@ button:focus-visible, .tab:focus-visible {
 .figure.dim .fig-body { opacity: .24; }
 .figure.dim .fig-volume { opacity: .6; }
 
-.fig-halo { fill: none; stroke: var(--lilac); stroke-opacity: .16; stroke-width: 1; }
-.fig-halo.dotted { stroke-dasharray: 1 7; stroke-opacity: .3; }
-.fig-ring { fill: none; stroke: var(--violet); stroke-opacity: .45; stroke-width: 1; }
-.fig-ring.faint { stroke: var(--lilac); stroke-opacity: .2; }
-.fig-spark { fill: var(--gold); opacity: .85; }
+/* Палитра сцены — из макета: приглушённая лавандовая, не насыщенный индиго.
+   Акцент #9B7FD4, кромка #C9B8E8, точки #F0E0C0, фон #050508. */
+.fig-wrap {
+  background: #050508;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.fig-panel { fill: #0E0E14; }
 
-.nebula path { fill: none; stroke: var(--violet); stroke-width: 26; stroke-opacity: .34;
+.fig-halo { fill: none; stroke: rgba(200, 190, 230, .25); stroke-width: 1; }
+.fig-halo.dotted { stroke-dasharray: 1 7; stroke: rgba(200, 190, 230, .3); }
+.fig-ring { fill: none; stroke: #7B5FC4; stroke-opacity: .75; stroke-width: 1; }
+.fig-ring.faint { stroke: #7B5FC4; stroke-opacity: .32; }
+.fig-spark { fill: #F0E0C0; opacity: .9; }
+
+.nebula path { fill: none; stroke: #8B6FD4; stroke-opacity: .35; stroke-width: 9;
   filter: url(#fig-nebula); stroke-linecap: round; }
-.nebula path.thin { stroke: var(--lilac); stroke-width: 12; stroke-opacity: .22; }
+.nebula path.thin { stroke: #9B7FD4; stroke-width: 5; stroke-opacity: .3; }
+.nebula path.hair { stroke: #C9B8E8; stroke-width: 2.5; stroke-opacity: .22; }
 
 /* Зоны: выбранная горит, остальные едва намечены. */
 .zone { cursor: pointer; }
