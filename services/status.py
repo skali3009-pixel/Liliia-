@@ -52,6 +52,23 @@ def _access_mode() -> list[str]:
     ]
 
 
+def _art_lines() -> list[str]:
+    """Какие фоновые картинки не скачались.
+
+    Приложение без них не ломается — на месте картинки остаётся соседний
+    арт или градиент, — но знать об этом полезно.
+    """
+    from services.artwork import missing
+
+    absent = missing()
+    if not absent:
+        return ["🖼 Картинки: все на месте"]
+    return [
+        f"🖼 Картинки: не хватает {len(absent)} — {', '.join(absent)}",
+        "   Экран покажет соседний арт. Докачать: bash fetch-art.sh",
+    ]
+
+
 def _legal_lines() -> list[str]:
     filled = all((config.LEGAL_OWNER, config.LEGAL_EMAIL))
     lines = [f"📄 Документы: редакция {LEGAL_VERSION}, реквизиты заполнены — "
@@ -93,6 +110,8 @@ async def collect() -> str:
         f"   С оплаченной подпиской: {data['active']}",
         f"   Доступ закончился: {data['expired']}",
         f"   Платежей всего: {paid_ever} (звёзд за 30 дней: {data['stars_30d']})",
+        "",
+        *_art_lines(),
         "",
         *_legal_lines(),
     ]

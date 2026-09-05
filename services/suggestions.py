@@ -19,6 +19,7 @@ import config
 from models import User
 from services.food_vision import FoodRecognitionError, VisionNotConfigured, get_client
 from utils.macros import GAP_LABELS, Remaining, dominant_gap
+from utils.meal_budget import meal_budget
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.timeframe import get_zone
 
@@ -34,14 +35,19 @@ DIET_RU = {
 }
 
 SYSTEM_PROMPT = (
-    "Ты — нутрициолог, который подсказывает, что съесть прямо сейчас, чтобы уложиться "
-    "в дневную норму.\n"
+    "Ты — квалифицированный нутрициолог. Подсказываешь, что съесть прямо сейчас: "
+    "не «на весь оставшийся день», а именно на ближайший приём пищи.\n"
     "\n"
     "Правила:\n"
     "- Предлагай три варианта: простые блюда из обычных продуктов, которые можно "
     "приготовить за 15-20 минут или купить готовыми.\n"
-    "- Каждый вариант должен помещаться в оставшиеся калории и по возможности "
-    "закрывать недобор нужного макронутриента.\n"
+    "- Держись бюджета этого приёма — он назван в запросе отдельной строкой. "
+    "Остаток дня и бюджет приёма это разные числа: если впереди ещё еда, занимать "
+    "весь остаток одним блюдом нельзя.\n"
+    "- В каждом приёме должен быть источник белка: он держит сытость и бережёт "
+    "мышцы при снижении веса.\n"
+    "- Половину объёма отдавай овощам и зелени, если это не завтрак.\n"
+    "- Вечером предлагай легче: белок и овощи, поменьше быстрых углеводов.\n"
     "- Обязательно соблюдай ограничения по питанию и аллергии — это жёсткое условие, "
     "а не пожелание.\n"
     "- Учитывай время суток: утром не предлагай тяжёлый ужин, вечером — сладкие каши.\n"
@@ -111,13 +117,17 @@ class Suggestion:
 def build_request(user: User, left: Remaining, norms: dict[str, float]) -> str:
     """Собрать описание ситуации для модели."""
     now = datetime.now(get_zone(user.timezone))
-    meal_type = MEAL_TYPE_RU[guess_meal_type(now)]
+    budget = meal_budget(
+        now=now,
+        daily_calories=norms.get("calories", 0),
+        remaining_calories=left.calories,
+    )
 
     gap = dominant_gap(left, norms)
     gap_line = (
-        f"Сильнее всего не хватает {GAP_LABELS[gap]}."
+        f"Сильнее всего за день не хватает {GAP_LABELS[gap]}."
         if gap
-        else "Норма почти выбрана — предложи что-то лёгкое."
+        else "Норма за день почти выбрана."
     )
 
     limits = []
@@ -127,8 +137,11 @@ def build_request(user: User, left: Remaining, norms: dict[str, float]) -> str:
         limits.append(f"аллергии и непереносимости: {user.allergies}")
 
     return (
-        f"Сейчас {now.strftime('%H:%M')}, ближайший приём пищи — {meal_type}.\n"
-        f"Осталось на сегодня: {left.calories} ккал, "
+        f"{budget.note}\n"
+        f"\n"
+        f"Бюджет этого приёма: около {budget.target_kcal} ккал, "
+        f"максимум {budget.max_kcal} ккал.\n"
+        f"Осталось за весь день: {left.calories} ккал, "
         f"белки {left.protein_g} г, жиры {left.fat_g} г, углеводы {left.carbs_g} г.\n"
         f"Клетчатки до дневной цели осталось {left.fiber_g} г.\n"
         f"{gap_line}\n"

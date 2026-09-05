@@ -61,7 +61,9 @@ def test_request_names_the_biggest_gap():
 def test_request_softens_when_norm_is_used_up():
     user = make_user()
     left = remaining({"calories": 1600, "protein_g": 120, "fat_g": 48, "carbs_g": 160}, NORMS)
-    assert "Норма почти выбрана" in build_request(user, left, NORMS)
+    text = build_request(user, left, NORMS)
+    assert "норма уже выбрана полностью" in text
+    assert "лёгкое" in text
 
 
 class _Block:
