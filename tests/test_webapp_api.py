@@ -445,7 +445,8 @@ def test_thigh_measurement_is_saved_and_charted():
             assert response.status == 200
 
             data = await (await call(client, "GET", "/api/progress?metric=thigh&period=month")).json()
-            assert data["title"] == "Бедро"
+            # Заголовок пишем полностью: «бёдра» и «бедро» рядом не различить.
+            assert data["title"] == "Обхват ноги"
             assert data["points"][-1]["value"] == 58.5
     run(scenario)
 

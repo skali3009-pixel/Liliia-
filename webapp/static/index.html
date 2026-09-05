@@ -296,9 +296,9 @@
         <button class="chip-btn" data-metric="calories">Калории</button>
         <button class="chip-btn" data-metric="waist">Талия</button>
         <button class="chip-btn" data-metric="hips">Бёдра</button>
-        <button class="chip-btn" data-metric="thigh">Бедро</button>
+        <button class="chip-btn" data-metric="thigh">Нога</button>
         <button class="chip-btn" data-metric="chest">Грудь</button>
-        <button class="chip-btn" data-metric="arm">Руки</button>
+        <button class="chip-btn" data-metric="arm">Рука</button>
       </div>
       <div class="seg" id="period-switch">
         <button class="seg-btn" data-period="week">Неделя</button>
@@ -320,15 +320,20 @@
       <div class="grid2">
         <input id="m-weight" class="input" type="number" step="0.1" placeholder="Вес, кг">
         <input id="m-waist" class="input" type="number" step="0.5" placeholder="Талия, см">
-        <input id="m-hips" class="input" type="number" step="0.5" placeholder="Бёдра, см">
-        <input id="m-thigh" class="input" type="number" step="0.5" placeholder="Бедро (нога), см">
+        <input id="m-hips" class="input" type="number" step="0.5"
+               placeholder="Бёдра по ягодицам, см">
+        <input id="m-thigh" class="input" type="number" step="0.5"
+               placeholder="Одна нога вверху, см">
         <input id="m-chest" class="input" type="number" step="0.5" placeholder="Грудь, см">
-        <input id="m-arm" class="input" type="number" step="0.5" placeholder="Руки, см">
+        <input id="m-arm" class="input" type="number" step="0.5"
+               placeholder="Одна рука (бицепс), см">
       </div>
       <button id="m-save" class="btn">Сохранить замер</button>
       <p class="hint">Заполни то, что мерила — остальное можно пропустить.
-        Бёдра — по самой широкой точке ягодиц, бедро — по самой широкой точке
-        ноги. Ногу и руку меряй всегда одну и ту же, иначе замеры не сравнить.</p>
+        «Бёдра» — вокруг таза по самой широкой точке ягодиц, это один обхват
+        на двоих. «Одна нога» — вокруг одного бедра под ягодицей, «одна рука» —
+        вокруг бицепса. Ногу и руку меряй всегда одну и ту же, иначе замеры
+        не сравнить между собой.</p>
     </section>
 
     <section class="card">

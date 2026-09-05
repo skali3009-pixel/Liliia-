@@ -354,7 +354,11 @@ def _body_block(user: User, measures: dict[str, float], *, weight_kg: float | No
         measures=body_measures, height_cm=height_cm, weight_kg=weight
     )
     goal = goal_silhouette(
-        now, weight_kg=weight, target_weight_kg=user.target_weight_kg or 0
+        now,
+        weight_kg=weight,
+        target_weight_kg=user.target_weight_kg or 0,
+        height_cm=height_cm,
+        estimated=estimated,
     )
 
     return {

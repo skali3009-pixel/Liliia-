@@ -908,7 +908,7 @@ function relief(warp) {
                 `${pt(cx + side * thigh.w * FIG_H * 0.35, FIG.knee - 12)}`, 1.3);
   }).join('');
 
-  return `<g class="fig-relief" style="opacity:${n1(lean * 0.55)}">
+  return `<g class="fig-relief" style="opacity:${n1(lean * 0.34)}">
     ${line(`M ${pt(c, FIG.bust + 26)} L ${pt(c, FIG.hip - 12)}`, 1.6)}
     ${ribs}
     ${line(`M ${pt(c - waist * 0.34, FIG.waist + 16)} ` +

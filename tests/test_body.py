@@ -224,3 +224,37 @@ def test_slim_and_heavy_bodies_look_different():
     assert thin < 0.85 and full > 1.15
     # Между худой и полной — заметно больше половины ширины.
     assert full / thin > 1.4
+
+
+def test_goal_for_a_big_loss_is_really_slimmer():
+    """120 → 70 кг рисовалось почти тем же телом: предел сжатия съедал
+    разницу, и обе фигуры выглядели одинаково полными."""
+    from utils.body import warp_factors
+
+    now, estimated = build_silhouette(measures={}, height_cm=165, weight_kg=120)
+    goal = goal_silhouette(
+        now, weight_kg=120, target_weight_kg=70, height_cm=165, estimated=estimated,
+    )
+
+    assert warp_factors(now, height_cm=165)["waist"] > 1.3
+    assert warp_factors(goal, height_cm=165)["waist"] < 1.05
+
+
+def test_measured_body_keeps_its_own_shape_in_the_goal():
+    """С реальными замерами цель считается от них, а не от одного веса."""
+    wide_hips = {"bust": 95, "waist": 100, "hip": 130, "thigh": 66, "arm": 33}
+    now, estimated = build_silhouette(measures=wide_hips, height_cm=165, weight_kg=100)
+    goal = goal_silhouette(
+        now, weight_kg=100, target_weight_kg=75, height_cm=165, estimated=estimated,
+    )
+
+    assert estimated is False
+    # Широкие бёдра остаются широкими относительно талии и после похудения.
+    assert goal.hip / goal.waist > 1.15
+
+
+def test_zone_names_do_not_collide():
+    """«Бёдра» и «бедро» на слух одно и то же — в списке зон так нельзя."""
+    names = {zone["label"] for zone in zones({})}
+    assert "Бёдра" in names and "Нога" in names
+    assert "Бедро" not in names

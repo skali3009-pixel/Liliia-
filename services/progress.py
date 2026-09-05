@@ -19,13 +19,15 @@ from utils.timeframe import DEFAULT_TIMEZONE, day_bounds, get_zone, to_local, to
 logger = logging.getLogger(__name__)
 
 # Поля замеров, которые показываем на графике и в форме.
+# «Бёдра» (таз целиком) и «бедро» (одна нога) на слух почти неразличимы,
+# поэтому в заголовках пишем полностью, а в форме замера — с пояснением.
 MEASURE_FIELDS = {
     "weight": ("weight_kg", "Вес", "кг"),
-    "waist": ("waist_cm", "Талия", "см"),
-    "hips": ("hips_cm", "Бёдра", "см"),
-    "thigh": ("thigh_cm", "Бедро", "см"),
-    "chest": ("chest_cm", "Грудь", "см"),
-    "arm": ("arm_cm", "Руки", "см"),
+    "waist": ("waist_cm", "Обхват талии", "см"),
+    "hips": ("hips_cm", "Обхват бёдер", "см"),
+    "thigh": ("thigh_cm", "Обхват ноги", "см"),
+    "chest": ("chest_cm", "Обхват груди", "см"),
+    "arm": ("arm_cm", "Обхват руки", "см"),
 }
 
 
