@@ -1,0 +1,926 @@
+/* Тёмная фиолетовая палитра: приложение выглядит одинаково в любой теме
+   Telegram — это осознанный выбор, а не наследование чужих цветов.
+   Игровое (кристалл, награды, задания) держится на фиолетовом и бирюзовом,
+   взрослое (данные, графики, списки) — на почти чёрном фоне и хайрлайнах. */
+:root {
+  --void: #0A0912;
+  --surface: #151327;
+  --surface-2: #1E1B33;
+  --stroke: #2B2748;
+
+  --violet: #8B5CF6;
+  --lilac: #C4B5FD;
+  --indigo: #5B6CFF;
+  --blue: #3E7BFA;
+  --teal: #2DD4BF;
+
+  /* Имена ниже используются во всём приложении — графики, кнопки, чипы. */
+  --bg: var(--void);
+  --card: var(--surface);
+  --fg: #EDEAFB;
+  --muted: #9C96C4;
+  --accent: var(--violet);
+  --accent-fg: #ffffff;
+  --ok: var(--teal);
+  --warn: #F5B544;
+  --over: #FF6B6B;
+
+  --gold: #C9A961;
+  --display: 'Playfair Display', 'Times New Roman', Georgia, serif;
+  /* Отдельная гарнитура для фразы дня: у неё тонкий штрих и высокий
+     контраст, поэтому крупная строка читается как в журнале, а не как
+     системный текст. Для интерфейса она не годится — только для одной
+     большой фразы. */
+  --quote: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
+  --body: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+
+  --radius: 20px;
+  color-scheme: dark;
+
+  /* Ночное небо: подложка под арты и замена им, пока картинки не скачаны. */
+  --sky-fallback:
+    radial-gradient(1px 1px at 18% 22%, rgba(255, 255, 255, .5), transparent),
+    radial-gradient(1px 1px at 62% 12%, rgba(255, 255, 255, .35), transparent),
+    radial-gradient(1.5px 1.5px at 82% 30%, rgba(196, 181, 253, .6), transparent),
+    radial-gradient(1px 1px at 35% 38%, rgba(255, 255, 255, .3), transparent),
+    radial-gradient(120% 90% at 70% 12%, #2A2450 0%, #17132C 46%, var(--void) 100%);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+/* Атрибут hidden должен побеждать любые display из классов —
+   иначе спрятанные экраны продолжают отображаться. */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  /* Снизу оставлено место под вкладки и кнопку «Расскажи, что происходит». */
+  padding: 0 16px calc(148px + env(safe-area-inset-bottom)) 16px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 500 15px/1.45 var(--body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Сериф — только для крупных заголовков-обращений: он задаёт тон, но
+   в данных мешает, поэтому числа остаются гротеском. */
+.hero-title, .world-title, .pop-title, .quote {
+  font-family: var(--display);
+  font-weight: 500;
+  letter-spacing: -.01em;
+}
+.kcal-value, .stat-value, .rest-time, .dial-val, .hud-level {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Надпись-указатель над заголовком: маленькая, разрядкой, золотом. */
+.eyebrow {
+  font-size: 9px; font-weight: 600; letter-spacing: .24em; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 6px;
+}
+/* Не .center: этот класс занят экраном загрузки. */
+.eyebrow.mid { text-align: center; margin-bottom: 14px; }
+
+.center { display: flex; height: 70vh; align-items: center; justify-content: center; color: var(--muted); }
+.muted { color: var(--muted); font-size: 13px; }
+.hint { color: var(--muted); font-size: 12px; margin: 10px 2px 0; }
+
+.card, .ring-card {
+  background: var(--card);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-top: 12px;
+}
+.card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
+h2 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
+
+/* Кольцо калорий */
+.ring-card { padding: 20px 16px 16px; text-align: center; }
+.ring-wrap { position: relative; display: inline-block; line-height: 0; }
+.ring { width: 168px; height: 168px; transform: rotate(-90deg); }
+.ring-bg, .ring-fill { fill: none; stroke-width: 11; stroke-linecap: round; }
+.ring-bg { stroke: var(--surface-2); }
+.ring-fill {
+  stroke: url(#ring-gradient);
+  stroke-dasharray: 327;
+  stroke-dashoffset: 327;
+  transition: stroke-dashoffset .5s ease, stroke .3s;
+}
+.ring-center {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  line-height: 1.2;
+}
+.kcal-value { font-size: 34px; letter-spacing: -1px; }
+.kcal-label { font-size: 12px; color: var(--muted); }
+
+/* Полоски (вода и вспомогательные) */
+.bar { height: 7px; background: var(--surface-2); border-radius: 99px; overflow: hidden; }
+.bar.big { height: 9px; background: var(--void); margin-bottom: 12px; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 99px;
+         transition: width .4s ease; }
+#bar-water { background: linear-gradient(90deg, var(--indigo), var(--blue)); }
+
+.row { display: flex; gap: 8px; }
+.row.wrap { flex-wrap: wrap; }
+
+.chip {
+  flex: 1; padding: 11px 6px; border: 1px solid var(--stroke); border-radius: 12px;
+  background: var(--surface-2); color: var(--fg); font-family: inherit;
+  font-size: 14px; font-weight: 500; cursor: pointer;
+}
+.chip:active { transform: scale(.97); }
+.chip.ghost { flex: 0 0 46px; color: var(--muted); }
+.chip.on { background: var(--accent); color: var(--accent-fg); }
+
+.btn {
+  width: 100%; margin-top: 10px; padding: 13px; border: none; border-radius: 12px;
+  background: var(--accent); color: var(--accent-fg); font-size: 15px; font-weight: 600; cursor: pointer;
+}
+.btn:active { opacity: .85; }
+
+.input {
+  width: 100%; margin-bottom: 8px; padding: 12px; border: 1px solid var(--stroke);
+  border-radius: 12px; background: var(--surface-2); color: var(--fg);
+  font-size: 15px; font-family: inherit;
+}
+.input::placeholder { color: var(--muted); }
+/* Фокус виден, но своим цветом, а не системной белой рамкой. */
+.input:focus, .input:focus-visible {
+  outline: none; border-color: var(--violet);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, .25);
+}
+button:focus-visible, .tab:focus-visible {
+  outline: 2px solid var(--lilac); outline-offset: 2px;
+}
+
+/* Список еды */
+.meal { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--bg); }
+.meal:last-of-type { border-bottom: none; }
+.meal-main { flex: 1; min-width: 0; }
+.meal-name { font-size: 14px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meal-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.meal-kcal { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.icon-btn { border: none; background: none; color: var(--muted); font-size: 17px; padding: 6px; cursor: pointer; }
+.empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+
+/* Препараты */
+.pill { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--bg); }
+.pill:last-of-type { border-bottom: none; }
+.pill-check {
+  width: 26px; height: 26px; flex: 0 0 26px; border-radius: 50%;
+  border: 2px solid var(--muted); background: none; color: transparent;
+  font-size: 14px; line-height: 1; cursor: pointer;
+}
+.pill-check.done { background: var(--ok); border-color: var(--ok); color: #fff; }
+.pill-main { flex: 1; }
+.pill-name { font-size: 14px; font-weight: 500; }
+.pill-name.done { text-decoration: line-through; color: var(--muted); }
+.pill-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+/* Вкладки */
+.tabs {
+  position: fixed; left: 0; right: 0; bottom: 0; display: flex;
+  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: rgba(10, 9, 18, .92); backdrop-filter: blur(12px);
+  border-top: 1px solid var(--stroke); gap: 6px;
+}
+/* Иконка над подписью — так подписи помещаются целиком и ряд не пестрит. */
+.tab {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 7px 4px; border: none; border-radius: 14px;
+  background: none; color: var(--muted); font-family: inherit;
+  font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.tab svg { width: 21px; height: 21px; fill: none; stroke: currentColor;
+           stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tab.active svg { stroke: var(--lilac); }
+.tab.active { background: var(--surface-2); color: var(--fg); box-shadow: inset 0 0 0 1px var(--stroke); }
+
+.toast {
+  position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%);
+  background: var(--surface-2); color: var(--fg); border: 1px solid var(--stroke);
+  padding: 10px 16px; border-radius: 12px; font-size: 13px; z-index: 10;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
+}
+
+/* --- Прогресс --- */
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
+.stat { background: var(--card); border-radius: var(--radius); padding: 14px 10px; text-align: center; }
+/* Крупные числа — пропорциональными цифрами: моноширинные на таком кегле
+   выглядят разреженно. */
+.stat-value { font-size: 21px; font-weight: 700; letter-spacing: -.3px; }
+.stat-label { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+/* Переключатели стоят над карточкой графика: один ряд фильтров на всё,
+   что они меняют. */
+.filters { display: grid; gap: 8px; margin-top: 14px; }
+.seg { display: flex; background: var(--card); border-radius: 12px; padding: 3px; }
+.seg-btn {
+  flex: 1; padding: 8px 4px; border: none; border-radius: 9px; background: none;
+  color: var(--muted); font-size: 13px; font-weight: 500; font-family: inherit; cursor: pointer;
+}
+.seg-btn.active { background: var(--bg); color: var(--fg); }
+
+.link-btn {
+  border: none; background: none; color: var(--accent);
+  font-size: 13px; font-family: inherit; cursor: pointer; padding: 0;
+}
+
+/* Сетка и оси — сплошные волоски на тон от фона, без штриховки. */
+.chart { width: 100%; display: block; touch-action: pan-y; }
+.grid-line { stroke: var(--muted); stroke-opacity: .18; stroke-width: 1; }
+.axis-text { fill: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
+.series-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round;
+               stroke-linejoin: round; }
+.series-dot { fill: var(--accent); }
+/* Точка под пальцем обводится цветом фона, чтобы не сливалась с линией. */
+.series-dot.active { stroke: var(--bg); stroke-width: 2; }
+.goal-line { stroke: var(--ok); stroke-opacity: .55; stroke-width: 1; }
+.goal-text { fill: var(--ok); font-size: 10px; opacity: .85; }
+.crosshair { stroke: var(--muted); stroke-opacity: .35; stroke-width: 1; }
+.tip-box { fill: var(--fg); }
+.tip-text { fill: var(--bg); font-size: 11px; font-weight: 600; }
+
+.table-row { display: flex; justify-content: space-between; padding: 7px 0;
+             border-bottom: 1px solid var(--bg); font-size: 13px; }
+.table-row:last-child { border-bottom: none; }
+.table-row span:last-child { font-variant-numeric: tabular-nums; }
+
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.grid2 .input { margin-bottom: 0; }
+
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.compare figure { margin: 0; }
+.compare img { width: 100%; border-radius: 12px; display: block; background: var(--bg); }
+.compare figcaption { font-size: 11px; color: var(--muted); text-align: center; margin-top: 5px; }
+.photo-strip { display: flex; gap: 8px; overflow-x: auto; margin-top: 10px; padding-bottom: 4px; }
+.photo-strip img { height: 64px; border-radius: 9px; opacity: .55; }
+.photo-strip img.on { opacity: 1; outline: 2px solid var(--accent); }
+
+/* --- Тренировки --- */
+.exercise { display: flex; align-items: flex-start; gap: 11px; padding: 12px 0;
+            border-bottom: 1px solid var(--bg); }
+.exercise:last-of-type { border-bottom: none; }
+.ex-check {
+  width: 26px; height: 26px; flex: 0 0 26px; margin-top: 2px; border-radius: 50%;
+  border: 2px solid var(--muted); background: none; color: transparent;
+  font-size: 14px; line-height: 1; cursor: pointer;
+}
+.ex-check.done { background: var(--ok); border-color: var(--ok); color: #fff; }
+.ex-main { flex: 1; min-width: 0; }
+.ex-name { font-size: 14px; font-weight: 500; }
+.ex-name.done { color: var(--muted); text-decoration: line-through; }
+.ex-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.ex-actions { display: flex; gap: 12px; margin-top: 7px; }
+.ex-link {
+  font-size: 12px; color: var(--accent); text-decoration: none;
+  border: none; background: none; padding: 0; font-family: inherit; cursor: pointer;
+}
+
+/* Таймер отдыха закрывает экран целиком: во время паузы всё равно
+   ничего другого не делаешь, зато цифру видно с вытянутой руки. */
+.overlay {
+  position: fixed; inset: 0; z-index: 20;
+  background: var(--bg); display: flex; align-items: center; justify-content: center;
+}
+.rest-card { text-align: center; padding: 0 32px; }
+.rest-label { font-size: 15px; color: var(--muted); }
+.rest-time { font-size: 76px; font-weight: 700; letter-spacing: -2px; margin: 6px 0 22px; }
+
+/* --- Фигура тела на экране «Прогресс» ---------------------------------
+   Силуэт рисуется кодом по замерам, поэтому здесь только свет и цвет:
+   заливка, свечение, ореолы и отражение в полу. */
+.body-card { padding-bottom: 14px; }
+.body-card .seg { margin-bottom: 6px; }
+.body-stage { margin: 4px -4px 0; }
+
+/* Холст с рисованной фигурой и SVG-декор лежат друг на друге в одной
+   системе координат 430×470. Режим наложения screen убирает чёрный фон
+   картинки: чёрное в screen не меняет подложку, остаётся только свечение. */
+.fig-wrap { position: relative; width: 100%; aspect-ratio: 430 / 470; }
+.fig-canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  mix-blend-mode: screen;
+}
+.fig-wrap .fig-svg { position: absolute; inset: 0; }
+.fig-svg { display: block; width: 100%; height: auto; }
+
+.fig-body path, .fig-body ellipse, .fig-body circle {
+  fill: url(#fig-fill); stroke: none;
+}
+/* Прозрачность — группе целиком, а не каждой форме (см. комментарий у
+   градиента fig-fill): только так перекрытия не светятся швами. */
+.fig-body { opacity: .34; }
+/* Шов между ногами — единственная линия внутри силуэта. */
+.fig-body .fig-seam {
+  fill: none; stroke: var(--void); stroke-opacity: .22; stroke-width: 2;
+  stroke-linecap: round; filter: url(#fig-blur-soft);
+}
+.fig-rim { filter: url(#fig-rim); }
+/* Скругление и блики: вместе они и делают фигуру объёмной. */
+.fig-shade { fill: url(#fig-round); }
+.fig-volume { filter: url(#fig-blur-soft); }
+.fig-volume ellipse { fill: url(#fig-lume); stroke: none; }
+.fig-volume { opacity: .9; }
+/* Дублёр под телом: размытая копия даёт объём и свет вокруг фигуры. */
+.fig-glow path, .fig-glow ellipse, .fig-glow circle {
+  fill: var(--violet); stroke: none;
+}
+.fig-glow { opacity: .3; filter: url(#fig-blur); }
+.fig-mirror { filter: url(#fig-blur-soft); }
+.fig-mirror path, .fig-mirror ellipse, .fig-mirror circle {
+  fill: url(#fig-mirror-fill); stroke: none;
+}
+.fig-mirror { opacity: .5; }
+/* Фигура-цель светит слабее: главная — та, что сейчас. Значения здесь
+   абсолютные, а не «доля от основной»: правило со .dim перебивает базовое
+   по специфичности, и множителя не получится — получится замена. */
+.figure.dim .fig-rim { opacity: .6; }
+.figure.dim .fig-glow { opacity: .18; }
+.figure.dim .fig-body { opacity: .24; }
+.figure.dim .fig-volume { opacity: .6; }
+
+/* Палитра сцены — из макета: приглушённая лавандовая, не насыщенный индиго.
+   Акцент #9B7FD4, кромка #C9B8E8, точки #F0E0C0, фон #050508. */
+.fig-wrap {
+  background: #050508;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.fig-panel { fill: #0E0E14; }
+
+.fig-halo { fill: none; stroke: rgba(200, 190, 230, .25); stroke-width: 1; }
+.fig-halo.dotted { stroke-dasharray: 1 7; stroke: rgba(200, 190, 230, .3); }
+.fig-ring { fill: none; stroke: #7B5FC4; stroke-opacity: .75; stroke-width: 1; }
+.fig-ring.faint { stroke: #7B5FC4; stroke-opacity: .32; }
+.fig-spark { fill: #F0E0C0; opacity: .9; }
+
+/* Рельеф — тонкие светлые линии поверх тела, размытые до намёка. */
+.fig-relief path {
+  fill: none; stroke: #C9B8E8; stroke-linecap: round;
+  /* Сильнее размытия, чем у остального: рельеф должен читаться намёком,
+     иначе линии выглядят царапинами по телу. */
+  filter: url(#fig-nebula);
+}
+
+/* --- Жизнь на экране ---------------------------------------------------
+   Фигура дышит, ореол медленно вращается, точки мерцают, поток течёт.
+   Всё медленное и почти незаметное: экран должен казаться живым, а не
+   мигать. При системном запрете анимаций всё замирает. */
+@media (prefers-reduced-motion: no-preference) {
+  /* Точка опоры — под стопами, иначе фигура «подпрыгивает» над полом. */
+  .fig-canvas { animation: fig-breath 7s ease-in-out infinite; transform-origin: 50% 95%; }
+  .fig-halo.dotted {
+    animation: fig-spin 60s linear infinite;
+    transform-box: fill-box; transform-origin: center;
+  }
+  .fig-spark { animation: fig-twinkle 5s ease-in-out infinite; }
+  .fig-spark:nth-of-type(2n) { animation-delay: -1.7s; }
+  .fig-spark:nth-of-type(3n) { animation-delay: -3.1s; }
+  .nebula path { animation: fig-drift 11s ease-in-out infinite alternate; }
+  .nebula path:nth-of-type(2n) { animation-duration: 14s; animation-delay: -2s; }
+  .zone.on ellipse, .zone.on .zone-cap { animation: fig-pulse 2.6s ease-in-out infinite; }
+  .fig-relief { animation: fig-twinkle 6s ease-in-out infinite; }
+}
+
+@keyframes fig-breath {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.008); }
+}
+@keyframes fig-spin { to { transform: rotate(360deg); } }
+@keyframes fig-twinkle {
+  0%, 100% { opacity: .45; }
+  50%      { opacity: 1; }
+}
+@keyframes fig-drift {
+  from { transform: translate(-4px, 3px); }
+  to   { transform: translate(5px, -4px); }
+}
+@keyframes fig-pulse {
+  0%, 100% { opacity: .7; }
+  50%      { opacity: 1; }
+}
+
+.nebula path { fill: none; stroke: #8B6FD4; stroke-opacity: .35; stroke-width: 9;
+  filter: url(#fig-nebula); stroke-linecap: round; }
+.nebula path.thin { stroke: #9B7FD4; stroke-width: 5; stroke-opacity: .3; }
+.nebula path.hair { stroke: #C9B8E8; stroke-width: 2.5; stroke-opacity: .22; }
+
+/* Зоны: выбранная горит, остальные едва намечены. */
+.zone { cursor: pointer; }
+.zone ellipse { fill: var(--lilac); fill-opacity: .07; stroke: var(--lilac);
+  stroke-opacity: .3; stroke-width: 1; }
+.zone .dotted { fill: none; stroke-dasharray: 2 4; stroke-opacity: .5; }
+.zone .zone-cap { fill: none; stroke: var(--lilac); stroke-opacity: .22; stroke-linecap: round; }
+.zone.on ellipse { fill-opacity: .2; stroke-opacity: .85; }
+.zone.on .zone-cap { stroke-opacity: .5; }
+
+.fig-captions { display: flex; gap: 10px; margin-top: 2px; }
+.fig-captions.single { justify-content: center; }
+.fig-captions > div {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.fig-captions b { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.fig-captions span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.insights { display: grid; gap: 8px; margin-top: 14px; }
+.insight { display: flex; gap: 10px; align-items: flex-start;
+  background: var(--surface-2); border-radius: 14px; padding: 10px 12px; }
+.insight-icon { font-size: 15px; line-height: 1.2; }
+.insight-title { font-size: 12px; font-weight: 700; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--lilac); }
+.insight-text { font-size: 13px; color: var(--fg); margin-top: 1px; }
+
+/* --- Правило тарелки и рекомендации --- */
+.plate-row { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; }
+.plate { width: 96px; height: 96px; flex: 0 0 96px; }
+.plate-rim { fill: none; stroke: var(--muted); stroke-opacity: .25; stroke-width: 2; }
+.plate-veg { fill: var(--teal); fill-opacity: .8; }
+.plate-protein { fill: var(--lilac); fill-opacity: .85; }
+.plate-carb { fill: var(--indigo); fill-opacity: .85; }
+
+/* min-width: 0 обязателен: без него у flex-элемента ширина по умолчанию
+   считается по содержимому, длинная строка не переносится и вылезает
+   за скруглённый край карточки на фон чата. */
+.plate-legend {
+  list-style: none; margin: 0; padding: 0; font-size: 12px; line-height: 1.7;
+  min-width: 0; flex: 1 1 auto;
+}
+/* Маркер держим у первой строки: при переносе он не должен уезжать
+   в вертикальный центр абзаца. */
+.plate-legend li {
+  display: flex; align-items: flex-start; gap: 7px; color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.dot { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 9px; margin-top: 6px; }
+.dot.veg { background: var(--teal); }
+.dot.protein { background: var(--lilac); }
+.dot.carb { background: var(--indigo); }
+
+.suggestion { padding: 12px 0; border-bottom: 1px solid var(--bg); }
+.suggestion:last-child { border-bottom: none; }
+.sug-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.sug-name { font-size: 14px; font-weight: 500; }
+.sug-kcal { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.sug-macros { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.sug-why { font-size: 12px; color: var(--muted); margin-top: 5px; font-style: italic; }
+.sug-eat { margin-top: 8px; padding: 8px 14px; border: none; border-radius: 10px;
+           background: var(--bg); color: var(--accent); font-size: 13px; font-weight: 500;
+           font-family: inherit; cursor: pointer; }
+
+/* Направлений и форм занятий много — прокручиваем ряд, а не переносим:
+   так первый элемент всегда на месте и высота не скачет. */
+.chips { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.chips::-webkit-scrollbar { display: none; }
+.chips:empty { display: none; }
+.chips .chip-btn {
+  flex: 0 0 auto; padding: 8px 13px; border: none; border-radius: 11px;
+  background: var(--card); color: var(--muted);
+  font-size: 13px; font-weight: 500; font-family: inherit; cursor: pointer; white-space: nowrap;
+}
+.chips .chip-btn.active { background: var(--accent); color: var(--accent-fg); }
+.chips.programs { margin-top: 10px; }
+.chips.programs .chip-btn { background: var(--card); }
+.chips.programs .chip-btn.active { background: var(--accent); color: var(--accent-fg); }
+
+.note {
+  margin: 0 0 12px; padding: 10px 12px; border-radius: 11px;
+  background: var(--bg); color: var(--muted); font-size: 12px; line-height: 1.5;
+}
+
+/* --- Игровой слой --- */
+
+/* HUD: кристалл растёт вместе с уровнем — это единственный вольный
+   элемент интерфейса, всё остальное вокруг держится строго. */
+.hud {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px; margin-top: 12px;
+  background: linear-gradient(135deg, #1B1733 0%, #141126 60%, #16122B 100%);
+  border: 1px solid var(--stroke); border-radius: var(--radius);
+}
+.hud-main { flex: 1; min-width: 0; }
+.hud-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.hud-level { font-size: 15px; letter-spacing: -.02em; }
+.hud-streak { font-size: 13px; color: var(--lilac); white-space: nowrap; }
+.hud-sub { display: flex; justify-content: space-between; gap: 8px;
+           font-size: 11px; color: var(--muted); margin-top: 5px;
+           font-variant-numeric: tabular-nums; }
+.hud-gain { color: var(--teal); }
+
+.xp-track { height: 8px; margin-top: 8px; border-radius: 99px;
+            background: var(--void); overflow: hidden; }
+.xp-track i { display: block; height: 100%; width: 0; border-radius: 99px;
+              background: linear-gradient(90deg, var(--violet), var(--lilac));
+              transition: width .5s cubic-bezier(.22, 1, .36, 1); }
+
+.crystal { width: 46px; height: 62px; flex: 0 0 46px; }
+.c-face { stroke: var(--lilac); stroke-opacity: .45; stroke-width: .8; }
+.c-left { fill: url(#crystal-gradient); }
+.c-right { fill: url(#crystal-gradient); fill-opacity: .62; }
+.c-top { fill: var(--lilac); fill-opacity: .9; }
+.sparks circle { fill: var(--lilac); opacity: 0; }
+
+.crystal[data-stage="1"] { opacity: .68; }
+.crystal[data-stage="2"] { opacity: .85; }
+.crystal[data-stage="3"] { filter: drop-shadow(0 0 6px rgba(139, 92, 246, .55)); }
+.crystal[data-stage="4"] { filter: drop-shadow(0 0 10px rgba(139, 92, 246, .7)); }
+.crystal[data-stage="5"] { filter: drop-shadow(0 0 14px rgba(196, 181, 253, .85)); }
+.crystal[data-stage="3"] .sparks circle,
+.crystal[data-stage="4"] .sparks circle,
+.crystal[data-stage="5"] .sparks circle { opacity: .8; animation: twinkle 2.6s ease-in-out infinite; }
+.crystal .sparks circle:nth-child(2) { animation-delay: .8s; }
+.crystal .sparks circle:nth-child(3) { animation-delay: 1.6s; }
+
+@keyframes twinkle { 0%, 100% { opacity: .15; } 50% { opacity: .9; } }
+
+/* Кольца БЖУ и клетчатки: значение внутри кольца, норма — под ним. */
+.dials { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 16px;
+         padding-top: 16px; border-top: 1px solid var(--stroke); }
+.dial { text-align: center; }
+.dial-wrap { position: relative; width: 54px; height: 54px; margin: 0 auto; }
+.dial svg { width: 54px; height: 54px; transform: rotate(-90deg); }
+.dial-bg { fill: none; stroke: var(--surface-2); stroke-width: 5; }
+.dial-fill { fill: none; stroke-width: 5; stroke-linecap: round;
+             stroke-dasharray: 113; stroke-dashoffset: 113;
+             transition: stroke-dashoffset .6s cubic-bezier(.22, 1, .36, 1); }
+.dial[data-key="p"] .dial-fill { stroke: var(--lilac); }
+.dial[data-key="f"] .dial-fill { stroke: var(--violet); }
+.dial[data-key="c"] .dial-fill { stroke: var(--indigo); }
+.dial[data-key="fib"] .dial-fill { stroke: var(--teal); }
+.dial-val { position: absolute; inset: 0; display: flex; align-items: center;
+            justify-content: center; font-size: 14px; }
+.dial-name { font-size: 11px; color: var(--muted); margin-top: 6px; }
+.dial-norm { font-size: 10px; color: var(--muted); opacity: .7;
+             font-variant-numeric: tabular-nums; }
+
+/* Задания дня */
+.quest { display: flex; align-items: center; gap: 11px; padding: 11px 0;
+         border-bottom: 1px solid var(--void); }
+.quest:last-child { border-bottom: none; }
+.q-icon {
+  width: 34px; height: 34px; flex: 0 0 34px; border-radius: 11px;
+  background: var(--surface-2); border: 1px solid var(--stroke);
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
+}
+.quest.done .q-icon { background: rgba(45, 212, 191, .16); border-color: rgba(45, 212, 191, .45);
+                      color: var(--teal); }
+.q-main { flex: 1; min-width: 0; }
+.q-title { font-size: 14px; font-weight: 600; }
+.quest.done .q-title { color: var(--muted); font-weight: 500; }
+.q-line { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+.q-track { flex: 1; height: 5px; border-radius: 99px; background: var(--void); overflow: hidden; }
+.q-track i { display: block; height: 100%; width: 0; border-radius: 99px;
+             background: var(--violet); transition: width .5s ease; }
+.quest.done .q-track i { background: var(--teal); }
+.q-hint { font-size: 11px; color: var(--muted); white-space: nowrap;
+          font-variant-numeric: tabular-nums; }
+.q-xp {
+  font-size: 12px; font-weight: 700; white-space: nowrap; padding: 5px 9px;
+  border-radius: 9px; background: var(--surface-2); color: var(--lilac);
+  font-variant-numeric: tabular-nums;
+}
+.quest.done .q-xp { background: rgba(45, 212, 191, .16); color: var(--teal); }
+
+/* Награды */
+.awards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.award { text-align: center; padding: 12px 6px; border-radius: 14px;
+         background: var(--surface-2); border: 1px solid var(--stroke); opacity: .45; }
+.award.earned { opacity: 1; border-color: rgba(139, 92, 246, .45);
+                background: linear-gradient(160deg, rgba(139, 92, 246, .18), var(--surface-2)); }
+.a-icon { font-size: 22px; line-height: 1.2; filter: grayscale(1); }
+.award.earned .a-icon { filter: none; }
+.a-title { font-size: 11px; font-weight: 600; margin-top: 5px; }
+.a-goal { font-size: 10px; color: var(--muted); margin-top: 2px; line-height: 1.3; }
+
+/* Новая награда — единственное модальное окно в приложении: событие редкое,
+   и его стоит заметить. */
+.pop { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center;
+       justify-content: center; padding: 24px;
+       background: rgba(10, 9, 18, .82); backdrop-filter: blur(6px); }
+.pop-card {
+  width: 100%; max-width: 300px; text-align: center; padding: 26px 20px 20px;
+  border-radius: 24px; border: 1px solid rgba(139, 92, 246, .5);
+  background: linear-gradient(165deg, #241E45, #14122A);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, .6);
+  animation: pop-in .35s cubic-bezier(.22, 1, .36, 1);
+}
+.pop-icon { font-size: 46px; line-height: 1; }
+.pop-title { font-size: 19px; margin-top: 12px; }
+.pop-sub { font-size: 12px; color: var(--muted); margin-top: 6px; }
+
+@keyframes pop-in { from { transform: scale(.86); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* --- Шапка-герой и «Мой мир» --- */
+
+/* Арты лежат в /static/img/. Если картинки нет, остаётся градиент —
+   приложение выглядит целым и без неё. */
+.hero, .world-hero {
+  position: relative; margin: 0 -16px; padding: 0; overflow: hidden;
+}
+.hero-art, .world-art {
+  position: absolute; left: 0; right: 0; top: -14%; height: 128%;
+  /* Портрет стоит справа: слева остаётся тёмное поле под заголовок. */
+  background-position: right top; background-size: cover;
+  background-repeat: no-repeat;
+  /* Края растворяются, чтобы арт не читался наклеенным прямоугольником:
+     видно только «пятно света», из которого выходит зверь. */
+  -webkit-mask-image: radial-gradient(115% 78% at 72% 26%,
+    #000 0%, #000 38%, rgba(0, 0, 0, .72) 60%, rgba(0, 0, 0, .28) 80%, transparent 100%);
+  mask-image: radial-gradient(115% 78% at 72% 26%,
+    #000 0%, #000 38%, rgba(0, 0, 0, .72) 60%, rgba(0, 0, 0, .28) 80%, transparent 100%);
+  will-change: transform;
+}
+/* Слои фона: если картинки нет, слой просто не рисуется, и виден
+   следующий. Поэтому у каждого экрана свой арт, за ним — общий портрет
+   гепарда, и только под ними градиент со звёздами. Так экран не остаётся
+   пустым, даже если один файл не скачался. */
+.hero-art { background-image: url('/static/img/hero.png'), var(--sky-fallback); }
+.world-art, .hero-art[data-art="world"] {
+  background-position: center top;
+  background-image: url('/static/img/world.png'), url('/static/img/hero.png'),
+                    var(--sky-fallback);
+  -webkit-mask-image: radial-gradient(120% 84% at 50% 34%,
+    #000 0%, #000 44%, rgba(0, 0, 0, .7) 66%, rgba(0, 0, 0, .25) 84%, transparent 100%);
+  mask-image: radial-gradient(120% 84% at 50% 34%,
+    #000 0%, #000 44%, rgba(0, 0, 0, .7) 66%, rgba(0, 0, 0, .25) 84%, transparent 100%);
+}
+.hero-art[data-art="gym"] {
+  background-image: url('/static/img/gym.png'), url('/static/img/hero.png'),
+                    var(--sky-fallback);
+}
+.hero-art[data-art="sky"] {
+  background-position: center top;
+  background-image: url('/static/img/sky.png'), url('/static/img/world.png'),
+                    var(--sky-fallback);
+}
+
+/* Затемнение снизу — чтобы текст читался поверх любой картинки и переход
+   к контенту был без единой заметной линии. */
+.hero::after, .world-hero::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(10, 9, 18, .3) 0%, rgba(10, 9, 18, .06) 26%,
+              rgba(10, 9, 18, .55) 62%, rgba(10, 9, 18, .93) 86%, var(--void) 100%);
+}
+.hero-body, .world-body { position: relative; z-index: 1; padding: 132px 16px 18px; }
+/* Снизу запас: подпись под заголовком бывает в две строки, и без него
+   следующая карточка наезжала на текст. */
+.world-body { padding: 216px 16px 26px; }
+/* Шапки «Спорта» и «Прогресса» ниже: там сразу начинаются данные. */
+.hero.slim .hero-body { padding: 96px 16px 14px; }
+
+/* «СЕГОДНЯ» набрано вразрядку и упирается в портрет — как в макете. */
+.hero-title {
+  font-size: 34px; margin: 0; letter-spacing: .08em; text-transform: uppercase;
+  line-height: 1;
+}
+.hero.slim .hero-title { font-size: 26px; }
+.world-title { font-size: 32px; margin: 0; }
+/* Приветствие — антиквой, но тише фразы дня: иначе две крупные строки
+   спорят друг с другом и ни одна не читается первой. */
+.hero-greeting {
+  font-family: var(--display); font-weight: 500;
+  font-size: 18px; line-height: 1.3; letter-spacing: -.01em;
+  margin: 14px 0 0; max-width: 13em; white-space: pre-line;
+  color: #CFC7E8;
+                 white-space: pre-line; }
+/* Фраза дня. Тонкая линия слева вместо кавычек: кавычки в таком размере
+   выглядят тяжело, а линия задаёт поля, как в вёрстке журнала. */
+.day-line {
+  margin: 18px 0 0; padding: 2px 0 2px 16px; max-width: 19em;
+  border-left: 1px solid rgba(201, 184, 232, .34);
+}
+.day-line blockquote {
+  margin: 0;
+  font-family: var(--quote); font-style: italic; font-weight: 400;
+  font-size: 25px; line-height: 1.28; letter-spacing: .005em;
+  color: #EFEAFF;
+}
+/* Первая буква крупнее — фраза начинает читаться сама. */
+.day-line blockquote::first-letter { font-size: 1.35em; line-height: 1; }
+
+.hero-state { display: flex; align-items: center; gap: 11px; margin-top: 18px; }
+.hero-state-icon { font-size: 19px; line-height: 1; }
+.hero-state-title { font-size: 14px; font-weight: 600; }
+.hero-state-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+.hero-sub { font-size: 13px; color: var(--muted); margin-top: 6px; }
+.world-sub { font-size: 13px; color: var(--muted); margin: 8px 0 0; max-width: 22em; }
+
+.hud { display: flex; align-items: center; gap: 12px; margin-top: 16px;
+       padding: 12px 14px; border-radius: 16px;
+       background: rgba(21, 19, 39, .72); border: 1px solid var(--stroke);
+       backdrop-filter: blur(8px); }
+
+/* --- Плитки состояния --- */
+.state-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 12px; }
+.state {
+  padding: 12px 8px; border-radius: 16px; text-align: center;
+  background: var(--surface); border: 1px solid var(--stroke);
+}
+.state-icon { font-size: 15px; line-height: 1; }
+.state-value { font-size: 17px; font-weight: 700; margin-top: 6px; }
+.state-value.text { font-size: 13px; font-weight: 600; }
+.state-value.empty { color: var(--muted); font-weight: 500; }
+.state-label { font-size: 10px; color: var(--muted); margin-top: 3px; }
+
+/* --- Лента дня --- */
+.event { display: flex; gap: 12px; padding: 0 0 14px; position: relative; }
+.event:last-child { padding-bottom: 0; }
+/* Линия соединяет кружки событий и обрывается на последнем. */
+.event:not(:last-child)::before {
+  content: ''; position: absolute; left: 17px; top: 38px; bottom: 0; width: 1px;
+  background: var(--stroke);
+}
+.event-dot {
+  width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%;
+  background: var(--surface-2); border: 1px solid var(--stroke);
+  display: flex; align-items: center; justify-content: center; font-size: 15px;
+}
+.event[data-kind="state"] .event-dot { border-color: rgba(196, 181, 253, .5); }
+.event[data-kind="workout"] .event-dot { border-color: rgba(45, 212, 191, .5); }
+.event-main { flex: 1; min-width: 0; padding-top: 1px; }
+.event-time { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.event-title { font-size: 14px; font-weight: 600; margin-top: 1px;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.event-value { font-size: 13px; font-weight: 700; white-space: nowrap; padding-top: 14px;
+               font-variant-numeric: tabular-nums; }
+
+/* --- Кнопка «Расскажи, что происходит» --- */
+.say {
+  position: fixed; left: 16px; right: 16px; z-index: 9;
+  bottom: calc(74px + env(safe-area-inset-bottom));
+  padding: 15px 18px; border-radius: 18px; cursor: pointer;
+  border: 1px solid rgba(196, 181, 253, .55);
+  background: linear-gradient(135deg, rgba(139, 92, 246, .96), rgba(79, 70, 229, .96));
+  color: #fff; font-family: inherit; font-size: 15px; font-weight: 600;
+  box-shadow: 0 12px 34px rgba(88, 44, 190, .45);
+}
+.say:active { transform: scale(.99); }
+.say-spark { color: var(--gold); margin-right: 6px; }
+/* Кнопка нужна только на «Сегодня» — на других экранах она бы перекрывала списки. */
+.say.hidden-screen { display: none; }
+
+/* --- Лист «Что происходит» --- */
+.sheet {
+  position: fixed; inset: 0; z-index: 25; display: flex; align-items: flex-end;
+  background: rgba(6, 5, 12, .72); backdrop-filter: blur(6px);
+}
+.sheet-card {
+  width: 100%; max-height: 88vh; overflow-y: auto;
+  padding: 18px 16px calc(20px + env(safe-area-inset-bottom));
+  border-radius: 26px 26px 0 0; border: 1px solid var(--stroke); border-bottom: none;
+  background:
+    linear-gradient(180deg, rgba(27, 23, 52, .55) 0%, #1B1734 42%, var(--surface) 100%),
+    url('/static/img/moment.png') right top / auto 62% no-repeat,
+    linear-gradient(180deg, #1B1734, var(--surface));
+  animation: sheet-up .28s cubic-bezier(.22, 1, .36, 1);
+}
+@keyframes sheet-up { from { transform: translateY(16%); } to { transform: translateY(0); } }
+.sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.sheet-head h2 { font-size: 15px; letter-spacing: .12em; text-transform: uppercase;
+                 font-weight: 600; }
+.input.area { resize: none; line-height: 1.4; font-family: inherit; }
+
+.quote {
+  font-size: 16px; font-style: italic; color: var(--lilac);
+  padding: 4px 0 14px; line-height: 1.4;
+}
+.facts { margin-bottom: 14px; }
+.fact { display: flex; align-items: center; gap: 11px; padding: 11px 0;
+        border-bottom: 1px solid var(--void); }
+.fact:last-child { border-bottom: none; }
+.fact-icon { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 10px;
+             background: var(--surface-2); border: 1px solid var(--stroke);
+             display: flex; align-items: center; justify-content: center; font-size: 14px; }
+.fact-label { flex: 1; font-size: 13px; color: var(--muted); }
+.fact-value { font-size: 14px; font-weight: 600; text-align: right; }
+.btn.narrow { flex: 1; margin-top: 0; }
+.row .chip { flex: 0 0 40%; }
+.event-actions { display: flex; align-items: flex-start; padding-top: 8px; }
+.event-actions .icon-btn { font-size: 14px; padding: 4px; }
+
+/* --- Блок записи: волна, микрофон, камера и «плюс» --- */
+.capture {
+  margin-top: 14px; padding: 18px 16px 14px; text-align: center;
+  border-radius: var(--radius); border: 1px solid var(--stroke);
+  background: linear-gradient(180deg, #1A1633, var(--surface));
+}
+
+/* Волна — украшение, а не индикатор: она статична и не притворяется записью. */
+.wave { display: flex; align-items: center; justify-content: center; gap: 3px; height: 34px; }
+.wave i {
+  width: 2px; border-radius: 2px; background: var(--lilac); opacity: .5;
+  animation: wave 2.4s ease-in-out infinite;
+}
+.wave i:nth-child(3n) { height: 60%; animation-delay: .2s; }
+.wave i:nth-child(3n+1) { height: 30%; animation-delay: .5s; }
+.wave i:nth-child(3n+2) { height: 90%; animation-delay: .8s; }
+.wave i:nth-child(4n) { opacity: .3; }
+@keyframes wave { 0%, 100% { transform: scaleY(.55); } 50% { transform: scaleY(1); } }
+
+.capture-row { display: flex; align-items: center; justify-content: center; gap: 26px;
+               margin-top: 14px; }
+.round-btn {
+  width: 46px; height: 46px; border-radius: 50%; cursor: pointer;
+  border: 1px solid var(--stroke); background: var(--surface-2); color: var(--fg);
+  font-family: inherit; font-size: 19px; line-height: 1;
+}
+.mic-btn {
+  width: 74px; height: 74px; border-radius: 50%; cursor: pointer;
+  border: 1.5px solid var(--gold); padding: 0;
+  background: radial-gradient(circle at 50% 35%, #A78BFA, #6D28D9 70%);
+  box-shadow: 0 0 0 6px rgba(139, 92, 246, .16), 0 12px 30px rgba(88, 44, 190, .45);
+  display: flex; align-items: center; justify-content: center;
+}
+.mic-btn svg { width: 28px; height: 28px; fill: none; stroke: #fff; stroke-width: 1.6;
+               stroke-linecap: round; stroke-linejoin: round; }
+.mic-btn:active, .round-btn:active { transform: scale(.96); }
+.capture-hint { font-size: 11px; color: var(--muted); margin: 14px 0 0; }
+
+/* --- Лента дня в стиле макета: кружок, время, название, галочка --- */
+.event-dot { border-color: rgba(139, 92, 246, .45); }
+.event-check {
+  width: 26px; height: 26px; flex: 0 0 26px; margin-top: 12px; border-radius: 50%;
+  border: 1px solid rgba(139, 92, 246, .5); color: var(--lilac);
+  display: flex; align-items: center; justify-content: center; font-size: 13px;
+}
+
+/* Заголовок раздела с линией — как в макете «Распознанные факты ————» */
+.eyebrow.ruled { display: flex; align-items: center; gap: 10px; margin: 18px 0 4px; }
+.eyebrow.ruled::after { content: ''; flex: 1; height: 1px; background: var(--stroke); }
+
+.quote { position: relative; padding-left: 22px; }
+.quote::before {
+  content: '“'; position: absolute; left: 0; top: 6px;
+  font-family: var(--display); font-size: 34px; line-height: 1; color: var(--gold); opacity: .8;
+}
+
+/* Строка факта: карандаш появляется у всего, что можно поправить. */
+.fact-edit { border: none; background: none; cursor: pointer; padding: 4px 0 4px 10px; }
+.fact-edit svg { width: 15px; height: 15px; fill: none; stroke: var(--muted);
+                 stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.fact-edit:active svg { stroke: var(--lilac); }
+.fact-input {
+  width: 108px; padding: 6px 8px; border-radius: 9px; text-align: right;
+  border: 1px solid var(--violet); background: var(--void); color: var(--fg);
+  font-family: inherit; font-size: 14px; font-weight: 600;
+}
+select.fact-input { text-align: left; width: 130px; }
+
+.trust {
+  display: flex; gap: 12px; align-items: flex-start; margin: 4px 0 16px;
+  padding: 14px; border-radius: 16px;
+  background: var(--surface-2); border: 1px solid var(--stroke);
+}
+.trust svg { width: 22px; height: 22px; flex: 0 0 22px; margin-top: 2px; fill: none;
+             stroke: var(--teal); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.trust-value { font-size: 15px; font-weight: 700; }
+.trust-note { font-size: 11px; color: var(--muted); margin-top: 3px; line-height: 1.4; }
+
+/* --- Карточка последнего открытия --- */
+.discovery { text-align: left; }
+.discovery-title { font-family: var(--display); font-weight: 500; font-size: 26px;
+                   margin: 2px 0 14px; color: var(--gold); }
+.discovery-why { margin: 0; display: grid; gap: 8px; }
+.discovery-why > div { display: flex; gap: 8px; font-size: 13px; }
+.discovery-why dt { color: var(--muted); flex: 0 0 60px; }
+.discovery-why dd { margin: 0; flex: 1; }
+
+/* Путь к следующему открытию: пройденные шаги горят золотом. */
+.steps { display: flex; align-items: center; gap: 6px; margin-top: 18px; }
+.steps i {
+  width: 22px; height: 22px; flex: 0 0 22px; border-radius: 50%;
+  border: 1px solid var(--stroke); color: var(--muted);
+  display: flex; align-items: center; justify-content: center; font-size: 11px; font-style: normal;
+}
+.steps i.on { border-color: var(--gold); color: var(--gold); }
+.steps b { flex: 1; height: 1px; background: var(--stroke); }
+.steps b.on { background: rgba(201, 169, 97, .6); }
+
+/* --- Быстрая отметка состояния --- */
+.state { cursor: pointer; }
+.state:active { transform: scale(.97); }
+/* Пустая плитка приглашает нажать, а не выглядит сломанной. */
+.state-value.empty { color: var(--lilac); font-weight: 600; opacity: .55; }
+
+.state-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 4px; }
+.state-opt {
+  flex: 1 1 auto; min-width: 54px; padding: 13px 10px; cursor: pointer;
+  border: 1px solid var(--stroke); border-radius: 13px;
+  background: var(--surface-2); color: var(--fg);
+  font-family: inherit; font-size: 15px; font-weight: 600;
+}
+.state-opt.wide { flex: 1 1 44%; }
+.state-opt.on { border-color: var(--violet); background: rgba(139, 92, 246, .22); }
+.state-opt:active { transform: scale(.97); }
+
+/* Экран подписки шире обычного окна: в нём есть текст, а не только кнопка. */
+.pop-card.wide { max-width: 330px; }
+.pop-text { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 12px 0 4px; }

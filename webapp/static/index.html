@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Дневник</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,300;1,400;1,500&family=Manrope:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div id="loading" class="center">Загружаю…</div>
+
+<div id="app" hidden>
+  <main id="screen-today" class="screen">
+    <!-- Шапка как в макете: крупное «СЕГОДНЯ» разрядкой, гепард справа,
+         приветствие и строка состояния дня. -->
+    <section class="hero">
+      <div class="hero-art" data-art="hero"></div>
+      <div class="hero-body">
+        <h1 class="hero-title">Сегодня</h1>
+        <div class="eyebrow">Твоя ежедневная редакция</div>
+
+        <p class="hero-greeting" id="hero-greeting">Доброе утро.</p>
+
+        <!-- Фраза дня: первое, что читается на экране. Меняется раз в
+             сутки и зависит от цели. -->
+        <figure class="day-line" id="day-line" hidden>
+          <blockquote id="day-line-text"></blockquote>
+        </figure>
+
+        <div class="hero-state">
+          <span class="hero-state-icon" id="hero-state-icon">☀️</span>
+          <div>
+            <div class="hero-state-title" id="hero-title">Новый день</div>
+            <div class="hero-state-sub" id="hero-sub"></div>
+          </div>
+        </div>
+
+        <div class="hud">
+          <svg class="crystal" id="crystal" viewBox="0 0 44 60" data-stage="1" aria-hidden="true">
+            <defs>
+              <linearGradient id="crystal-gradient" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#C4B5FD"/>
+                <stop offset="55%" stop-color="#8B5CF6"/>
+                <stop offset="100%" stop-color="#4F46E5"/>
+              </linearGradient>
+            </defs>
+            <path class="c-face c-left" d="M22 2 L6 20 L11 46 L22 58 Z"/>
+            <path class="c-face c-right" d="M22 2 L38 20 L33 46 L22 58 Z"/>
+            <path class="c-face c-top" d="M22 2 L6 20 L22 25 L38 20 Z"/>
+            <g class="sparks">
+              <circle cx="5" cy="9" r="1.6"/>
+              <circle cx="40" cy="13" r="1.2"/>
+              <circle cx="35" cy="53" r="1.4"/>
+            </g>
+          </svg>
+          <div class="hud-main">
+            <div class="hud-top">
+              <span class="hud-level" id="hud-level">Уровень 1</span>
+              <span class="hud-streak" id="hud-streak"></span>
+            </div>
+            <div class="xp-track"><i id="xp-fill"></i></div>
+            <div class="hud-sub">
+              <span id="xp-text">0 / 100 💎</span>
+              <span class="hud-gain" id="xp-today"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Блок записи стоит сразу под шапкой: это главное действие экрана. -->
+    <section class="capture">
+      <div class="eyebrow mid">Расскажи, что происходит</div>
+      <div class="wave" aria-hidden="true">
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+      </div>
+      <div class="capture-row">
+        <button class="mic-btn" id="moment-open" aria-label="Рассказать, что происходит">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 12a8 8 0 0 1-8 8H5l1.5-3A8 8 0 1 1 20 12z"/>
+            <path d="M9 11h6M9 14h4"/>
+          </svg>
+        </button>
+      </div>
+      <p class="capture-hint">Фото и голосовое — в чате с ботом: он поймёт так же,
+        а записанное придёт сюда само.</p>
+    </section>
+
+    <section class="state-grid" id="state-grid"></section>
+
+    <section class="ring-card">
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+          <defs>
+            <linearGradient id="ring-gradient" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#C4B5FD"/>
+              <stop offset="100%" stop-color="#8B5CF6"/>
+            </linearGradient>
+          </defs>
+          <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+          <circle id="ring-fill" class="ring-fill" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="ring-center">
+          <div id="kcal-left" class="kcal-value">—</div>
+          <div class="kcal-label">ккал осталось</div>
+        </div>
+      </div>
+      <div id="kcal-sub" class="muted"></div>
+
+      <div class="dials">
+        <div class="dial" data-key="p">
+          <div class="dial-wrap">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dial-bg" cx="22" cy="22" r="18"></circle>
+              <circle class="dial-fill" id="dial-p" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <div class="dial-val" id="val-p">—</div>
+          </div>
+          <div class="dial-name">Белки</div>
+          <div class="dial-norm" id="norm-p"></div>
+        </div>
+        <div class="dial" data-key="f">
+          <div class="dial-wrap">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dial-bg" cx="22" cy="22" r="18"></circle>
+              <circle class="dial-fill" id="dial-f" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <div class="dial-val" id="val-f">—</div>
+          </div>
+          <div class="dial-name">Жиры</div>
+          <div class="dial-norm" id="norm-f"></div>
+        </div>
+        <div class="dial" data-key="c">
+          <div class="dial-wrap">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dial-bg" cx="22" cy="22" r="18"></circle>
+              <circle class="dial-fill" id="dial-c" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <div class="dial-val" id="val-c">—</div>
+          </div>
+          <div class="dial-name">Углеводы</div>
+          <div class="dial-norm" id="norm-c"></div>
+        </div>
+        <div class="dial" data-key="fib">
+          <div class="dial-wrap">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dial-bg" cx="22" cy="22" r="18"></circle>
+              <circle class="dial-fill" id="dial-fib" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <div class="dial-val" id="val-fib">—</div>
+          </div>
+          <div class="dial-name">Клетчатка</div>
+          <div class="dial-norm" id="norm-fib"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Лента дня</h2><span id="timeline-count" class="muted"></span></div>
+      <div id="timeline"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Задания дня</h2><span id="quest-count" class="muted"></span></div>
+      <div id="quests"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>💧 Вода</h2><span id="water-val" class="muted"></span></div>
+      <div class="bar big"><i id="bar-water"></i></div>
+      <div class="row">
+        <button class="chip" data-water="250">🥛 250</button>
+        <button class="chip" data-water="350">☕ 350</button>
+        <button class="chip" data-water="500">🍶 500</button>
+        <button class="chip ghost" id="water-undo">↩︎</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>💊 Приём на сегодня</h2>
+        <button class="link-btn" id="pill-form-toggle">добавить</button></div>
+      <div id="pills"></div>
+
+      <div id="pill-form" hidden>
+        <input id="pill-name" class="input" placeholder="Например: Витамин D">
+        <input id="pill-dose" class="input" placeholder="Дозировка: 5000 МЕ">
+        <select id="pill-schedule" class="input">
+          <option value="daily">Каждый день</option>
+          <option value="weekdays">По дням недели</option>
+          <option value="interval">Раз в несколько дней</option>
+        </select>
+        <div id="weekday-picker" class="row wrap" hidden></div>
+        <input id="pill-interval" class="input" type="number" min="2" max="90"
+               placeholder="Раз в сколько дней (например, 7)" hidden>
+        <input id="pill-time" class="input" type="time" placeholder="Напоминание">
+        <button id="pill-add" class="btn">Добавить препарат</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>🍽️ Что съесть</h2><span id="gap-hint" class="muted"></span></div>
+
+      <div class="plate-row">
+        <svg class="plate" viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="46" class="plate-rim"/>
+          <path d="M50 4 A46 46 0 0 0 50 96 Z" class="plate-veg"/>
+          <path d="M50 4 A46 46 0 0 1 96 50 L50 50 Z" class="plate-protein"/>
+          <path d="M50 50 L96 50 A46 46 0 0 1 50 96 Z" class="plate-carb"/>
+        </svg>
+        <ul class="plate-legend">
+          <li><i class="dot veg"></i>½ тарелки — овощи и зелень</li>
+          <li><i class="dot protein"></i>¼ — белок: мясо, рыба, творог</li>
+          <li><i class="dot carb"></i>¼ — сложные углеводы: крупы, паста</li>
+        </ul>
+      </div>
+
+      <button id="suggest-btn" class="btn">Подобрать блюда</button>
+      <div id="suggestions"></div>
+      <p class="hint">Подбирает Claude — учитывает остаток нормы, время суток,
+        твой тип питания и аллергии.</p>
+    </section>
+  </main>
+
+
+  <main id="screen-world" class="screen" hidden>
+    <section class="world-hero">
+      <div class="world-art" data-art="world"></div>
+      <div class="world-body">
+        <div class="eyebrow">Мой мир</div>
+        <h1 class="world-title" id="world-title">Место силы</h1>
+        <p class="world-sub" id="world-sub">Растёт с каждым закрытым заданием.</p>
+      </div>
+    </section>
+
+    <section class="card discovery">
+      <div class="eyebrow">Последнее открытие</div>
+      <h2 class="discovery-title" id="discovery-title">Пока закрыто</h2>
+      <dl class="discovery-why">
+        <div><dt>Почему</dt><dd id="discovery-why">—</dd></div>
+        <div><dt>Дальше</dt><dd id="discovery-next">—</dd></div>
+      </dl>
+      <div class="steps" id="discovery-steps"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Открытия</h2><span id="award-count" class="muted"></span></div>
+      <div id="awards" class="awards"></div>
+      <p class="hint" id="award-next"></p>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Как это устроено</h2></div>
+      <p class="note">Каждое закрытое задание — кристаллы. Из кристаллов растёт
+        уровень, из уровня — твой мир. Ничего отмечать вручную не нужно: всё
+        считается по тому, что ты и так записываешь.</p>
+    </section>
+  </main>
+
+
+  <main id="screen-progress" class="screen" hidden>
+    <section class="hero slim">
+      <div class="hero-art" data-art="sky"></div>
+      <div class="hero-body">
+        <h1 class="hero-title">Прогресс</h1>
+        <div class="eyebrow">Вес, объёмы и фото по неделям</div>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat"><div id="stat-weight" class="stat-value">—</div>
+        <div class="stat-label">сейчас, кг</div></div>
+      <div class="stat"><div id="stat-change" class="stat-value">—</div>
+        <div class="stat-label">изменение</div></div>
+      <div class="stat"><div id="stat-streak" class="stat-value">—</div>
+        <div class="stat-label" id="stat-streak-label">дней подряд</div></div>
+    </section>
+
+    <section class="card body-card">
+      <div class="card-head">
+        <h2>Твоё тело</h2>
+        <span id="body-note" class="muted"></span>
+      </div>
+      <div class="seg" id="body-switch">
+        <button class="seg-btn active" data-body="goal">Сейчас и цель</button>
+        <button class="seg-btn" data-body="zones">Зоны</button>
+      </div>
+      <div id="body-stage" class="body-stage"></div>
+      <div id="body-zones" class="chips" hidden></div>
+      <div id="body-insights" class="insights"></div>
+    </section>
+
+    <div class="filters">
+      <!-- Замеров больше, чем помещается в переключатель, — ряд прокручивается. -->
+      <div class="chips" id="metric-switch">
+        <button class="chip-btn active" data-metric="weight">Вес</button>
+        <button class="chip-btn" data-metric="calories">Калории</button>
+        <button class="chip-btn" data-metric="waist">Талия</button>
+        <button class="chip-btn" data-metric="hips">Бёдра</button>
+        <button class="chip-btn" data-metric="thigh">Нога</button>
+        <button class="chip-btn" data-metric="chest">Грудь</button>
+        <button class="chip-btn" data-metric="arm">Рука</button>
+      </div>
+      <div class="seg" id="period-switch">
+        <button class="seg-btn" data-period="week">Неделя</button>
+        <button class="seg-btn active" data-period="month">Месяц</button>
+      </div>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 id="chart-title">Вес</h2>
+        <button id="table-toggle" class="link-btn">таблица</button>
+      </div>
+      <div id="chart-box"></div>
+      <div id="chart-table" hidden></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Новый замер</h2></div>
+      <div class="grid2">
+        <input id="m-weight" class="input" type="number" step="0.1" placeholder="Вес, кг">
+        <input id="m-waist" class="input" type="number" step="0.5" placeholder="Талия, см">
+        <input id="m-hips" class="input" type="number" step="0.5"
+               placeholder="Бёдра по ягодицам, см">
+        <input id="m-thigh" class="input" type="number" step="0.5"
+               placeholder="Одна нога вверху, см">
+        <input id="m-chest" class="input" type="number" step="0.5" placeholder="Грудь, см">
+        <input id="m-arm" class="input" type="number" step="0.5"
+               placeholder="Одна рука (бицепс), см">
+      </div>
+      <button id="m-save" class="btn">Сохранить замер</button>
+      <p class="hint">Заполни то, что мерила — остальное можно пропустить.
+        «Бёдра» — вокруг таза по самой широкой точке ягодиц, это один обхват
+        на двоих. «Одна нога» — вокруг одного бедра под ягодицей, «одна рука» —
+        вокруг бицепса. Ногу и руку меряй всегда одну и ту же, иначе замеры
+        не сравнить между собой.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Фото прогресса</h2>
+        <label class="link-btn" for="photo-input">добавить</label></div>
+      <input id="photo-input" type="file" accept="image/*" hidden>
+      <div id="photo-compare"></div>
+      <p class="hint" id="photo-hint">Снимай в одинаковой позе и при одном свете — так разница видна честнее.</p>
+    </section>
+  </main>
+
+
+  <main id="screen-gym" class="screen" hidden>
+    <section class="hero slim">
+      <div class="hero-art" data-art="gym"></div>
+      <div class="hero-body">
+        <h1 class="hero-title">Спорт</h1>
+        <div class="eyebrow">Тело, лицо, глаза, осанка</div>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat"><div id="gym-count" class="stat-value">—</div>
+        <div class="stat-label" id="gym-count-label">тренировок</div></div>
+      <div class="stat"><div id="gym-kcal" class="stat-value">—</div>
+        <div class="stat-label">ккал за неделю</div></div>
+    </section>
+
+    <div class="filters">
+      <div class="chips" id="category-switch"></div>
+      <div class="chips" id="style-switch"></div>
+    </div>
+
+    <div class="chips programs" id="program-switch"></div>
+
+    <section class="card">
+      <div class="card-head"><h2 id="program-title">Программа</h2>
+        <span id="program-sub" class="muted"></span></div>
+      <p id="program-note" class="note" hidden></p>
+      <div id="exercises"></div>
+      <button id="finish-workout" class="btn" hidden>Записать тренировку</button>
+    </section>
+
+    <section class="card" id="cardio-card">
+      <div class="card-head"><h2>Кардио</h2></div>
+      <div id="cardio-list"></div>
+    </section>
+  </main>
+
+  <div id="rest-overlay" class="overlay" hidden>
+    <div class="rest-card">
+      <div class="rest-label">Отдых</div>
+      <div id="rest-time" class="rest-time">60</div>
+      <button id="rest-skip" class="btn">Пропустить</button>
+    </div>
+  </div>
+
+  <nav class="tabs">
+    <button class="tab active" data-screen="today">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/>
+        <path d="M12 4a8 8 0 0 1 7 4"/></svg>Сегодня</button>
+    <button class="tab" data-screen="world">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 6-2.5 10h-9L5 9z"/>
+        <path d="M12 3v18M5 9h14"/></svg>Мой мир</button>
+    <button class="tab" data-screen="gym">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6M8 7v10M16 7v10M20 9v6M8 12h8"/></svg>Спорт</button>
+    <button class="tab" data-screen="progress">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l5-5 4 3 7-8"/>
+        <path d="M4 20h16"/></svg>Прогресс</button>
+  </nav>
+</div>
+
+<!-- Ввод момента: сначала распознаём, показываем факты, и только потом
+     сохраняем — догадки модели человек должен видеть до записи. -->
+<div id="moment-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="moment-head">Что происходит?</h2>
+      <button class="icon-btn" id="moment-close" aria-label="Закрыть">✕</button>
+    </div>
+
+    <div id="moment-input">
+      <textarea id="moment-text" class="input area" rows="3"
+                placeholder="Позавтракала, выпила кофе и чувствую себя бодрее"></textarea>
+      <button class="btn" id="moment-send">Распознать</button>
+      <p class="hint">Голосом — отправь голосовое боту в чат: он поймёт так же,
+        а сюда всё придёт само.</p>
+    </div>
+
+    <div id="moment-result" hidden>
+      <div class="eyebrow">Твоя фраза</div>
+      <div class="quote" id="moment-quote"></div>
+
+      <div class="eyebrow ruled">Распознанные факты</div>
+      <div class="facts" id="moment-facts"></div>
+
+      <div class="trust">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/>
+          <path d="M9 12l2 2 4-4"/></svg>
+        <div>
+          <div class="eyebrow">Уверенность</div>
+          <div class="trust-value" id="moment-trust">Высокая</div>
+          <div class="trust-note" id="moment-trust-note">Эти данные точно отражают твоё сообщение.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="chip" id="moment-edit">Исправить</button>
+        <button class="btn narrow" id="moment-save">Всё верно</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Отметить состояние в два тапа: раньше это можно было только рассказать
+     словами, и плитки стояли пустыми. -->
+<!-- Экран подписки: закрыт доступ — данные остаются, но приложение просит
+     вернуться в чат, потому что счёт выставляет бот. -->
+<div id="paywall" class="pop" hidden>
+  <div class="pop-card wide">
+    <div class="pop-icon">🔒</div>
+    <div class="pop-title" id="paywall-title">Доступ закрыт</div>
+    <p class="pop-text" id="paywall-text"></p>
+    <button class="btn" id="paywall-open">Открыть чат и продлить</button>
+  </div>
+</div>
+
+<div id="state-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="state-head">Энергия</h2>
+      <button class="icon-btn" id="state-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div id="state-options" class="state-options"></div>
+    <p class="hint" id="state-hint"></p>
+  </div>
+</div>
+
+<div id="award-pop" class="pop" hidden>
+  <div class="pop-card">
+    <div class="pop-icon" id="pop-icon">🏆</div>
+    <div class="pop-title" id="pop-title"></div>
+    <div class="pop-sub" id="pop-sub">Новое открытие</div>
+    <button class="btn" id="pop-close">Класс</button>
+  </div>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
