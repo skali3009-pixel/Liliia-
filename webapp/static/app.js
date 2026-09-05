@@ -642,6 +642,10 @@ const FIG = {
 };
 const FIG_H = FIG.bottom - FIG.top;
 
+// Ширина системы координат одна на оба режима: иначе одинокая фигура
+// растягивается на всю карточку и та прыгает в высоте при переключении.
+const STAGE_W = 430;
+
 let bodyMode = 'goal';
 let bodyZone = 'waist';
 
@@ -876,40 +880,191 @@ function figureDecor() {
     <circle cx="${FIG.cx + 88}" cy="${floor}" r="2.5" class="fig-spark"/>`;
 }
 
-/* Подсветка зон из второго макета: полосы на талии, груди и бёдрах,
-   панели на руках и ногах. Выбранная зона горит, остальные приглушены. */
-function zoneShapes(s, active) {
-  const hi = s.hip * FIG_H;
-  const th = s.thigh * FIG_H;
-  const ar = s.arm * FIG_H;
-  const band = (code, y, halfWidth) =>
-    `<g class="zone${code === active ? ' on' : ''}" data-zone="${code}">
-       <ellipse cx="${FIG.cx}" cy="${y}" rx="${n1(halfWidth + 4)}" ry="7"/>
-       <ellipse cx="${FIG.cx}" cy="${y}" rx="${n1(halfWidth + 4)}" ry="7" class="dotted"/>
-     </g>`;
+/* --- Рисованная фигура из макета ----------------------------------------
 
-  /* Подсветка конечности — не четырёхугольник по её краям (получаются
-     коробки поперёк ноги), а толстая линия по оси со скруглёнными концами:
-     она сама повторяет форму руки или бедра. */
-  const limbs = (code, pick, grow) =>
-    `<g class="zone${code === active ? ' on' : ''}" data-zone="${code}">` +
-    [-1, 1].map((side) => {
-      const [from, to] = pick(side);
-      return `<path class="zone-cap" d="M ${pt(from[1], from[0])} L ${pt(to[1], to[0])}" ` +
-             `stroke-width="${n1(from[2] + to[2] + grow * 2)}"/>`;
-    }).join('') +
-    '</g>';
+   Тело — не набор кривых, а картинка, которую Лилия сделала сама. Чтобы она
+   не осталась просто украшением, картинка растягивается по строкам: каждая
+   строка пикселей сжимается или расширяется по своему коэффициенту, и
+   рисунок принимает пропорции конкретного тела.
 
-  return [
-    limbs('arm', (side) => armStops(s, side).slice(0, 2), 2),
-    band('bust', FIG.bust, s.bust * FIG_H),
-    band('waist', FIG.waist, s.waist * FIG_H),
-    band('hip', FIG.hip, hi),
-    limbs('thigh', (side) => legStops(s, side).slice(0, 2), 2),
-  ].join('');
+   Голова, шея и стопы не трогаются (там коэффициент 1) — тянется только то,
+   что и правда меняется от веса. */
+
+const ART = {
+  src: '/static/img/body.webp', w: 340, h: 1172, crown: 34,
+  // Стопы — это пальцы, а не нижний край картинки: ниже идёт отражение в
+  // полу, и если считать его частью тела, фигура повисает над кольцом.
+  feet: 1068,
+  // Центр — по торсу, а не по габаритам кадра: обрезка вышла несимметричной,
+  // и по габаритам фигура уезжает вбок от колец и пола.
+  cx: 142,
+  // Пропорции самой нарисованной фигуры в долях её роста: по ним ложится
+  // подсветка зон. Свет в картинке падает слева, правый контур почти не
+  // читается — числа сняты по левому краю и симметрии, потом выверены
+  // рендером.
+  zones: {
+    bust: 0.082, waist: 0.070, hip: 0.092,
+    thigh: { dx: 0.036, w: 0.032 },
+    arm: { dx: 0.082, w: 0.016 },
+  },
+};
+
+// Доля высоты тела → какая зона там находится. Совпадает с ориентирами FIG,
+// поэтому подсветка зон ложится ровно на картинку.
+const WARP_STOPS = [
+  [0.00, null], [0.17, null], [0.20, null],
+  [0.264, 'bust'], [0.366, 'waist'], [0.478, 'hip'], [0.649, 'thigh'],
+  [0.86, 'calf'], [1.00, null],
+];
+
+function warpAt(warp, t) {
+  const value = (zone) => {
+    if (zone === null) return 1;
+    // Икра меняется слабее бедра: к щиколотке растяжение сходит на нет.
+    if (zone === 'calf') return 1 + ((warp.thigh || 1) - 1) * 0.35;
+    return warp[zone] || 1;
+  };
+  for (let i = 1; i < WARP_STOPS.length; i++) {
+    const [t0, z0] = WARP_STOPS[i - 1];
+    const [t1, z1] = WARP_STOPS[i];
+    if (t <= t1 || i === WARP_STOPS.length - 1) {
+      const share = t1 === t0 ? 0 : Math.min(Math.max((t - t0) / (t1 - t0), 0), 1);
+      return between(value(z0), value(z1), share);
+    }
+  }
+  return 1;
+}
+
+let artPromise = null;
+
+function loadArt() {
+  if (artPromise) return artPromise;
+  artPromise = new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    // Картинки нет — рисуем фигуру кривыми, экран не должен остаться пустым.
+    img.onerror = () => resolve(null);
+    img.src = ART.src;
+  });
+  return artPromise;
+}
+
+/* Одна фигура на холст: строка исходника → строка на экране со своим
+   горизонтальным масштабом. Высота строки берётся с запасом, иначе между
+   строками остаются волосяные щели. */
+function paintFigure(ctx, img, { dx, warp, alpha, unit }) {
+  const bodyPx = (FIG.bottom - FIG.top) * unit;
+  const k = bodyPx / (ART.feet - ART.crown);
+  const cxDst = (FIG.cx + dx) * unit;
+  const topDst = FIG.top * unit;
+
+  // Полупрозрачную фигуру собираем на отдельном холсте и накладываем одним
+  // куском. Если гасить каждую строку по отдельности, соседние строки
+  // перекрываются на пиксель и смешиваются дважды — по телу идут полосы.
+  const solo = alpha < 1;
+  let target = ctx;
+  if (solo) {
+    const buffer = document.createElement('canvas');
+    buffer.width = ctx.canvas.width;
+    buffer.height = ctx.canvas.height;
+    target = buffer.getContext('2d');
+  }
+
+  for (let sy = 0; sy < ART.h; sy++) {
+    const t = (sy - ART.crown) / (ART.feet - ART.crown);
+    const scale = warpAt(warp, Math.min(Math.max(t, 0), 1));
+    target.drawImage(
+      img, 0, sy, ART.w, 1,
+      cxDst - ART.cx * k * scale, topDst + (sy - ART.crown) * k,
+      ART.w * k * scale, k + 1,
+    );
+  }
+
+  if (solo) {
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(target.canvas, 0, 0);
+    ctx.globalAlpha = 1;
+  }
+}
+
+async function paintStage(data) {
+  const canvas = document.getElementById('fig-canvas');
+  if (!canvas) return;
+  const img = await loadArt();
+  if (!img) return;
+
+  const box = canvas.getBoundingClientRect();
+  const ratio = Math.min(window.devicePixelRatio || 1, 2.5);
+  canvas.width = Math.round(box.width * ratio);
+  canvas.height = Math.round(box.height * ratio);
+
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  const unit = canvas.width / STAGE_W;
+
+  const single = bodyMode === 'zones' || !data.goal;
+  paintFigure(ctx, img, {
+    dx: single ? STAGE_W / 2 - FIG.cx : 0,
+    warp: data.warp || {}, alpha: 1, unit,
+  });
+  if (!single) {
+    paintFigure(ctx, img, { dx: 230, warp: data.goal_warp || {}, alpha: 0.62, unit });
+  }
 }
 
 let figureSeq = 0;
+
+/* Где на теле проходят зоны. Для нарисованной фигуры — из пропорций самой
+   картинки, растянутых теми же коэффициентами; для запасного силуэта — из
+   его собственных полуширин. Иначе подсветка съезжает с тела. */
+function zoneGeometry(figure, warp) {
+  if (warp) {
+    const k = (value, zone) => value * FIG_H * (warp[zone] || 1);
+    return {
+      bust: k(ART.zones.bust, 'bust'),
+      waist: k(ART.zones.waist, 'waist'),
+      hip: k(ART.zones.hip, 'hip'),
+      thigh: { dx: k(ART.zones.thigh.dx, 'thigh'), w: k(ART.zones.thigh.w, 'thigh') },
+      arm: { dx: k(ART.zones.arm.dx, 'arm'), w: k(ART.zones.arm.w, 'arm') },
+    };
+  }
+  const hip = figure.hip * FIG_H;
+  return {
+    bust: figure.bust * FIG_H,
+    waist: figure.waist * FIG_H,
+    hip,
+    thigh: { dx: hip * 0.44, w: figure.thigh * FIG_H },
+    arm: { dx: figure.shoulder * FIG_H - figure.arm * FIG_H * 0.3, w: figure.arm * FIG_H },
+  };
+}
+
+/* Подсветка зон из второго макета: полосы на талии, груди и бёдрах,
+   панели на руках и ногах. Выбранная зона горит, остальные приглушены. */
+function zoneShapes(geometry, active) {
+  const wrap = (code, inner) =>
+    `<g class="zone${code === active ? ' on' : ''}" data-zone="${code}">${inner}</g>`;
+
+  const band = (code, y, halfWidth) => wrap(code,
+    `<ellipse cx="${FIG.cx}" cy="${y}" rx="${n1(halfWidth + 4)}" ry="7"/>` +
+    `<ellipse cx="${FIG.cx}" cy="${y}" rx="${n1(halfWidth + 4)}" ry="7" class="dotted"/>`);
+
+  /* Подсветка конечности — толстая линия по её оси со скруглёнными концами:
+     она повторяет форму руки или бедра, а не рисует коробку поперёк. */
+  const limbs = (code, part, y0, y1) => wrap(code,
+    [-1, 1].map((side) => {
+      const cx = FIG.cx + side * part.dx;
+      return `<path class="zone-cap" d="M ${pt(cx, y0)} L ${pt(cx, y1)}" ` +
+             `stroke-width="${n1(part.w * 2 + 4)}"/>`;
+    }).join(''));
+
+  return [
+    limbs('arm', geometry.arm, FIG.shoulder + 10, FIG.bust + 34),
+    band('bust', FIG.bust, geometry.bust),
+    band('waist', FIG.waist, geometry.waist),
+    band('hip', FIG.hip, geometry.hip),
+    limbs('thigh', geometry.thigh, FIG.crotch - 6, FIG.thighMid + 4),
+  ].join('');
+}
 
 function figureGroup(s, { dx = 0, dim = false, zones = '' } = {}) {
   const shapes = bodyShapes(s);
@@ -1009,7 +1164,7 @@ const FIG_DEFS = `
     </filter>
   </defs>`;
 
-function renderBody(data) {
+async function renderBody(data) {
   const stage = document.getElementById('body-stage');
   const note = document.getElementById('body-note');
   const chips = document.getElementById('body-zones');
@@ -1017,31 +1172,38 @@ function renderBody(data) {
 
   note.textContent = data.estimated ? 'примерно — нет замеров' : '';
 
-  // Ширина системы координат одна на оба режима: иначе одинокая фигура
-  // растягивается на всю карточку и та вырастает вдвое при переключении.
-  const STAGE_W = 430;
+  // Если картинка не загрузилась, фигуру рисуем кривыми: экран прогресса
+  // не должен оставаться пустым из-за одного файла.
+  const art = await loadArt();
+  const single = bodyMode === 'zones' || !data.goal;
+  const middle = STAGE_W / 2 - FIG.cx;
+  const drawn = (figure, options) => (art ? '' : figureGroup(figure, options));
+
+  const overlay = `
+    <svg class="fig-svg" viewBox="0 0 ${STAGE_W} 470" preserveAspectRatio="xMidYMid meet">
+      ${FIG_DEFS}
+      ${!single && data.goal ? nebula(215) : ''}
+      <g transform="translate(${single ? middle : 0} 0)">${figureDecor()}</g>
+      ${!single ? `<g transform="translate(230 0)">${figureDecor()}</g>` : ''}
+      ${drawn(data.now, { dx: single ? middle : 0 })}
+      ${!single && data.goal ? drawn(data.goal, { dx: 230, dim: true }) : ''}
+      ${bodyMode === 'zones'
+        ? `<g transform="translate(${middle} 0)">` +
+          `${zoneShapes(zoneGeometry(data.now, art ? data.warp : null), bodyZone)}</g>` : ''}
+    </svg>`;
 
   if (bodyMode === 'zones') {
     chips.hidden = false;
-    stage.innerHTML = `
-      <svg class="fig-svg" viewBox="0 0 ${STAGE_W} 470" preserveAspectRatio="xMidYMid meet">
-        ${FIG_DEFS}
-        ${figureGroup(data.now, {
-          dx: STAGE_W / 2 - FIG.cx,
-          zones: zoneShapes(data.now, bodyZone),
-        })}
-      </svg>`;
+    stage.innerHTML = `<div class="fig-wrap">
+        <canvas id="fig-canvas" class="fig-canvas"></canvas>${overlay}
+      </div>`;
     renderZoneChips(data.zones);
   } else {
     chips.hidden = true;
-    const gap = 230;
     stage.innerHTML = `
-      <svg class="fig-svg" viewBox="0 0 ${STAGE_W} 470" preserveAspectRatio="xMidYMid meet">
-        ${FIG_DEFS}
-        ${data.goal ? nebula(215) : ''}
-        ${figureGroup(data.now, { dx: data.goal ? 0 : STAGE_W / 2 - FIG.cx })}
-        ${data.goal ? figureGroup(data.goal, { dx: gap, dim: true }) : ''}
-      </svg>
+      <div class="fig-wrap">
+        <canvas id="fig-canvas" class="fig-canvas"></canvas>${overlay}
+      </div>
       <div class="fig-captions${data.goal ? '' : ' single'}">
         <div><b>Сейчас</b><span>${progress?.summary?.current_weight
           ? `${fmt(progress.summary.current_weight)} кг` : 'вес не записан'}</span></div>
@@ -1050,6 +1212,8 @@ function renderBody(data) {
       ${data.goal ? '' : '<p class="hint">Поставь цель по весу в анкете — покажу, ' +
         'как будет выглядеть фигура.</p>'}`;
   }
+
+  await paintStage(data);
 
   renderInsights(data.insights);
   for (const group of stage.querySelectorAll('.zone')) {

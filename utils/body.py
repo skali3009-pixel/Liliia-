@@ -182,6 +182,41 @@ def goal_silhouette(
     )
 
 
+# Рисунок фигуры (webapp/static/img/body.webp) изображает женщину примерно
+# такого телосложения. От него и считается, насколько растянуть картинку под
+# настоящие замеры: сам рисунок остаётся тем же, меняются только пропорции.
+REFERENCE_BMI = 23.0
+
+# Границы растяжения: цель может быть выставлена как угодно, а превращать
+# рисунок в кривое зеркало нельзя.
+WARP_MIN = 0.84
+WARP_MAX = 1.30
+
+WARP_ZONES = ("bust", "waist", "hip", "thigh", "arm")
+
+
+def reference_silhouette(height_cm: float) -> Silhouette:
+    """Фигура, которую изображает рисунок."""
+    weight = REFERENCE_BMI * (height_cm / 100) ** 2 if height_cm > 0 else 0
+    figure, _ = build_silhouette(measures={}, height_cm=height_cm, weight_kg=weight)
+    return figure
+
+
+def warp_factors(figure: Silhouette | None, *, height_cm: float) -> dict[str, float]:
+    """Во сколько раз растянуть рисунок в каждой зоне под это тело."""
+    if figure is None or height_cm <= 0:
+        return {zone: 1.0 for zone in WARP_ZONES}
+
+    reference = reference_silhouette(height_cm)
+    factors = {}
+    for zone in WARP_ZONES:
+        base = getattr(reference, zone)
+        value = getattr(figure, zone)
+        ratio = value / base if base > 0 else 1.0
+        factors[zone] = round(min(max(ratio, WARP_MIN), WARP_MAX), 4)
+    return factors
+
+
 @dataclass(frozen=True)
 class Insight:
     """Строка с выводом под фигурой."""
@@ -300,6 +335,8 @@ def zones(measures: dict[str, float]) -> list[dict[str, Any]]:
 __all__ = [
     "Insight",
     "Silhouette",
+    "warp_factors",
+    "reference_silhouette",
     "bmi",
     "build_insights",
     "build_silhouette",

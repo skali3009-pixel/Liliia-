@@ -172,3 +172,40 @@ def test_zone_without_a_measurement_is_marked_empty():
     empty = {zone["code"]: zone for zone in zones({"waist": 70})}
     assert empty["waist"]["has_data"] is True
     assert empty["thigh"]["has_data"] is False
+
+
+def test_warp_matches_the_drawing_for_a_reference_body():
+    """Тело, которое и нарисовано, растягивать не нужно."""
+    from utils.body import REFERENCE_BMI, reference_silhouette, warp_factors
+
+    figure = reference_silhouette(165)
+    factors = warp_factors(figure, height_cm=165)
+    assert all(abs(value - 1.0) < 1e-6 for value in factors.values())
+    assert REFERENCE_BMI > 0
+
+
+def test_wider_body_stretches_the_drawing_and_slimmer_shrinks_it():
+    from utils.body import warp_factors
+
+    wide, _ = build_silhouette(measures={"waist": 95}, height_cm=165, weight_kg=85)
+    narrow, _ = build_silhouette(measures={"waist": 62}, height_cm=165, weight_kg=52)
+
+    assert warp_factors(wide, height_cm=165)["waist"] > 1
+    assert warp_factors(narrow, height_cm=165)["waist"] < 1
+
+
+def test_warp_never_turns_the_drawing_into_a_funhouse_mirror():
+    """Цель можно выставить любую — рисунок обязан остаться человеком."""
+    from utils.body import WARP_MAX, WARP_MIN, warp_factors
+
+    huge, _ = build_silhouette(measures={"waist": 200}, height_cm=150, weight_kg=200)
+    tiny, _ = build_silhouette(measures={"waist": 30}, height_cm=190, weight_kg=35)
+
+    assert warp_factors(huge, height_cm=150)["waist"] == WARP_MAX
+    assert warp_factors(tiny, height_cm=190)["waist"] == WARP_MIN
+
+
+def test_no_warp_without_a_figure():
+    from utils.body import warp_factors
+
+    assert set(warp_factors(None, height_cm=165).values()) == {1.0}

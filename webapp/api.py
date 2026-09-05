@@ -43,7 +43,8 @@ from services.workouts import (
     week_summary,
 )
 from services.water import add_water, today_total_ml, undo_last
-from utils.body import build_insights, build_silhouette, goal_silhouette, zones
+from utils.body import (build_insights, build_silhouette, goal_silhouette,
+                        warp_factors, zones)
 from utils.macros import GAP_LABELS, dominant_gap, remaining
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, scale_nutrition
@@ -359,6 +360,9 @@ def _body_block(user: User, measures: dict[str, float], *, weight_kg: float | No
     return {
         "now": now.to_dict(),
         "goal": goal.to_dict() if goal else None,
+        # Насколько растянуть рисунок фигуры под это тело и под цель.
+        "warp": warp_factors(now, height_cm=height_cm),
+        "goal_warp": warp_factors(goal, height_cm=height_cm) if goal else None,
         "estimated": estimated,
         "zones": zones(body_measures),
         "insights": [

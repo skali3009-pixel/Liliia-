@@ -292,6 +292,15 @@ button:focus-visible, .tab:focus-visible {
 .body-card .seg { margin-bottom: 6px; }
 .body-stage { margin: 4px -4px 0; }
 
+/* Холст с рисованной фигурой и SVG-декор лежат друг на друге в одной
+   системе координат 430×470. Режим наложения screen убирает чёрный фон
+   картинки: чёрное в screen не меняет подложку, остаётся только свечение. */
+.fig-wrap { position: relative; width: 100%; aspect-ratio: 430 / 470; }
+.fig-canvas {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  mix-blend-mode: screen;
+}
+.fig-wrap .fig-svg { position: absolute; inset: 0; }
 .fig-svg { display: block; width: 100%; height: auto; }
 
 .fig-body path, .fig-body ellipse, .fig-body circle {
