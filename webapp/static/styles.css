@@ -353,6 +353,50 @@ button:focus-visible, .tab:focus-visible {
 .fig-ring.faint { stroke: #7B5FC4; stroke-opacity: .32; }
 .fig-spark { fill: #F0E0C0; opacity: .9; }
 
+/* Рельеф — тонкие светлые линии поверх тела, размытые до намёка. */
+.fig-relief path {
+  fill: none; stroke: #C9B8E8; stroke-linecap: round;
+  filter: url(#fig-blur-soft);
+}
+
+/* --- Жизнь на экране ---------------------------------------------------
+   Фигура дышит, ореол медленно вращается, точки мерцают, поток течёт.
+   Всё медленное и почти незаметное: экран должен казаться живым, а не
+   мигать. При системном запрете анимаций всё замирает. */
+@media (prefers-reduced-motion: no-preference) {
+  /* Точка опоры — под стопами, иначе фигура «подпрыгивает» над полом. */
+  .fig-canvas { animation: fig-breath 7s ease-in-out infinite; transform-origin: 50% 95%; }
+  .fig-halo.dotted {
+    animation: fig-spin 60s linear infinite;
+    transform-box: fill-box; transform-origin: center;
+  }
+  .fig-spark { animation: fig-twinkle 5s ease-in-out infinite; }
+  .fig-spark:nth-of-type(2n) { animation-delay: -1.7s; }
+  .fig-spark:nth-of-type(3n) { animation-delay: -3.1s; }
+  .nebula path { animation: fig-drift 11s ease-in-out infinite alternate; }
+  .nebula path:nth-of-type(2n) { animation-duration: 14s; animation-delay: -2s; }
+  .zone.on ellipse, .zone.on .zone-cap { animation: fig-pulse 2.6s ease-in-out infinite; }
+  .fig-relief { animation: fig-twinkle 6s ease-in-out infinite; }
+}
+
+@keyframes fig-breath {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.008); }
+}
+@keyframes fig-spin { to { transform: rotate(360deg); } }
+@keyframes fig-twinkle {
+  0%, 100% { opacity: .45; }
+  50%      { opacity: 1; }
+}
+@keyframes fig-drift {
+  from { transform: translate(-4px, 3px); }
+  to   { transform: translate(5px, -4px); }
+}
+@keyframes fig-pulse {
+  0%, 100% { opacity: .7; }
+  50%      { opacity: 1; }
+}
+
 .nebula path { fill: none; stroke: #8B6FD4; stroke-opacity: .35; stroke-width: 9;
   filter: url(#fig-nebula); stroke-linecap: round; }
 .nebula path.thin { stroke: #9B7FD4; stroke-width: 5; stroke-opacity: .3; }

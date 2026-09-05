@@ -883,6 +883,40 @@ function figureDecor() {
     <circle cx="${FIG.cx + 71}" cy="${floor}" r="2.6" class="fig-spark"/>`;
 }
 
+/* Рельеф: чем стройнее тело, тем заметнее прорисовка пресса и бёдер.
+   Это намёк на форму, а не обещание кубиков, поэтому линии мягкие и
+   появляются постепенно — вместе с тем, как сходит объём. */
+function relief(warp) {
+  const lean = Math.min(Math.max((1 - (warp.waist || 1)) / 0.22, 0), 1);
+  if (lean < 0.06) return '';
+
+  const waist = ART.zones.waist * FIG_H * (warp.waist || 1);
+  const hip = ART.zones.hip * FIG_H * (warp.hip || 1);
+  const thigh = ART.zones.thigh;
+  const c = FIG.cx;
+  const line = (d, width) => `<path d="${d}" stroke-width="${width}"/>`;
+
+  const ribs = [-1, 1].map((side) =>
+    line(`M ${pt(c + side * waist * 0.62, FIG.underbust - 4)} ` +
+         `Q ${pt(c + side * waist * 0.5, FIG.underbust + 12)} ` +
+         `${pt(c + side * waist * 0.2, FIG.underbust + 18)}`, 1.4)).join('');
+
+  const legs = [-1, 1].map((side) => {
+    const cx = c + side * thigh.dx * FIG_H * (warp.thigh || 1);
+    return line(`M ${pt(cx + side * thigh.w * FIG_H * 0.5, FIG.crotch + 6)} ` +
+                `Q ${pt(cx + side * thigh.w * FIG_H * 0.7, FIG.thighMid)} ` +
+                `${pt(cx + side * thigh.w * FIG_H * 0.35, FIG.knee - 12)}`, 1.3);
+  }).join('');
+
+  return `<g class="fig-relief" style="opacity:${n1(lean * 0.55)}">
+    ${line(`M ${pt(c, FIG.bust + 26)} L ${pt(c, FIG.hip - 12)}`, 1.6)}
+    ${ribs}
+    ${line(`M ${pt(c - waist * 0.34, FIG.waist + 16)} ` +
+           `Q ${pt(c, FIG.waist + 24)} ${pt(c + waist * 0.34, FIG.waist + 16)}`, 1.2)}
+    ${legs}
+  </g>`;
+}
+
 /* Вертикальные панели по краям сцены — как в макете. Скругление только по
    внутреннему краю: снаружи панель уходит за границу кадра. */
 function stagePanels() {
@@ -905,21 +939,21 @@ function stagePanels() {
    что и правда меняется от веса. */
 
 const ART = {
-  src: '/static/img/body.webp', w: 340, h: 1172, crown: 34,
+  src: '/static/img/body.webp', w: 380, h: 1037, crown: 24,
   // Стопы — это пальцы, а не нижний край картинки: ниже идёт отражение в
   // полу, и если считать его частью тела, фигура повисает над кольцом.
-  feet: 1068,
-  // Центр — по торсу, а не по габаритам кадра: обрезка вышла несимметричной,
-  // и по габаритам фигура уезжает вбок от колец и пола.
-  cx: 142,
+  feet: 1013,
+  // Центр искали по голове: она узкая и симметричная. По ногам его сбивает
+  // кольцо на полу, по габаритам кадра — остатки тумана сбоку. Из-за такой
+  // ошибки в прошлой версии кадр срезал фигуре руку.
+  cx: 190,
   // Пропорции самой нарисованной фигуры в долях её роста: по ним ложится
-  // подсветка зон. Свет в картинке падает слева, правый контур почти не
-  // читается — числа сняты по левому краю и симметрии, потом выверены
-  // рендером.
+  // подсветка зон. Сняты по пикам яркости на контуре — на симметричной
+  // картинке они читаются с обеих сторон и сходятся до третьего знака.
   zones: {
-    bust: 0.082, waist: 0.070, hip: 0.092,
-    thigh: { dx: 0.036, w: 0.032 },
-    arm: { dx: 0.082, w: 0.016 },
+    bust: 0.086, waist: 0.085, hip: 0.112,
+    thigh: { dx: 0.036, w: 0.033 },
+    arm: { dx: 0.110, w: 0.021 },
   },
 };
 
@@ -1204,8 +1238,10 @@ async function renderBody(data) {
       ${FIG_DEFS}
       ${stagePanels()}
       ${!single && data.goal ? nebula(215) : ''}
-      <g transform="translate(${single ? middle : 0} 0)">${figureDecor()}</g>
-      ${!single ? `<g transform="translate(230 0)">${figureDecor()}</g>` : ''}
+      <g transform="translate(${single ? middle : 0} 0)">
+        ${figureDecor()}${relief(data.warp || {})}</g>
+      ${!single ? `<g transform="translate(230 0)">
+        ${figureDecor()}${relief(data.goal_warp || {})}</g>` : ''}
       ${drawn(data.now, { dx: single ? middle : 0 })}
       ${!single && data.goal ? drawn(data.goal, { dx: 230, dim: true }) : ''}
       ${bodyMode === 'zones'

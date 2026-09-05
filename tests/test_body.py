@@ -209,3 +209,18 @@ def test_no_warp_without_a_figure():
     from utils.body import warp_factors
 
     assert set(warp_factors(None, height_cm=165).values()) == {1.0}
+
+
+def test_slim_and_heavy_bodies_look_different():
+    """Из-за узкого диапазона 59 и 90 кг рисовались почти одинаково —
+    так фигура не отвечает на вопрос «а что изменится?»."""
+    from utils.body import warp_factors
+
+    slim, _ = build_silhouette(measures={}, height_cm=165, weight_kg=52)
+    heavy, _ = build_silhouette(measures={}, height_cm=165, weight_kg=95)
+
+    thin = warp_factors(slim, height_cm=165)["waist"]
+    full = warp_factors(heavy, height_cm=165)["waist"]
+    assert thin < 0.85 and full > 1.15
+    # Между худой и полной — заметно больше половины ширины.
+    assert full / thin > 1.4
