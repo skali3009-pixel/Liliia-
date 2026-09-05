@@ -292,8 +292,9 @@ vision-модели и формат самого запроса к Claude.
   `body.py`, `achievement.py`, `supplement.py` (таблицы users, meals,
   water_log, workouts, workout_log, body_measurements, progress_photos,
   achievements, supplements, supplement_log).
-- `states/` — FSM-состояния (`onboarding.py`, `food.py`).
-- `keyboards/` — клавиатуры (`onboarding.py`, `main_menu.py`, `food.py`).
+- `states/` — FSM-состояния (`onboarding.py`, `food.py`, `profile.py`).
+- `keyboards/` — клавиатуры (`onboarding.py`, `main_menu.py`, `food.py`,
+  `profile.py`).
 - `services/` — бизнес-логика вне обработчиков:
   - `gamification.py` — задания дня, опыт, уровень, стрик и награды;
   - `subscriptions.py` — пробный период, оплата, продление и окончание доступа;
@@ -306,14 +307,16 @@ vision-модели и формат самого запроса к Claude.
   - `progress.py` — динамика веса и калорий, замеры, стрик, фото;
   - `reminders.py` — какие напоминания отправить в текущую минуту;
   - `workouts.py` — программы, расчёт расхода, запись выполнения;
-  - `suggestions.py` — подбор блюд под остаток нормы через Claude.
+  - `suggestions.py` — подбор блюд под остаток нормы через Claude;
+  - `favorites.py` — что человек ест постоянно, для записи в одно касание;
+  - `profile.py` — правка анкеты после онбординга и пересчёт нормы.
 - `seed/` — библиотека упражнений и её заливка в базу при старте.
 - `webapp/` — мини-приложение: `auth.py` (проверка подписи Telegram),
   `api.py` (HTTP-API поверх той же базы), `server.py`, `static/` (экран).
 - `handlers/` — обработчики апдейтов Telegram:
   - `onboarding.py` — анкета + расчёт и сохранение нормы КБЖУ/воды;
   - `food.py` — фото/текст → карточка КБЖУ → коррекция порции → сохранение;
-  - `menu.py` — кнопки главного меню.
+  - `profile.py` — карточка профиля и правка любого её поля.
 - `utils/` — чистые функции с тестами: `formulas.py`, `portions.py`,
   `progress.py`, `meal_time.py`, `parsing.py`, `game.py` (задания, уровни).
 - `scheduler.py` — планировщик напоминаний (APScheduler, раз в минуту).

@@ -20,6 +20,14 @@ from keyboards.onboarding import (
 )
 from models import ActivityLevelEnum, DietTypeEnum, GenderEnum, GoalEnum, User
 from handlers.legal import consent_keyboard, needs_consent, welcome_text
+from services.profile import (
+    MAX_AGE,
+    MAX_HEIGHT_CM,
+    MAX_WEIGHT_KG,
+    MIN_AGE,
+    MIN_HEIGHT_CM,
+    MIN_WEIGHT_KG,
+)
 from services.subscriptions import check_access, ensure_trial
 from states.onboarding import OnboardingStates
 from utils.formulas import ActivityLevel, Gender, Goal, calculate_macros, daily_water_ml
@@ -27,10 +35,6 @@ from utils.parsing import parse_float, parse_int
 
 logger = logging.getLogger(__name__)
 router = Router(name="onboarding")
-
-MIN_AGE, MAX_AGE = 10, 100
-MIN_HEIGHT_CM, MAX_HEIGHT_CM = 100.0, 250.0
-MIN_WEIGHT_KG, MAX_WEIGHT_KG = 30.0, 300.0
 
 GENDER_RU = {GenderEnum.MALE.value: "мужской", GenderEnum.FEMALE.value: "женский"}
 

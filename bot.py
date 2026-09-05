@@ -13,7 +13,7 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 import config
 from db import init_models
 from services.artwork import ensure_artwork
-from handlers import (access, food, legal, menu, onboarding, progress,
+from handlers import (access, food, legal, onboarding, profile, progress,
                       suggestions, supplements, water, workouts)
 from middlewares.access import AccessMiddleware
 from scheduler import start_scheduler
@@ -33,13 +33,15 @@ dp.callback_query.outer_middleware(AccessMiddleware())
 dp.include_router(legal.router)
 dp.include_router(access.router)
 dp.include_router(onboarding.router)
+# Профиль раньше еды: он снимает состояние правки, когда человек уходит из
+# незаконченного ответа в другую кнопку меню.
+dp.include_router(profile.router)
 dp.include_router(food.router)
 dp.include_router(water.router)
 dp.include_router(supplements.router)
 dp.include_router(progress.router)
 dp.include_router(workouts.router)
 dp.include_router(suggestions.router)
-dp.include_router(menu.router)
 
 
 async def setup_menu_button() -> None:

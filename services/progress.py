@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import config
 from models import BodyMeasurement, Meal, ProgressPhoto, User
-from utils.formulas import ActivityLevel, Gender, Goal, calculate_macros, daily_water_ml
+from services.profile import recalculate
 from utils.timeframe import DEFAULT_TIMEZONE, day_bounds, get_zone, to_local, today_in
 
 logger = logging.getLogger(__name__)
@@ -181,25 +181,11 @@ async def add_measurement(
     session.add(measurement)
 
     norms_updated = False
-    if weight_kg and user.gender and user.age and user.height_cm and user.activity_level and user.goal:
+    if weight_kg:
         user.current_weight_kg = weight_kg
-        macros = calculate_macros(
-            gender=Gender(user.gender.value),
-            weight_kg=weight_kg,
-            height_cm=user.height_cm,
-            age_years=user.age,
-            activity_level=ActivityLevel(user.activity_level.value),
-            goal=Goal(user.goal.value),
-        )
-        user.daily_calories = macros.calories
-        user.daily_protein_g = macros.protein_g
-        user.daily_fat_g = macros.fat_g
-        user.daily_carbs_g = macros.carbs_g
-        user.daily_fiber_g = macros.fiber_g
-        user.daily_water_ml = daily_water_ml(
-            weight_kg=weight_kg, activity_level=ActivityLevel(user.activity_level.value)
-        )
-        norms_updated = True
+        # Норму считает profile.recalculate — одна формула на весь проект,
+        # чтобы взвешивание и правка анкеты не разъехались в цифрах.
+        norms_updated = recalculate(user)
 
     await session.commit()
     return measurement, norms_updated

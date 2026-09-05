@@ -1,4 +1,9 @@
-"""Inline-клавиатуры для шагов онбординга."""
+"""Inline-клавиатуры для шагов онбординга.
+
+Те же самые списки нужны потом в редактировании профиля, поэтому у каждой
+клавиатуры есть префикс callback-данных: онбординг слушает «onb_», профиль —
+«prof_», и один и тот же выбор не срабатывает дважды в разных сценариях.
+"""
 
 from __future__ import annotations
 
@@ -31,10 +36,10 @@ ACTIVITY_LABELS: dict[ActivityLevel, str] = {
 }
 
 
-def activity_keyboard() -> InlineKeyboardMarkup:
+def activity_keyboard(prefix: str = "onb") -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for level, label in ACTIVITY_LABELS.items():
-        builder.button(text=label, callback_data=f"onb_activity:{level.value}")
+        builder.button(text=label, callback_data=f"{prefix}_activity:{level.value}")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -47,10 +52,10 @@ GOAL_LABELS: dict[Goal, str] = {
 }
 
 
-def goal_keyboard() -> InlineKeyboardMarkup:
+def goal_keyboard(prefix: str = "onb") -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for goal, label in GOAL_LABELS.items():
-        builder.button(text=label, callback_data=f"onb_goal:{goal.value}")
+        builder.button(text=label, callback_data=f"{prefix}_goal:{goal.value}")
     builder.adjust(1)
     return builder.as_markup()
 
@@ -63,9 +68,9 @@ DIET_LABELS: dict[DietTypeEnum, str] = {
 }
 
 
-def diet_type_keyboard() -> InlineKeyboardMarkup:
+def diet_type_keyboard(prefix: str = "onb") -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for diet, label in DIET_LABELS.items():
-        builder.button(text=label, callback_data=f"onb_diet:{diet.value}")
+        builder.button(text=label, callback_data=f"{prefix}_diet:{diet.value}")
     builder.adjust(1)
     return builder.as_markup()
