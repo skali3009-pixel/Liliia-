@@ -91,6 +91,10 @@ function renderHero(data) {
   const hour = new Date().getHours();
   const [, icon, greeting] = GREETINGS.find(([until]) => hour < until) || GREETINGS[0];
   document.getElementById('hero-greeting').textContent = greeting;
+
+  const line = data.profile?.line || '';
+  document.getElementById('day-line-text').textContent = line;
+  document.getElementById('day-line').hidden = !line;
   document.getElementById('hero-state-icon').textContent = icon;
   document.getElementById('hero-title').textContent = dayTitle(state);
 

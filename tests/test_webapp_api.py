@@ -641,3 +641,15 @@ def test_page_carries_asset_versions_so_telegram_cannot_serve_a_stale_app():
             assert "/static/styles.css?v=" in page
             assert "no-store" in response.headers.get("Cache-Control", "")
     run(scenario)
+
+
+def test_today_carries_the_daily_line():
+    """Фраза дня приходит вместе с профилем и одинакова весь день."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            first = (await (await call(client, "GET", "/api/today")).json())["profile"]
+            again = (await (await call(client, "GET", "/api/today")).json())["profile"]
+
+            assert first["line"]
+            assert first["line"] == again["line"]
+    run(scenario)

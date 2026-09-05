@@ -27,6 +27,11 @@
 
   --gold: #C9A961;
   --display: 'Playfair Display', 'Times New Roman', Georgia, serif;
+  /* Отдельная гарнитура для фразы дня: у неё тонкий штрих и высокий
+     контраст, поэтому крупная строка читается как в журнале, а не как
+     системный текст. Для интерфейса она не годится — только для одной
+     большой фразы. */
+  --quote: 'Cormorant Garamond', 'Playfair Display', Georgia, serif;
   --body: 'Manrope', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
   --radius: 20px;
@@ -677,9 +682,30 @@ button:focus-visible, .tab:focus-visible {
 }
 .hero.slim .hero-title { font-size: 26px; }
 .world-title { font-size: 32px; margin: 0; }
-.hero-greeting { font-size: 15px; line-height: 1.35; margin: 18px 0 0; max-width: 15em;
+/* Приветствие — антиквой, но тише фразы дня: иначе две крупные строки
+   спорят друг с другом и ни одна не читается первой. */
+.hero-greeting {
+  font-family: var(--display); font-weight: 500;
+  font-size: 18px; line-height: 1.3; letter-spacing: -.01em;
+  margin: 14px 0 0; max-width: 13em; white-space: pre-line;
+  color: #CFC7E8;
                  white-space: pre-line; }
-.hero-state { display: flex; align-items: center; gap: 11px; margin-top: 14px; }
+/* Фраза дня. Тонкая линия слева вместо кавычек: кавычки в таком размере
+   выглядят тяжело, а линия задаёт поля, как в вёрстке журнала. */
+.day-line {
+  margin: 18px 0 0; padding: 2px 0 2px 16px; max-width: 19em;
+  border-left: 1px solid rgba(201, 184, 232, .34);
+}
+.day-line blockquote {
+  margin: 0;
+  font-family: var(--quote); font-style: italic; font-weight: 400;
+  font-size: 25px; line-height: 1.28; letter-spacing: .005em;
+  color: #EFEAFF;
+}
+/* Первая буква крупнее — фраза начинает читаться сама. */
+.day-line blockquote::first-letter { font-size: 1.35em; line-height: 1; }
+
+.hero-state { display: flex; align-items: center; gap: 11px; margin-top: 18px; }
 .hero-state-icon { font-size: 19px; line-height: 1; }
 .hero-state-title { font-size: 14px; font-weight: 600; }
 .hero-state-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }

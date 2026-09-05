@@ -45,6 +45,7 @@ from services.workouts import (
 from services.water import add_water, today_total_ml, undo_last
 from utils.body import (build_insights, build_silhouette, goal_silhouette,
                         warp_factors, zones)
+from utils.daily_line import daily_line
 from utils.macros import GAP_LABELS, dominant_gap, remaining
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, scale_nutrition
@@ -169,6 +170,12 @@ async def get_today(request: web.Request) -> web.Response:
                     "goal": user.goal.value if user.goal else None,
                     "weight_kg": user.current_weight_kg,
                     "target_weight_kg": user.target_weight_kg,
+                    # Фраза дня: под цель, одна на весь день.
+                    "line": daily_line(
+                        goal=user.goal.value if user.goal else None,
+                        user_id=user.id,
+                        day=today_in(tz),
+                    ),
                 },
                 "norms": {
                     "calories": user.daily_calories or 0,
