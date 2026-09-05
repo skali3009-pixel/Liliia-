@@ -8,7 +8,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from handlers.profile import CHOICE_FIELDS, TEXT_FIELDS, profile_text
 from keyboards.onboarding import activity_keyboard, diet_type_keyboard, goal_keyboard
-from keyboards.profile import CB_BACK, FIELD_LABELS, edit_menu_keyboard, with_back
+from keyboards.profile import (CB_BACK, CB_REMINDERS, FIELD_LABELS, edit_menu_keyboard,
+                               with_back)
 from models import (ActivityLevelEnum, Base, DietTypeEnum, GenderEnum, GoalEnum, User)
 from services import profile as svc
 from services.progress import add_measurement
@@ -165,8 +166,35 @@ def test_every_button_on_the_card_leads_somewhere():
 
 def test_card_buttons_are_wired_to_the_edit_prefix():
     codes = [b.callback_data for row in edit_menu_keyboard().inline_keyboard for b in row]
-    assert len(codes) == len(FIELD_LABELS)
-    assert all(code.startswith("prof_edit:") for code in codes)
+    assert len(codes) == len(FIELD_LABELS) + 1  # + переключатель напоминаний
+    assert sum(code.startswith("prof_edit:") for code in codes) == len(FIELD_LABELS)
+    assert CB_REMINDERS in codes
+
+
+def test_reminder_button_shows_the_current_state():
+    def label(on: bool) -> str:
+        rows = edit_menu_keyboard(reminders_on=on).inline_keyboard
+        return next(b.text for row in rows for b in row if b.callback_data == CB_REMINDERS)
+
+    assert "вкл" in label(True)
+    assert "выкл" in label(False)
+
+
+def test_reminders_can_be_switched_off_and_back(monkeypatch):
+    """Единственная альтернатива выключателю — удалить бота. Так нельзя."""
+    async def scenario():
+        async with db() as (session, user):
+            module = bind(monkeypatch, session)
+            callback = FakeCallback(CB_REMINDERS, FakeMessage())
+
+            await module.switch_reminders(callback)
+            assert user.reminders_enabled is False
+            assert callback.answers == ["Больше не напоминаю"]
+            assert "выключены" in callback.message.edits[-1][0]
+
+            await module.switch_reminders(callback)
+            assert user.reminders_enabled is True
+    run(scenario)
 
 
 @pytest.mark.parametrize("keyboard", [goal_keyboard, activity_keyboard, diet_type_keyboard])

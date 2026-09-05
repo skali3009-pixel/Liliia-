@@ -80,3 +80,13 @@ def test_ignores_users_who_never_finished_onboarding():
             nudges = await users_without_meals_today(session, now_utc=MOMENT_UTC)
             assert nudges == []
     asyncio.run(scenario())
+
+
+def test_switched_off_reminders_stop_the_nudge():
+    """Выключатель в профиле обязан выключать всё, а не половину."""
+    async def scenario():
+        async with db() as session:
+            session.add(make_user(1, reminders_enabled=False))
+            await session.commit()
+            assert await users_without_meals_today(session, now_utc=MOMENT_UTC) == []
+    asyncio.run(scenario())

@@ -98,6 +98,10 @@ class User(Base):
     daily_fiber_g: Mapped[int | None] = mapped_column(Integer, nullable=True)
     daily_water_ml: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Мягкие напоминания бота (дневник, вода, итоги недели). Напоминания о
+    # препаратах человек ставит сам поштучно, они этим флагом не выключаются.
+    reminders_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     streak_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 

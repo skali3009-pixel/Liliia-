@@ -7,6 +7,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 CB_EDIT = "prof_edit:"
 CB_BACK = "prof_back"
+CB_REMINDERS = "prof_reminders"
 
 # Порядок не случайный: сверху то, что меняют чаще всего.
 FIELD_LABELS: dict[str, str] = {
@@ -20,11 +21,17 @@ FIELD_LABELS: dict[str, str] = {
 }
 
 
-def edit_menu_keyboard() -> InlineKeyboardMarkup:
+def edit_menu_keyboard(*, reminders_on: bool = True) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for field, label in FIELD_LABELS.items():
         builder.button(text=label, callback_data=f"{CB_EDIT}{field}")
-    builder.adjust(2, 2, 2, 1)
+    # Выключить напоминания должно быть так же легко, как их получать —
+    # иначе единственный способ от них избавиться это удалить бота.
+    builder.button(
+        text="🔔 Напоминания: вкл" if reminders_on else "🔕 Напоминания: выкл",
+        callback_data=CB_REMINDERS,
+    )
+    builder.adjust(2, 2, 2, 1, 1)
     return builder.as_markup()
 
 
@@ -35,4 +42,5 @@ def with_back(markup: InlineKeyboardMarkup) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-__all__ = ["CB_BACK", "CB_EDIT", "FIELD_LABELS", "edit_menu_keyboard", "with_back"]
+__all__ = ["CB_BACK", "CB_EDIT", "CB_REMINDERS", "FIELD_LABELS", "edit_menu_keyboard",
+           "with_back"]

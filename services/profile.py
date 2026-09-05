@@ -118,6 +118,13 @@ async def set_target_weight(session: AsyncSession, user: User, value: float) -> 
     await session.commit()
 
 
+async def toggle_reminders(session: AsyncSession, user: User) -> bool:
+    """Включить/выключить мягкие напоминания. Возвращает новое состояние."""
+    user.reminders_enabled = not user.reminders_enabled
+    await session.commit()
+    return user.reminders_enabled
+
+
 def valid_target(value: float | None) -> bool:
     return value is not None and MIN_TARGET_KG <= value <= MAX_TARGET_KG
 
@@ -149,6 +156,7 @@ __all__ = [
     "set_goal",
     "set_height",
     "set_target_weight",
+    "toggle_reminders",
     "valid_age",
     "valid_height",
     "valid_target",

@@ -5,7 +5,7 @@ import asyncio
 from sqlalchemy import inspect, text
 from sqlalchemy.ext.asyncio import create_async_engine
 
-from migrations import apply_column_additions
+from migrations import COLUMN_ADDITIONS, apply_column_additions
 
 
 def _columns(sync_connection, table):
@@ -20,10 +20,13 @@ def test_missing_column_is_added_and_rerun_is_safe():
             await conn.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, age INTEGER)"))
 
             applied = await apply_column_additions(conn)
-            # Все колонки users, добавленные после первого релиза.
+            # Все колонки users, добавленные после первого релиза. Список
+            # берём из самих миграций: забытая здесь колонка означала бы, что
+            # обновление молча оставило базу без неё.
             assert applied == [
-                "users.timezone", "users.daily_fiber_g", "users.referral",
-                "users.legal_version", "users.legal_accepted_at", "users.marketing_consent",
+                f"users.{column}"
+                for table, column, _ in COLUMN_ADDITIONS
+                if table == "users" and column != "age"
             ]
             assert "timezone" in await conn.run_sync(_columns, "users")
 

@@ -15,6 +15,9 @@ from services.meal_reminders import users_without_meals_today
 from services.reminders import collect_due_reminders
 from services.selfupdate import run_update
 from services.subscriptions import expire_overdue, expiring_soon, mark_warned
+from services.water_reminders import render as render_water
+from services.water_reminders import users_behind_on_water
+from services.weekly import build_summary, render, users_for_summary
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +80,55 @@ async def send_meal_nudges(bot: Bot) -> None:
             logger.info("Не получилось напомнить про дневник %s", nudge.user_id)
 
 
+async def send_water_nudges(bot: Bot) -> None:
+    """Днём — тем, кто к середине дня выпил меньше половины нормы."""
+    try:
+        async with get_session() as session:
+            nudges = await users_behind_on_water(session)
+    except Exception:
+        logger.exception("Не удалось собрать напоминания о воде")
+        return
+
+    for nudge in nudges:
+        key = (nudge.user_id, "water_nudge")
+        if key in _already_sent:
+            continue
+        try:
+            await bot.send_message(nudge.user_id, render_water(nudge))
+            _already_sent.add(key)
+        except Exception:
+            logger.info("Не получилось напомнить про воду %s", nudge.user_id)
+
+
+async def send_weekly_summaries(bot: Bot) -> None:
+    """Воскресным вечером — неделя целиком, одним сообщением."""
+    try:
+        async with get_session() as session:
+            users = await users_for_summary(session)
+            summaries = [
+                (user, await build_summary(session, user),
+                 user.goal.value if user.goal else None)
+                for user in users
+            ]
+    except Exception:
+        logger.exception("Не удалось собрать итоги недели")
+        return
+
+    for user, summary, goal in summaries:
+        key = (user.id, "weekly")
+        if key in _already_sent:
+            continue
+        # Неделя, в которой не было вообще ничего, — не повод для рассылки.
+        if summary.is_empty:
+            _already_sent.add(key)
+            continue
+        try:
+            await bot.send_message(user.id, render(summary, goal=goal))
+            _already_sent.add(key)
+        except Exception:
+            logger.info("Не получилось отправить итоги недели %s", user.id)
+
+
 async def check_subscriptions(bot: Bot) -> None:
     """Предупредить, у кого подписка на исходе, и закрыть истёкшие."""
     try:
@@ -115,6 +167,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(send_due_reminders, "cron", minute="*", args=[bot], id="supplements")
     scheduler.add_job(send_meal_nudges, "cron", minute="*", args=[bot], id="meal_nudges")
+    scheduler.add_job(send_water_nudges, "cron", minute="*", args=[bot], id="water_nudges")
+    scheduler.add_job(send_weekly_summaries, "cron", minute="*", args=[bot], id="weekly")
     scheduler.add_job(clear_sent_marks, "cron", hour=0, minute=1, id="cleanup")
     # Раз в день утром: предупредить об окончании и закрыть просроченные.
     scheduler.add_job(check_subscriptions, "cron", hour=6, minute=0, args=[bot],

@@ -21,7 +21,8 @@ from db import get_session
 from keyboards.main_menu import (MENU_ADD_MEAL, MENU_PROFILE, MENU_PROGRESS, MENU_WATER,
                                  MENU_WHAT_TO_EAT, MENU_WORKOUT)
 from keyboards.onboarding import activity_keyboard, diet_type_keyboard, goal_keyboard
-from keyboards.profile import CB_BACK, CB_EDIT, edit_menu_keyboard, with_back
+from keyboards.profile import (CB_BACK, CB_EDIT, CB_REMINDERS, edit_menu_keyboard,
+                               with_back)
 from models import User
 from services import profile as profile_service
 from states.profile import ProfileStates
@@ -110,7 +111,8 @@ def profile_text(user: User) -> str:
         f"Активность: {_enum_ru(user.activity_level, ACTIVITY_RU)}\n"
         f"Цель: {_enum_ru(user.goal, GOAL_RU)}\n"
         f"Питание: {_enum_ru(user.diet_type, DIET_RU)}\n"
-        f"Аллергии: {user.allergies or 'нет'}\n\n"
+        f"Аллергии: {user.allergies or 'нет'}\n"
+        f"Напоминания: {'включены' if user.reminders_enabled else 'выключены'}\n\n"
         f"{norms_line(user)}\n\n"
         "Что-то изменилось? Поправь кнопками ниже 👇"
     )
@@ -125,15 +127,16 @@ async def _load(user_id: int) -> User | None:
 async def _show_card(message: Message, user: User, *, edit: bool = False) -> None:
     """Карточка всегда одна и та же — правка обновляет её на месте."""
     text = profile_text(user)
+    keyboard = edit_menu_keyboard(reminders_on=user.reminders_enabled)
     if edit:
         try:
-            await message.edit_text(text, reply_markup=edit_menu_keyboard())
+            await message.edit_text(text, reply_markup=keyboard)
             return
         except TelegramBadRequest as e:
             if "message is not modified" not in str(e):
                 raise
             return
-    await message.answer(text, reply_markup=edit_menu_keyboard())
+    await message.answer(text, reply_markup=keyboard)
 
 
 @router.message(StateFilter(ProfileStates), F.text.in_(MENU_TEXTS))
@@ -184,6 +187,21 @@ async def open_field(callback: CallbackQuery, state: FSMContext) -> None:
 
     logger.warning("Неизвестное поле профиля: %s", field)
     await callback.answer()
+
+
+@router.callback_query(F.data == CB_REMINDERS)
+async def switch_reminders(callback: CallbackQuery) -> None:
+    async with get_session() as session:
+        user = await session.get(User, callback.from_user.id)
+        if user is None or not user.onboarding_completed:
+            await callback.answer(NOT_READY, show_alert=True)
+            return
+        enabled = await profile_service.toggle_reminders(session, user)
+
+    await _show_card(callback.message, user, edit=True)
+    await callback.answer(
+        "Напоминания включены" if enabled else "Больше не напоминаю"
+    )
 
 
 @router.callback_query(F.data == CB_BACK)

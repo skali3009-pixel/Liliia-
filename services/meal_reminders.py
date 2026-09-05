@@ -33,7 +33,11 @@ async def users_without_meals_today(
     moment = now_utc or datetime.now(timezone.utc)
 
     users = (
-        await session.execute(select(User).where(User.onboarding_completed.is_(True)))
+        await session.execute(
+            select(User).where(
+                User.onboarding_completed.is_(True), User.reminders_enabled.is_(True)
+            )
+        )
     ).scalars().all()
 
     nudges: list[MealNudge] = []
