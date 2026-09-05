@@ -5,7 +5,7 @@ from datetime import date
 import pytest
 
 from models import GoalEnum
-from utils.daily_line import DEFAULT_LINES, LINES, daily_line
+from utils.daily_line import CARE_LINES, DEFAULT_LINES, LINES, daily_line, pool_for
 
 DAY = date(2026, 9, 5)
 
@@ -35,19 +35,20 @@ def test_different_people_see_different_lines():
 def test_every_goal_has_its_own_lines(goal):
     """Цель из анкеты без своих фраз молча свалилась бы в общие."""
     assert goal in LINES
-    assert daily_line(goal=goal, user_id=7, day=DAY) in LINES[goal]
+    assert daily_line(goal=goal, user_id=7, day=DAY) in pool_for(goal)
 
 
 def test_profile_without_a_goal_still_gets_a_line():
-    assert daily_line(goal=None, user_id=7, day=DAY) in DEFAULT_LINES
-    assert daily_line(goal="", user_id=7, day=DAY) in DEFAULT_LINES
+    assert daily_line(goal=None, user_id=7, day=DAY) in pool_for(None)
+    assert daily_line(goal="", user_id=7, day=DAY) in pool_for(None)
 
 
 def test_unknown_goal_does_not_break():
-    assert daily_line(goal="что-то новое", user_id=7, day=DAY) in DEFAULT_LINES
+    assert daily_line(goal="что-то новое", user_id=7, day=DAY) in pool_for(None)
 
 
-ALL_LINES = [line for group in LINES.values() for line in group] + list(DEFAULT_LINES)
+ALL_LINES = ([line for group in LINES.values() for line in group]
+             + list(DEFAULT_LINES) + list(CARE_LINES))
 
 
 def test_lines_fit_the_header():
@@ -67,3 +68,31 @@ def test_lines_do_not_promise_and_do_not_diagnose():
         lowered = line.lower()
         for word in forbidden:
             assert word not in lowered, line
+
+
+def test_support_lines_show_up_for_every_goal():
+    """Ради них всё и делалось: поддержка должна доходить при любой цели."""
+    for goal in [g.value for g in GoalEnum] + [None]:
+        seen = {
+            daily_line(goal=goal, user_id=uid, day=date(2026, 9, 5 + uid % 20))
+            for uid in range(120)
+        }
+        assert seen & set(CARE_LINES), goal
+
+
+def test_lines_never_scold():
+    """Приложение — подруга, а не тренер: за срыв и пропуск не отчитываем."""
+    scolding = ("должна", "обязана", "лень", "оправдани", "соберись", "не ной",
+                "нельзя себе", "стыд", "вина", "провалила")
+    for line in ALL_LINES:
+        lowered = line.lower()
+        for word in scolding:
+            # «Усталость — это не лень» говорит ровно обратное, потому и живёт.
+            if word == "лень" and "не лень" in lowered:
+                continue
+            assert word not in lowered, line
+
+
+def test_no_exclamation_marks():
+    """Восклицание в такой строке всегда звучит как подгоняющий тренер."""
+    assert all("!" not in line for line in ALL_LINES)
