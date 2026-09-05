@@ -156,6 +156,29 @@ button:focus-visible, .tab:focus-visible {
   outline: 2px solid var(--lilac); outline-offset: 2px;
 }
 
+/* Ешь как обычно: строка-кнопка, нажатие сразу записывает. */
+.often {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 11px 2px; border: none; border-bottom: 1px solid var(--bg);
+  background: none; color: var(--fg); font-family: inherit; text-align: left;
+  cursor: pointer;
+}
+.often:last-of-type { border-bottom: none; }
+.often:active { opacity: .6; }
+.often:disabled { opacity: .35; }
+.often-main { flex: 1; min-width: 0; }
+.often-name {
+  font-size: 14px; font-weight: 500;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.often-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.often-kcal { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.often-add {
+  width: 28px; height: 28px; flex: 0 0 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--lilac); font-size: 15px; line-height: 1;
+}
+
 /* Список еды */
 .meal { display: flex; align-items: center; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--bg); }
 .meal:last-of-type { border-bottom: none; }

@@ -96,8 +96,11 @@ async def webapp_client():
         api_module.get_session = original
 
 
-async def call(client, method, path, *, user_id=USER_ID, json_body=None, signed=True):
+async def call(client, method, path, *, user_id=USER_ID, json_body=None, signed=True,
+               timezone=None):
     headers = {"X-Telegram-Init-Data": init_data(user_id)} if signed else {}
+    if timezone:
+        headers["X-Timezone"] = timezone
     return await client.request(method, path, headers=headers, json=json_body)
 
 
@@ -652,4 +655,29 @@ def test_today_carries_the_daily_line():
 
             assert first["line"]
             assert first["line"] == again["line"]
+    run(scenario)
+
+
+def test_app_learns_the_real_timezone_from_the_device():
+    """Пояс никто не спрашивал, и у всех оставалась Москва: у человека из
+    другого пояса утренняя еда уезжала во вчера."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            await call(client, "GET", "/api/today", timezone="Asia/Vladivostok")
+
+            async with maker_holder["maker"]() as session:
+                user = await session.get(User, USER_ID)
+                assert user.timezone == "Asia/Vladivostok"
+    run(scenario)
+
+
+def test_nonsense_timezone_is_ignored():
+    """Заголовок приходит снаружи — чушь в профиль попасть не должна."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            await call(client, "GET", "/api/today", timezone="Марс/Олимп")
+
+            async with maker_holder["maker"]() as session:
+                user = await session.get(User, USER_ID)
+                assert user.timezone == "Europe/Moscow"
     run(scenario)

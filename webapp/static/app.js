@@ -8,12 +8,22 @@ const DIAL_LENGTH = 113; // длина окружности радиуса 18
 let state = null;
 
 /* --- обращения к серверу: подпись Telegram уходит в заголовке --- */
+function deviceZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+  } catch (e) {
+    return '';
+  }
+}
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       'X-Telegram-Init-Data': tg?.initData || '',
+      // Часовой пояс знает браузер — спрашивать его у человека незачем.
+      'X-Timezone': deviceZone(),
       ...(options.headers || {}),
     },
   });
@@ -227,6 +237,7 @@ function renderToday(data) {
 
   renderHero(data);
   renderTimeline(data.timeline || []);
+  renderFrequent(data.frequent || []);
 }
 
 /* --- игра: уровень, кристалл, задания дня --- */
@@ -620,7 +631,7 @@ async function renderPhotos(photos) {
 /* Картинку тянем с подписью в заголовке: <img src> её передать не может. */
 async function loadPhoto(id, img) {
   const response = await fetch(`/api/photos/${id}`, {
-    headers: { 'X-Telegram-Init-Data': tg?.initData || '' },
+    headers: { 'X-Telegram-Init-Data': tg?.initData || '', 'X-Timezone': deviceZone() },
   });
   if (!response.ok) return;
   img.src = URL.createObjectURL(await response.blob());
@@ -1376,7 +1387,7 @@ async function uploadPhoto(file) {
   try {
     await fetch('/api/photos', {
       method: 'POST',
-      headers: { 'X-Telegram-Init-Data': tg?.initData || '' },
+      headers: { 'X-Telegram-Init-Data': tg?.initData || '', 'X-Timezone': deviceZone() },
       body: form,
     }).then((r) => { if (!r.ok) throw new Error('Не удалось загрузить'); });
     haptic('medium');
@@ -1570,6 +1581,51 @@ async function finishWorkout() {
   } catch (e) { toast(e.message); }
 }
 
+
+/* --- Ешь как обычно ------------------------------------------------------
+
+   Самое частое действие в дневнике — записать то, что ешь каждый день.
+   Гонять это через распознавание бессмысленно: несколько секунд ожидания
+   и оплаченный запрос ради «овсянки», которая уже двадцать раз записана.
+*/
+
+function renderFrequent(items) {
+  const card = document.getElementById('frequent-card');
+  const box = document.getElementById('frequent');
+  card.hidden = !items || !items.length;
+  box.innerHTML = '';
+
+  for (const item of items || []) {
+    const row = document.createElement('button');
+    row.className = 'often';
+    row.innerHTML = `
+      <div class="often-main">
+        <div class="often-name"></div>
+        <div class="often-sub"></div>
+      </div>
+      <div class="often-kcal"></div>
+      <div class="often-add">＋</div>`;
+    row.querySelector('.often-name').textContent = item.name;
+    row.querySelector('.often-sub').textContent =
+      `${item.weight_g} г · Б ${item.protein_g} · Ж ${item.fat_g} · У ${item.carbs_g}` +
+      (item.times > 2 ? ` · ${item.times} ${plural(item.times, 'раз', 'раза', 'раз')}` : '');
+    row.querySelector('.often-kcal').textContent = `${item.calories}`;
+
+    row.onclick = async () => {
+      row.disabled = true;
+      try {
+        await api('/api/meals', { method: 'POST', body: JSON.stringify(item) });
+        haptic('medium');
+        toast(`Записала: ${item.name}`);
+        await refresh();
+      } catch (e) {
+        toast(e.message);
+        row.disabled = false;
+      }
+    };
+    box.appendChild(row);
+  }
+}
 
 /* --- Что съесть -------------------------------------------------------- */
 

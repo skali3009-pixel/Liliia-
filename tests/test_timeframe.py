@@ -41,3 +41,16 @@ def test_different_timezones_give_different_days():
     moment = datetime(2026, 9, 3, 22, 0, tzinfo=timezone.utc)
     assert today_in("Europe/Moscow", now=moment).isoformat() == "2026-09-04"   # 01:00
     assert today_in("Europe/Lisbon", now=moment).isoformat() == "2026-09-03"   # 23:00
+
+
+def test_known_zone_accepts_real_zones_and_rejects_junk():
+    """get_zone молча подставляет Москву на любую чушь — для пояса,
+    который приходит снаружи и сохраняется, нужна строгая проверка."""
+    from utils.timeframe import is_known_zone
+
+    assert is_known_zone("Asia/Vladivostok")
+    assert is_known_zone("Europe/Moscow")
+    assert not is_known_zone("Марс/Олимп")
+    assert not is_known_zone("")
+    assert not is_known_zone(None)
+    assert not is_known_zone("A" * 200)

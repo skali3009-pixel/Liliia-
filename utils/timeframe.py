@@ -21,6 +21,22 @@ def get_zone(timezone_name: str | None) -> ZoneInfo:
         return ZoneInfo(DEFAULT_TIMEZONE)
 
 
+def is_known_zone(name: str | None) -> bool:
+    """Существует ли такой часовой пояс.
+
+    get_zone молча подставляет Москву на любую чушь — это правильно для
+    отрисовки, но не годится, когда пояс приходит снаружи и его надо
+    сохранить.
+    """
+    if not name or len(name) > 64:
+        return False
+    try:
+        ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError, KeyError):
+        return False
+    return True
+
+
 def today_in(timezone_name: str | None, *, now: datetime | None = None) -> date:
     """Какое сегодня число у пользователя."""
     zone = get_zone(timezone_name)

@@ -13,6 +13,7 @@ from db import get_session
 from models import (Meal, MealSourceEnum, ProgressPhoto, ScheduleTypeEnum, Supplement, User,
                     WorkoutTypeEnum)
 from services.checkins import save_checkin, today_state
+from services.favorites import frequent_meals
 from services.food_vision import FoodAnalysis, FoodRecognitionError
 from services.gamification import awards_summary, sync_today
 from services.meals import get_today_totals, list_today_meals, save_meal
@@ -49,12 +50,13 @@ from utils.daily_line import daily_line
 from utils.macros import GAP_LABELS, dominant_gap, remaining
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, scale_nutrition
-from utils.timeframe import get_zone, to_local, today_in
+from utils.timeframe import get_zone, is_known_zone, to_local, today_in
 from webapp.auth import AuthError, verify_init_data
 
 logger = logging.getLogger(__name__)
 
 INIT_DATA_HEADER = "X-Telegram-Init-Data"
+TIMEZONE_HEADER = "X-Timezone"
 
 
 @web.middleware
@@ -104,6 +106,16 @@ async def auth_middleware(request: web.Request, handler):
                     },
                     status=402,
                 )
+
+        # Часовой пояс приложение сообщает само — его знает браузер. Иначе
+        # он навсегда остаётся московским, и у человека из другого пояса
+        # день начинается и заканчивается не тогда, когда у него на часах:
+        # утренняя еда уезжает во вчера, а норма обнуляется среди дня.
+        reported = request.headers.get(TIMEZONE_HEADER, "").strip()
+        if reported != user.timezone and is_known_zone(reported):
+            logger.info("Часовой пояс %s: %s → %s", user.id, user.timezone, reported)
+            user.timezone = reported
+            await session.commit()
 
         request["user_id"] = user.id
         request["timezone"] = user.timezone
@@ -203,6 +215,8 @@ async def get_today(request: web.Request) -> web.Response:
                     "sleep_minutes": state.sleep_minutes,
                 },
                 "timeline": timeline,
+                "frequent": [item.to_dict() for item in
+                             await frequent_meals(session, user_id, timezone_name=tz)],
                 "game": game,
             }
         )
