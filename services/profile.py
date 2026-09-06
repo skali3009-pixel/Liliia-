@@ -40,6 +40,31 @@ EDITABLE = {
 }
 
 
+# Подписи вариантов по-русски. Лежат рядом с валидацией, а не в обработчике
+# чата: то же самое показывает мини-приложение, и две копии рано или поздно
+# разошлись бы.
+GENDER_RU = {"male": "мужской", "female": "женский"}
+ACTIVITY_RU = {
+    "sedentary": "сидячий образ жизни",
+    "light": "лёгкая",
+    "moderate": "умеренная",
+    "high": "высокая",
+    "very_high": "очень высокая",
+}
+GOAL_RU = {
+    "lose_weight": "похудение",
+    "maintain": "поддержание",
+    "gain_mass": "набор массы",
+    "recomposition": "рельеф",
+}
+DIET_RU = {
+    "regular": "обычное",
+    "vegan": "веган",
+    "vegetarian": "вегетарианское",
+    "gluten_free": "без глютена",
+}
+
+
 def can_recalculate(user: User) -> bool:
     """Хватает ли данных, чтобы пересчитать норму."""
     return all((user.gender, user.age, user.height_cm, user.current_weight_kg,
@@ -107,9 +132,7 @@ async def set_diet(session: AsyncSession, user: User, value: str) -> bool:
 
 
 async def set_allergies(session: AsyncSession, user: User, text: str) -> None:
-    """Пустая строка и «нет» означают одно: ограничений нет."""
-    cleaned = (text or "").strip()
-    user.allergies = None if cleaned.lower() in {"", "-", "нет", "никаких"} else cleaned[:200]
+    user.allergies = clean_allergies(text)
     await session.commit()
 
 
@@ -125,6 +148,86 @@ async def toggle_reminders(session: AsyncSession, user: User) -> bool:
     return user.reminders_enabled
 
 
+class ProfileError(ValueError):
+    """Негодное значение поля. Текст ошибки показываем человеку как есть."""
+
+
+def _number(raw, cast, field: str):
+    """Число из чего угодно: приложение шлёт строку, бот — уже разобранное."""
+    try:
+        return cast(str(raw).strip().replace(",", "."))
+    except (AttributeError, TypeError, ValueError):
+        raise ProfileError(f"Не похоже на число: {field}") from None
+
+
+def apply_changes(user: User, changes: dict) -> bool:
+    """Применить правки к профилю, не сохраняя. True — норму пересчитали.
+
+    Одна дверь для чата и приложения: проверки и пересчёт здесь, а вызывающий
+    решает только, когда коммитить.
+    """
+    known = set(EDITABLE) | {"reminders"}
+    unknown = set(changes) - known
+    if unknown:
+        raise ProfileError(f"Неизвестное поле: {', '.join(sorted(unknown))}")
+
+    for field, raw in changes.items():
+        if field == "goal":
+            try:
+                user.goal = GoalEnum(raw)
+            except ValueError:
+                raise ProfileError("Неизвестная цель") from None
+        elif field == "activity":
+            try:
+                user.activity_level = ActivityLevelEnum(raw)
+            except ValueError:
+                raise ProfileError("Неизвестный уровень активности") from None
+        elif field == "diet":
+            try:
+                user.diet_type = DietTypeEnum(raw)
+            except ValueError:
+                raise ProfileError("Неизвестный тип питания") from None
+        elif field == "age":
+            value = _number(raw, int, "возраст")
+            if not valid_age(value):
+                raise ProfileError(f"Возраст — от {MIN_AGE} до {MAX_AGE} лет")
+            user.age = value
+        elif field == "height":
+            value = _number(raw, float, "рост")
+            if not valid_height(value):
+                raise ProfileError(
+                    f"Рост — от {MIN_HEIGHT_CM:.0f} до {MAX_HEIGHT_CM:.0f} см")
+            user.height_cm = value
+        elif field == "target_weight":
+            value = _number(raw, float, "вес цели")
+            if not valid_target(value):
+                raise ProfileError(
+                    f"Вес цели — от {MIN_TARGET_KG:.0f} до {MAX_TARGET_KG:.0f} кг")
+            user.target_weight_kg = value
+        elif field == "allergies":
+            user.allergies = clean_allergies(raw)
+        elif field == "reminders":
+            user.reminders_enabled = bool(raw)
+
+    # Пересчитываем один раз в конце: правок может прийти несколько сразу.
+    if any(EDITABLE.get(field) for field in changes):
+        return recalculate(user)
+    return False
+
+
+async def apply(session: AsyncSession, user: User, changes: dict) -> bool:
+    """Сохранить правки профиля. True — норма пересчитана."""
+    updated = apply_changes(user, changes)
+    await session.commit()
+    return updated
+
+
+def clean_allergies(text: str | None) -> str | None:
+    """Пустая строка и «нет» означают одно: ограничений нет."""
+    cleaned = (text or "").strip()
+    return None if cleaned.lower() in {"", "-", "нет", "никаких"} else cleaned[:200]
+
+
 def valid_target(value: float | None) -> bool:
     return value is not None and MIN_TARGET_KG <= value <= MAX_TARGET_KG
 
@@ -138,7 +241,15 @@ def valid_height(value: float | None) -> bool:
 
 
 __all__ = [
+    "ACTIVITY_RU",
+    "apply",
+    "apply_changes",
+    "can_recalculate",
+    "clean_allergies",
+    "DIET_RU",
     "EDITABLE",
+    "GENDER_RU",
+    "GOAL_RU",
     "MAX_AGE",
     "MAX_HEIGHT_CM",
     "MAX_TARGET_KG",
@@ -147,7 +258,7 @@ __all__ = [
     "MIN_HEIGHT_CM",
     "MIN_TARGET_KG",
     "MIN_WEIGHT_KG",
-    "can_recalculate",
+    "ProfileError",
     "recalculate",
     "set_activity",
     "set_age",

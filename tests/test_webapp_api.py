@@ -94,6 +94,9 @@ async def webapp_client():
     finally:
         await client.close()
         api_module.get_session = original
+        # Без этого рабочий поток aiosqlite иногда доживает до закрытия цикла
+        # и роняет предупреждение в случайный тест.
+        await engine.dispose()
 
 
 async def call(client, method, path, *, user_id=USER_ID, json_body=None, signed=True,

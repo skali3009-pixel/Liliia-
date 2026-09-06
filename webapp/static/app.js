@@ -1948,6 +1948,101 @@ function startParallax() {
   moveArt();
 }
 
+/* --- Профиль: то же, что кнопками в чате, но не выходя из приложения.
+   Правка сохраняется сразу после выбора или ухода из поля: кнопка
+   «Сохранить» тут только добавила бы шаг и способ потерять изменения. --- */
+let profileData = null;
+let profileChanged = false;
+
+function optionButtons(boxId, options, current, onPick) {
+  const box = document.getElementById(boxId);
+  box.innerHTML = '';
+  for (const option of options) {
+    const button = document.createElement('button');
+    button.className = `state-opt wide${option.code === current ? ' on' : ''}`;
+    button.textContent = option.label;
+    button.onclick = () => { if (option.code !== current) onPick(option.code); };
+    box.appendChild(button);
+  }
+}
+
+function renderProfile(data) {
+  const p = data.profile;
+  const n = data.norms;
+  document.getElementById('prof-norms').textContent = `${n.calories} ккал`;
+  document.getElementById('prof-norms-sub').textContent =
+    `Б ${n.protein_g} · Ж ${n.fat_g} · У ${n.carbs_g} г · клетчатка ${n.fiber_g} г · ` +
+    `вода ${(n.water_ml / 1000).toFixed(1)} л`;
+
+  optionButtons('prof-goal', data.options.goal, p.goal, (code) => saveProfile({ goal: code }));
+  optionButtons('prof-activity', data.options.activity, p.activity,
+    (code) => saveProfile({ activity: code }));
+  optionButtons('prof-diet', data.options.diet, p.diet, (code) => saveProfile({ diet: code }));
+
+  const fields = {
+    'prof-height': [p.height_cm, data.limits.height],
+    'prof-age': [p.age, data.limits.age],
+    'prof-target': [p.target_weight_kg, data.limits.target_weight],
+  };
+  for (const [id, [value, limits]] of Object.entries(fields)) {
+    const input = document.getElementById(id);
+    input.value = value ?? '';
+    // Границы показываем подсказкой: поле текстовое, min/max браузер бы не читал.
+    input.placeholder = `${limits[0]}–${limits[1]}`;
+  }
+
+  document.getElementById('prof-weight-hint').textContent = p.weight_kg
+    ? `Сейчас ${p.weight_kg} кг. Текущий вес меняется замером на «Прогрессе» — ` +
+      'так он попадает в график.'
+    : 'Текущий вес добавляется замером на «Прогрессе».';
+
+  document.getElementById('prof-allergies').value = p.allergies || '';
+
+  const reminders = document.getElementById('prof-reminders');
+  reminders.textContent = p.reminders ? 'включены' : 'выключены';
+  reminders.classList.toggle('on', p.reminders);
+}
+
+async function saveProfile(changes) {
+  try {
+    const data = await api('/api/profile', { method: 'PATCH', body: JSON.stringify(changes) });
+    profileData = data;
+    profileChanged = true;
+    renderProfile(data);
+    haptic('medium');
+    // Смена цели без видимой новой цифры выглядит так, будто ничего не произошло.
+    toast(data.recalculated ? `Норма пересчитана: ${data.norms.calories} ккал` : 'Сохранено');
+  } catch (e) {
+    toast(e.message);
+    if (profileData) renderProfile(profileData);   // поле возвращается к сохранённому
+  }
+}
+
+function saveProfileField(field, input) {
+  const value = input.value.trim();
+  if (!value) { renderProfile(profileData); return; }   // пустое поле — не «сбросить»
+  saveProfile({ [field]: value });
+}
+
+async function openProfile() {
+  document.getElementById('profile-sheet').hidden = false;
+  try {
+    profileData = await api('/api/profile');
+    renderProfile(profileData);
+  } catch (e) {
+    toast(e.message);
+  }
+}
+
+async function closeProfile() {
+  document.getElementById('profile-sheet').hidden = true;
+  // Норма могла измениться — кольцо на «Сегодня» должно это показать.
+  if (profileChanged) {
+    profileChanged = false;
+    await refresh().catch((e) => toast(e.message));
+  }
+}
+
 /* --- загрузка и переключение вкладок --- */
 async function refresh() {
   state = await api('/api/today');
@@ -2007,6 +2102,18 @@ async function init() {
     const form = document.getElementById('pill-form');
     form.hidden = !form.hidden;
   };
+
+  document.getElementById('profile-open').onclick = openProfile;
+  document.getElementById('profile-close').onclick = closeProfile;
+  document.getElementById('prof-reminders').onclick = () => {
+    if (profileData) saveProfile({ reminders: !profileData.profile.reminders });
+  };
+  document.getElementById('prof-allergies').onchange = (event) =>
+    saveProfile({ allergies: event.target.value });
+  for (const [id, field] of [['prof-height', 'height'], ['prof-age', 'age'],
+                             ['prof-target', 'target_weight']]) {
+    document.getElementById(id).onchange = (event) => saveProfileField(field, event.target);
+  }
 
   document.getElementById('moment-open').onclick = openMoment;
   document.getElementById('paywall-open').onclick = () => tg?.close?.();

@@ -18,6 +18,20 @@ from services.food_vision import FoodAnalysis, FoodRecognitionError
 from services.gamification import awards_summary, sync_today
 from services.meals import get_today_totals, list_today_meals, save_meal
 from services.moments import Moment, analyze_moment, facts as moment_facts
+from services.profile import (
+    ACTIVITY_RU,
+    DIET_RU,
+    GENDER_RU,
+    GOAL_RU,
+    MAX_AGE,
+    MAX_HEIGHT_CM,
+    MAX_TARGET_KG,
+    MIN_AGE,
+    MIN_HEIGHT_CM,
+    MIN_TARGET_KG,
+    ProfileError,
+    apply as apply_profile,
+)
 from services.progress import (
     MEASURE_FIELDS,
     add_measurement,
@@ -856,6 +870,79 @@ async def post_checkin(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+
+# --- Профиль: то же, что кнопками в чате, но не выходя из приложения ---
+
+def _options(mapping: dict[str, str]) -> list[dict]:
+    """Варианты выбора для приложения: код — в базу, подпись — человеку."""
+    return [{"code": code, "label": label} for code, label in mapping.items()]
+
+
+def _profile_json(user: User) -> dict:
+    return {
+        "profile": {
+            "name": (user.full_name or "").split(" ")[0],
+            "gender": user.gender.value if user.gender else None,
+            "gender_label": GENDER_RU.get(user.gender.value) if user.gender else None,
+            "age": user.age,
+            "height_cm": user.height_cm,
+            "weight_kg": user.current_weight_kg,
+            "target_weight_kg": user.target_weight_kg,
+            "goal": user.goal.value if user.goal else None,
+            "activity": user.activity_level.value if user.activity_level else None,
+            "diet": user.diet_type.value if user.diet_type else None,
+            "allergies": user.allergies or "",
+            "reminders": bool(user.reminders_enabled),
+        },
+        "norms": {
+            "calories": user.daily_calories or 0,
+            "protein_g": user.daily_protein_g or 0,
+            "fat_g": user.daily_fat_g or 0,
+            "carbs_g": user.daily_carbs_g or 0,
+            "fiber_g": user.daily_fiber_g or 0,
+            "water_ml": user.daily_water_ml or 0,
+        },
+        "options": {
+            "goal": _options(GOAL_RU),
+            "activity": _options(ACTIVITY_RU),
+            "diet": _options(DIET_RU),
+        },
+        # Границы приходят с сервера, чтобы поле не принимало то, что API
+        # всё равно отвергнет.
+        "limits": {
+            "age": [MIN_AGE, MAX_AGE],
+            "height": [MIN_HEIGHT_CM, MAX_HEIGHT_CM],
+            "target_weight": [MIN_TARGET_KG, MAX_TARGET_KG],
+        },
+    }
+
+
+async def get_profile(request: web.Request) -> web.Response:
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+    return web.json_response(_profile_json(user))
+
+
+async def patch_profile(request: web.Request) -> web.Response:
+    """Правка профиля. Вес не трогаем: он меняется замером, а не настройкой."""
+    changes = await request.json()
+    if not isinstance(changes, dict) or not changes:
+        return web.json_response({"error": "Нечего менять"}, status=400)
+
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        try:
+            recalculated = await apply_profile(session, user, changes)
+        except ProfileError as error:
+            return web.json_response({"error": str(error)}, status=400)
+
+    data = _profile_json(user)
+    # Приложение показывает новую норму сразу: смена цели без видимой цифры
+    # выглядит так, будто ничего не произошло.
+    data["recalculated"] = recalculated
+    return web.json_response(data)
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -878,3 +965,5 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/moment/confirm", confirm_moment)
     app.router.add_post("/api/moment/facts", recount_moment)
     app.router.add_post("/api/checkin", post_checkin)
+    app.router.add_get("/api/profile", get_profile)
+    app.router.add_patch("/api/profile", patch_profile)

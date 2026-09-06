@@ -25,32 +25,12 @@ from keyboards.profile import (CB_BACK, CB_EDIT, CB_REMINDERS, edit_menu_keyboar
                                with_back)
 from models import User
 from services import profile as profile_service
+from services.profile import ACTIVITY_RU, DIET_RU, GENDER_RU, GOAL_RU
 from states.profile import ProfileStates
 from utils.parsing import parse_float, parse_int
 
 logger = logging.getLogger(__name__)
 router = Router(name="profile")
-
-GENDER_RU = {"male": "мужской", "female": "женский"}
-ACTIVITY_RU = {
-    "sedentary": "сидячий образ жизни",
-    "light": "лёгкая",
-    "moderate": "умеренная",
-    "high": "высокая",
-    "very_high": "очень высокая",
-}
-GOAL_RU = {
-    "lose_weight": "похудение",
-    "maintain": "поддержание",
-    "gain_mass": "набор массы",
-    "recomposition": "рельеф",
-}
-DIET_RU = {
-    "regular": "обычное",
-    "vegan": "веган",
-    "vegetarian": "вегетарианское",
-    "gluten_free": "без глютена",
-}
 
 # Что спрашиваем текстом и в какое состояние при этом уходим.
 TEXT_FIELDS = {

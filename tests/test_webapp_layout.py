@@ -31,3 +31,16 @@ def test_sheet_button_rule_stays_inside_the_sheet():
         stripped = line.strip()
         if stripped.startswith(".row .chip"):
             raise AssertionError(f"правило без области действия: {stripped}")
+
+
+APP_JS = (STATIC / "app.js").read_text(encoding="utf-8")
+
+
+def test_profile_sheet_elements_exist_for_every_id_the_code_wires():
+    """Шестерёнка и поля профиля: код ищет их по id, опечатка ломает молча."""
+    assert 'id="profile-open"' in INDEX
+    for element_id in ("profile-sheet", "profile-close", "prof-goal", "prof-activity",
+                       "prof-diet", "prof-height", "prof-age", "prof-target",
+                       "prof-allergies", "prof-reminders", "prof-norms"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id

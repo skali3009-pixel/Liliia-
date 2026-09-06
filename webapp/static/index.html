@@ -19,6 +19,9 @@
          приветствие и строка состояния дня. -->
     <section class="hero">
       <div class="hero-art" data-art="hero"></div>
+      <!-- Профиль живёт под шестерёнкой в углу шапки: место, где его ищут в
+           любом приложении. Раньше анкету можно было поправить только в чате. -->
+      <button class="hero-gear" id="profile-open" aria-label="Профиль и настройки">⚙️</button>
       <div class="hero-body">
         <h1 class="hero-title">Сегодня</h1>
         <div class="eyebrow">Твоя ежедневная редакция</div>
@@ -486,6 +489,63 @@
     </div>
     <div id="state-options" class="state-options"></div>
     <p class="hint" id="state-hint"></p>
+  </div>
+</div>
+
+<!-- Профиль целиком в приложении: выбор — тапом, числа и аллергии — полем.
+     Каждая правка сохраняется сразу, кнопки «Сохранить» нет намеренно:
+     полшага меньше, и нельзя уйти, потеряв изменения. -->
+<div id="profile-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2>Профиль</h2>
+      <button class="icon-btn" id="profile-close" aria-label="Закрыть">✕</button>
+    </div>
+
+    <div class="prof-norms">
+      <div class="eyebrow">Твоя норма в день</div>
+      <div class="prof-norms-value" id="prof-norms">—</div>
+      <div class="prof-norms-sub" id="prof-norms-sub"></div>
+    </div>
+
+    <div class="eyebrow ruled">Цель</div>
+    <div class="state-options" id="prof-goal"></div>
+
+    <div class="eyebrow ruled">Активность</div>
+    <div class="state-options" id="prof-activity"></div>
+
+    <div class="eyebrow ruled">Питание</div>
+    <div class="state-options" id="prof-diet"></div>
+
+    <div class="eyebrow ruled">Цифры</div>
+    <!-- Поля текстовые, а не number: на русской клавиатуре дробное пишут через
+         запятую, а number-поле молча отдаёт пустое значение — правка исчезала
+         бы без единого слова. Разбирает число сервер, он же и проверяет. -->
+    <label class="prof-row">
+      <span>Рост, см</span>
+      <input class="input tight" id="prof-height" type="text" inputmode="decimal">
+    </label>
+    <label class="prof-row">
+      <span>Возраст</span>
+      <input class="input tight" id="prof-age" type="text" inputmode="numeric">
+    </label>
+    <label class="prof-row">
+      <span>Вес цели, кг</span>
+      <input class="input tight" id="prof-target" type="text" inputmode="decimal">
+    </label>
+    <p class="hint" id="prof-weight-hint"></p>
+
+    <div class="eyebrow ruled">Аллергии и что не ешь</div>
+    <input class="input" id="prof-allergies" type="text" maxlength="200"
+           placeholder="Например: орехи, лактоза. Или «нет»">
+
+    <div class="eyebrow ruled">Напоминания</div>
+    <div class="prof-row switch">
+      <span id="prof-reminders-label">Мягкие напоминания</span>
+      <button class="chip" id="prof-reminders">включены</button>
+    </div>
+    <p class="hint">Приходят в чат: про еду, про воду днём и итоги недели
+      в воскресенье.</p>
   </div>
 </div>
 
