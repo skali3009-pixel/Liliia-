@@ -721,3 +721,30 @@ def test_the_source_line_is_not_shown_to_a_person():
     for text in (offer_text(offer), recipe_text(offer)):
         assert "неделя" not in text and "день" not in text
         assert "⭐" in text
+
+
+def test_no_seeded_value_is_longer_than_its_column():
+    """SQLite длину строк не проверяет, а PostgreSQL — проверяет.
+
+    Значение, которое спокойно легло в тестах, на сервере роняет заливку
+    справочника целиком: именно так однажды и случилось со сроком хранения
+    «3 дня; быстро остудить» в колонке VARCHAR(20).
+    """
+    from sqlalchemy import String
+
+    from models import Prep, Product
+    from seed.nutrition.preps import PREPS
+
+    def limits(model):
+        return {c.name: c.type.length for c in model.__table__.columns
+                if isinstance(c.type, String) and c.type.length}
+
+    too_long = []
+    for model, rows in ((Product, PRODUCTS), (Prep, PREPS),
+                        (Dish, DISHES + GUIDE_DISHES + FOURDAY_DISHES + STORE_DISHES)):
+        for row in rows:
+            for field, cap in limits(model).items():
+                value = row.get(field)
+                if isinstance(value, str) and len(value) > cap:
+                    too_long.append(f"{row.get('code')}.{field}: {len(value)} > {cap}")
+    assert not too_long, too_long

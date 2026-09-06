@@ -19,6 +19,14 @@ from sqlalchemy.ext.asyncio import AsyncConnection
 logger = logging.getLogger(__name__)
 
 # (таблица, колонка, определение) — порядок соответствует истории изменений.
+# Расширение уже созданных колонок: (таблица, колонка, новый тип).
+# SQLite длину строк не проверяет, а PostgreSQL проверяет — значение, которое
+# спокойно легло в тесте, на сервере роняет заливку справочника.
+COLUMN_WIDENINGS: list[tuple[str, str, str]] = [
+    ("nutrition_preps", "fridge_days", "VARCHAR(60)"),
+    ("nutrition_preps", "freezer_days", "VARCHAR(60)"),
+]
+
 COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
     ("nutrition_dishes", "prep_codes", "VARCHAR(200) NOT NULL DEFAULT ''"),
     ("nutrition_dishes", "estimated", "BOOLEAN NOT NULL DEFAULT FALSE"),
@@ -62,5 +70,32 @@ async def apply_column_additions(connection: AsyncConnection) -> list[str]:
         await connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {definition}"))
         applied.append(f"{table}.{column}")
         logger.info("Добавлена колонка %s.%s", table, column)
+
+    applied += await _widen_columns(connection)
+    return applied
+
+
+async def _widen_columns(connection: AsyncConnection) -> list[str]:
+    """Расширить колонки, которым стало тесно.
+
+    В SQLite тип VARCHAR(20) ничего не ограничивает, поэтому короткая колонка
+    незаметна до первого запуска на PostgreSQL — там она роняет запись целиком.
+    """
+    applied: list[str] = []
+    is_sqlite = connection.dialect.name == "sqlite"
+
+    for table, column, definition in COLUMN_WIDENINGS:
+        existing = await connection.run_sync(_describe, table)
+        if existing is None or column not in existing:
+            continue
+        if is_sqlite:
+            # SQLite длину не хранит и ALTER TYPE не умеет — там менять нечего.
+            continue
+
+        await connection.execute(
+            text(f"ALTER TABLE {table} ALTER COLUMN {column} TYPE {definition}")
+        )
+        applied.append(f"{table}.{column} → {definition}")
+        logger.info("Расширена колонка %s.%s до %s", table, column, definition)
 
     return applied

@@ -67,8 +67,8 @@ class Prep(Base):
     # Сколько порций выходит из партии. Не везде указано — тогда None, и
     # показываем КБЖУ на 100 г, а не выдумываем порцию.
     portions: Mapped[float | None] = mapped_column(Float, nullable=True)
-    fridge_days: Mapped[str] = mapped_column(String(20), default="", nullable=False)
-    freezer_days: Mapped[str] = mapped_column(String(30), default="", nullable=False)
+    fridge_days: Mapped[str] = mapped_column(String(60), default="", nullable=False)
+    freezer_days: Mapped[str] = mapped_column(String(60), default="", nullable=False)
     # Что из этой заготовки собирают — её же идеи, короткой строкой.
     ideas: Mapped[str] = mapped_column(String(300), default="", nullable=False)
 

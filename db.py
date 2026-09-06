@@ -46,14 +46,16 @@ async def init_models() -> None:
     async with async_session_maker() as session:
         await grandfather_existing(session)
 
-    # Библиотека упражнений нужна сразу — без неё раздел тренировок пустой.
+    # Заливка справочников не должна мешать боту запуститься. Если данные
+    # почему-то не легли, лучше работать без части справочника, чем не
+    # работать вовсе: человек и так может вести дневник и смотреть прогресс.
     from seed.loader import seed_workouts
-
-    async with async_session_maker() as session:
-        await seed_workouts(session)
-
-    # Справочник питания — источник всех блюд, которые бот предлагает.
     from seed.nutrition.loader import seed_nutrition
 
-    async with async_session_maker() as session:
-        await seed_nutrition(session)
+    for name, seeder in (("упражнения", seed_workouts), ("питание", seed_nutrition)):
+        try:
+            async with async_session_maker() as session:
+                await seeder(session)
+        except Exception:
+            logger.exception("Не удалось залить справочник «%s» — бот работает без него",
+                             name)
