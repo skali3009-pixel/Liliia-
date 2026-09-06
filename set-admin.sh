@@ -21,14 +21,34 @@ IDS="${1:-}"
 
 current="$(grep -E '^ADMIN_IDS=' "$ENV_FILE" | cut -d= -f2- || true)"
 
+# Показать, кто владелец, и заодно первых людей из базы: свой номер проще
+# всего узнать здесь же, не переписываясь с ботом и не ставя посторонних.
+list_people() {
+  # shellcheck disable=SC1090
+  set -a; . "$ENV_FILE"; set +a
+  local url="${DATABASE_URL/+asyncpg/}"
+  [ -n "$url" ] || return 0
+
+  echo
+  echo "Первые, кто зашёл в бота (ты почти наверняка первая строка):"
+  psql "$url" -P pager=off -c \
+    "SELECT id AS номер, coalesce(full_name, '—') AS имя,
+            created_at::date AS пришёл
+       FROM users ORDER BY created_at LIMIT 10" 2>/dev/null \
+    || echo "  (не удалось прочитать базу — проверь DATABASE_URL в .env)"
+}
+
 if [ -z "$IDS" ]; then
   if [ -n "$current" ]; then
     echo "Сейчас владельцы: $current"
   else
-    echo "Владелец не задан — платный доступ выключен, отчёты уходить некуда."
-    echo "Узнай свой номер: напиши боту /id, затем выполни:"
-    echo "  bash set-admin.sh <номер>"
+    echo "Владелец не задан. Из-за этого:"
+    echo "  • платный доступ выключен — бот бесплатен для всех;"
+    echo "  • отчёты о расходах и предупреждения о сбоях отправлять некому."
   fi
+  list_people
+  echo
+  echo "Записать владельца: bash set-admin.sh <номер>"
   exit 0
 fi
 
