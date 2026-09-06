@@ -35,3 +35,10 @@ class DayStat(Base):
     # Сколько мест мира было открыто в этот день. Нужно ровно для одного:
     # заметить, что сегодня открылось новое, и порадоваться вместе с человеком.
     world_open: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # Кристаллы сверх заданий: событие мира и редкая находка. Отдельно от xp
+    # потому, что xp пересчитывается по заданиям при каждом открытии экрана и
+    # затёр бы любую добавку.
+    bonus: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # За что бонус уже начислен сегодня, через запятую: event, surprise.
+    # Начисляем каждое ровно один раз в день.
+    bonus_codes: Mapped[str] = mapped_column(String(60), default="", nullable=False)

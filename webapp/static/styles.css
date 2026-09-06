@@ -1180,3 +1180,12 @@ select.fact-input { text-align: left; width: 130px; }
   color: var(--lilac); font-size: 13px; line-height: 1.3;
 }
 .cheetah-emoji { font-size: 17px; }
+
+
+/* Событие дня: заметно, но не кричит — оно не должно спорить с местами. */
+.event { border-color: rgba(201, 169, 97, .45); }
+.event .zone-title { color: var(--gold); }
+.event-text { margin: 0 0 10px; font-size: 14px; line-height: 1.35; }
+.event.done { border-color: var(--ok); }
+.event.done .zone-title { color: var(--ok); }
+.world-level { margin: 6px 0 0; color: var(--gold); font-size: 14px; font-weight: 600; }

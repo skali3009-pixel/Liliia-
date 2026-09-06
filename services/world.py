@@ -49,7 +49,7 @@ async def facts(session: AsyncSession, user: User, *,
     from utils.timeframe import today_in
 
     total_xp = int((await session.execute(
-        select(func.coalesce(func.sum(DayStat.xp), 0)).where(DayStat.user_id == user.id)
+        select(func.coalesce(func.sum(DayStat.xp + DayStat.bonus), 0)).where(DayStat.user_id == user.id)
     )).scalar_one())
     measurements = int((await session.execute(
         select(func.count()).select_from(BodyMeasurement).where(

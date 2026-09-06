@@ -436,6 +436,14 @@ function celebrate(game) {
     haptic('medium');
   }
 
+  // Находка — приятная мелочь, а не главное событие: тост, не окно.
+  if (game.surprise) {
+    setTimeout(() => {
+      toast(`🎁 Гепард что-то нашёл: +${game.surprise} 💎`);
+      haptic('medium');
+    }, closed.length ? 2200 : 0);
+  }
+
   const queue = [...(game.new_awards || [])];
   const pop = document.getElementById('award-pop');
   const showNext = () => {
@@ -2725,6 +2733,11 @@ function renderWorld(data) {
   document.getElementById('world-count').textContent = `${data.open} из ${data.total}`;
   // Гепард радуется новому месту ровно один раз — сервер следит за этим сам.
   renderCheetah(data.cheetah, 'world-cheetah');
+  // Уровень и кристаллы — те же, что на «Сегодня»: одна шкала на всё
+  // приложение, просто видно её и здесь.
+  const level = document.getElementById('world-level');
+  level.textContent = state?.game
+    ? `Уровень ${state.game.level} · ${state.game.xp} 💎` : '';
 
   const nextCard = document.getElementById('world-next-card');
   if (data.next) {
@@ -2738,6 +2751,8 @@ function renderWorld(data) {
   } else {
     nextCard.hidden = true;
   }
+
+  renderEvent(data.event);
 
   const box = document.getElementById('world-zones');
   box.innerHTML = '';
@@ -2759,6 +2774,24 @@ function renderWorld(data) {
     row.querySelector('.zone-story').textContent = zone.hint;
     box.appendChild(row);
   }
+}
+
+function renderEvent(event) {
+  const card = document.getElementById('world-event');
+  if (!event) {
+    // Тихий день — это нормально. Пустая карточка «сегодня ничего» была бы
+    // хуже, чем её отсутствие.
+    card.hidden = true;
+    return;
+  }
+  card.classList.toggle('done', Boolean(event.rewarded));
+  document.getElementById('event-icon').textContent = event.icon;
+  document.getElementById('event-title').textContent = event.title;
+  document.getElementById('event-hint').textContent = event.hint;
+  document.getElementById('event-text').textContent = event.text;
+  document.getElementById('event-bar').style.width =
+    `${Math.round(event.share * 100)}%`;
+  card.hidden = false;
 }
 
 function switchScreen(name) {

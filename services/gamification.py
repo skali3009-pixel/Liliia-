@@ -204,7 +204,7 @@ async def sync_today(
 
     total_xp = int(
         (await session.execute(
-            select(func.coalesce(func.sum(DayStat.xp), 0)).where(DayStat.user_id == user.id)
+            select(func.coalesce(func.sum(DayStat.xp + DayStat.bonus), 0)).where(DayStat.user_id == user.id)
         )).scalar_one()
     )
     level = level_from_xp(total_xp)

@@ -283,6 +283,7 @@
         <div class="eyebrow">Мой мир</div>
         <h1 class="world-title" id="world-title">Место силы</h1>
         <p class="world-sub" id="world-sub">Растёт с каждым закрытым заданием.</p>
+        <p class="world-level" id="world-level"></p>
         <p class="cheetah" id="world-cheetah" hidden>
           <span class="cheetah-emoji" id="world-cheetah-emoji"></span>
           <span id="world-cheetah-line"></span>
@@ -308,6 +309,19 @@
     <section class="card">
       <div class="card-head"><h2>Места</h2><span id="world-count" class="muted"></span></div>
       <div id="world-zones"></div>
+    </section>
+
+    <!-- Событие дня. Есть не каждый день — иначе это уже не событие. -->
+    <section class="card event" id="world-event" hidden>
+      <div class="zone-head">
+        <span class="zone-icon" id="event-icon"></span>
+        <div>
+          <h2 class="zone-title" id="event-title"></h2>
+          <p class="zone-hint" id="event-hint"></p>
+        </div>
+      </div>
+      <p class="event-text" id="event-text"></p>
+      <div class="q-track"><i id="event-bar"></i></div>
     </section>
 
     <section class="card discovery">

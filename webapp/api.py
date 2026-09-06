@@ -12,6 +12,7 @@ import config
 from db import get_session
 from models import (Meal, MealSourceEnum, Prep, PrepComponent, Product, ProgressPhoto,
                     ScheduleTypeEnum, Supplement, User, WorkoutTypeEnum)
+from services import events as event_service
 from services import preps as prep_service
 from services.checkins import save_checkin, today_state
 from services.preps import expiring_names
@@ -239,6 +240,13 @@ async def get_today(request: web.Request) -> web.Response:
             _day_context(user, tz, suggested=(), **parts), game["quests"])
         for quest in game["quests"]:
             quest["main"] = quest["code"] in main_codes
+
+        # Находка случается только после того, как человек что-то закрыл.
+        found = await event_service.surprise(
+            session, user_id, closed_now=bool(game.get("just_completed")),
+            timezone_name=tz)
+        if found:
+            game["surprise"] = found
 
         # Гепард не советует — он реагирует. Считается по тем же данным.
         cheetah = cheetah_mood(
@@ -1112,8 +1120,29 @@ async def get_world(request: web.Request) -> web.Response:
 
     async with get_session() as session:
         user = await session.get(User, request["user_id"])
-        return web.json_response(
-            await world.state(session, user, timezone_name=request["timezone"]))
+        tz = request["timezone"]
+        payload = await world.state(session, user, timezone_name=tz)
+
+        # Событие дня живёт здесь, а не на «Сегодня»: тот экран и так плотный.
+        closed = await _quests_closed_today(session, user.id, timezone_name=tz)
+        happening = await event_service.state(session, user.id, closed,
+                                              timezone_name=tz)
+        payload["event"] = happening.to_dict() if happening else None
+        return web.json_response(payload)
+
+
+async def _quests_closed_today(session, user_id: int, *, timezone_name: str) -> int:
+    """Сколько заданий уже закрыто сегодня — по итогу дня, а не пересчётом."""
+    from models import DayStat
+    from sqlalchemy import select as sa_select
+    from utils.timeframe import today_in
+
+    row = (await session.execute(sa_select(DayStat).where(
+        DayStat.user_id == user_id, DayStat.day == today_in(timezone_name)
+    ))).scalar_one_or_none()
+    if row is None or not row.quests_done:
+        return 0
+    return len([code for code in row.quests_done.split(",") if code])
 
 
 async def post_my_prep(request: web.Request) -> web.Response:
