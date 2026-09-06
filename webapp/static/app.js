@@ -16,6 +16,50 @@ function deviceZone() {
   }
 }
 
+/* --- Поломка в самом приложении ---------------------------------------- */
+// Ошибка на сервере видна в логах, ошибка здесь — нигде: человек смотрит на
+// пустой экран, а у бота всё в порядке. Поэтому сообщаем о ней сами.
+// Не больше трёх за открытие: сломанный экран умеет сыпать ошибками без
+// конца, а повторы одной и той же поломки отсекает уже сервер. Трёх хватает,
+// чтобы не потерять вторую, настоящую, ошибку за первой.
+const CRASH_LIMIT = 3;
+let crashCount = 0;
+
+function reportCrash(message, place) {
+  if (crashCount >= CRASH_LIMIT || !message) return;
+  crashCount += 1;
+  try {
+    fetch('/api/crash', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': tg?.initData || '',
+        'X-Timezone': deviceZone(),
+      },
+      body: JSON.stringify({
+        message: String(message).slice(0, 300),
+        place: String(place || '').slice(0, 300),
+        screen: document.querySelector('.tab.active')?.dataset.screen || 'приложение',
+      }),
+      // Отчёт не должен мешать: ответ нам не нужен и ошибка его отправки тоже.
+      keepalive: true,
+    }).catch(() => {});
+  } catch (error) {
+    // Сообщение о поломке не имеет права ломать что-то ещё.
+  }
+}
+
+window.addEventListener('error', (event) => {
+  // Файл известен не всегда: без него строка «:1» выглядит поломкой сама.
+  const place = event.filename ? `${event.filename}:${event.lineno || '?'}` : '';
+  reportCrash(event.message, place);
+});
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason;
+  reportCrash(reason?.message || reason, reason?.stack?.split('\n')[1]?.trim());
+});
+
+
 async function api(path, options = {}) {
   const response = await fetch(path, {
     ...options,

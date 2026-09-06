@@ -104,3 +104,12 @@ def test_shelf_photo_is_wired():
 def test_shelf_offer_comes_before_the_hand_marked_basket():
     """Сфотографировать проще, чем отмечать полсотни продуктов пальцем."""
     assert INDEX.index('id="cube-shelf-card"') < INDEX.index('id="cube-basket-card"')
+
+
+def test_the_app_reports_its_own_breakage():
+    """Ошибка в браузере не видна нигде — приложение должно сказать о ней само."""
+    assert "addEventListener('error'" in APP_JS
+    assert "unhandledrejection" in APP_JS
+    assert "'/api/crash'" in APP_JS
+    # Сломанный экран сыплет ошибками без конца — отчётов должно быть немного.
+    assert "CRASH_LIMIT" in APP_JS

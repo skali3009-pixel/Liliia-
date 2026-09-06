@@ -12,7 +12,7 @@ from pathlib import Path
 from aiohttp import web
 
 import config
-from webapp.api import add_routes, auth_middleware, error_middleware
+from webapp.api import BOT_KEY, add_routes, auth_middleware, error_middleware
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +72,12 @@ async def legal_page(request: web.Request) -> web.Response:
     return web.Response(text=page, content_type="text/html", charset="utf-8")
 
 
-def create_app() -> web.Application:
+def create_app(bot=None) -> web.Application:
     # Порядок важен: ошибки ловим снаружи, авторизацию проверяем внутри.
     app = web.Application(middlewares=[error_middleware, auth_middleware])
+    # Бот нужен только чтобы сообщить владельцу о поломке. Без него
+    # приложение работает как раньше — просто молча.
+    app[BOT_KEY] = bot
     add_routes(app)
     app.router.add_get("/", index)
     app.router.add_get("/health", healthcheck)
@@ -83,9 +86,9 @@ def create_app() -> web.Application:
     return app
 
 
-async def start_webapp() -> web.AppRunner | None:
+async def start_webapp(bot=None) -> web.AppRunner | None:
     """Поднять сервер приложения рядом с ботом."""
-    runner = web.AppRunner(create_app(), access_log=None)
+    runner = web.AppRunner(create_app(bot), access_log=None)
     await runner.setup()
     site = web.TCPSite(runner, config.WEBAPP_HOST, config.WEBAPP_PORT)
     await site.start()

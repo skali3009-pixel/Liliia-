@@ -91,10 +91,19 @@ async def error_middleware(request: web.Request, handler):
         return await handler(request)
     except web.HTTPException:
         raise
-    except Exception:
-        logger.exception("Ошибка в %s %s", request.method, request.path)
+    except Exception as error:
+        # Владелец узнаёт о поломке сразу, а не из логов и не от человека.
+        from services import crashes
+
+        await crashes.report(
+            request.app.get(BOT_KEY), error,
+            where=f"приложение {request.method} {request.path}",
+            user_id=request.get("user_id"),
+        )
         return web.json_response(
-            {"error": "Что-то сломалось на сервере. Загляни в логи бота."}, status=500
+            {"error": "Что-то сломалось на нашей стороне. Я уже сообщил хозяйке "
+                      "бота — твои записи целы."},
+            status=500,
         )
 
 
@@ -403,6 +412,10 @@ PERIODS = {"week": 7, "month": 30}
 
 # Загружать гигабайты в дневник ни к чему: обычное фото с телефона меньше.
 MAX_PHOTO_BYTES = 10 * 1024 * 1024
+
+# Бот в приложении нужен ровно для одного: сообщить владельцу о поломке.
+# Отдельный ключ вместо строки — так требует aiohttp.
+BOT_KEY: web.AppKey = web.AppKey("bot", object)
 
 
 # Замеры в базе названы по-своему («chest», «hips»), а фигура рисуется по
@@ -1399,6 +1412,27 @@ async def get_preps(request: web.Request) -> web.Response:
     ], "mine": [item.to_dict() for item in fridge]})
 
 
+async def post_crash(request: web.Request) -> web.Response:
+    """Приложение сообщает о своей поломке на телефоне человека.
+
+    Серверная ошибка видна в логах, ошибка в браузере — нигде. Человек в
+    этот момент смотрит на пустой экран и решает, что бот сломался совсем.
+    """
+    from services import crashes
+
+    body = await request.json() if request.can_read_body else {}
+    await crashes.report_client(
+        request.app.get(BOT_KEY),
+        body.get("message") or "",
+        where=str(body.get("screen") or "приложение")[:60],
+        place=body.get("place") or "",
+        user_id=request.get("user_id"),
+    )
+    # Ответ всегда успешный: приложению незачем разбираться, как прошло
+    # сообщение о поломке — у него и так уже что-то сломалось.
+    return web.json_response({"ok": True})
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -1427,6 +1461,7 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/cube", post_cube)
     app.router.add_get("/api/cube/basket", get_basket)
     app.router.add_post("/api/cube/shelf", post_shelf)
+    app.router.add_post("/api/crash", post_crash)
     app.router.add_post("/api/workouts/pick", post_workout_pick)
     app.router.add_get("/api/preps", get_preps)
     app.router.add_post("/api/preps/mine", post_my_prep)

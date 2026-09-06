@@ -67,7 +67,13 @@ def _allowed(moment: datetime) -> bool:
     return len(_sent) < MAX_PER_HOUR
 
 
-async def _send(bot: Bot, text: str) -> bool:
+async def send(bot: Bot, text: str) -> bool:
+    """Сообщение владельцу под общим часовым ограничителем.
+
+    Публичная: под тем же лимитом должны ходить и сигналы сторожа, и
+    сообщения о поломках — иначе один шумный источник съедает внимание,
+    которого хватило бы на важное.
+    """
     moment = _now()
     if not _allowed(moment):
         logger.warning("Сигнал придержан — превышен лимит сообщений в час: %s", text[:60])
@@ -94,7 +100,7 @@ async def fire(bot: Bot, key: str, state: str, text: str) -> bool:
     if not config.ADMIN_IDS or _state.get(key) == state:
         return False
     _state[key] = state
-    return await _send(bot, text)
+    return await send(bot, text)
 
 
 async def resolve(bot: Bot, key: str, text: str) -> bool:
@@ -102,7 +108,7 @@ async def resolve(bot: Bot, key: str, text: str) -> bool:
     if not config.ADMIN_IDS or not _state.get(key):
         return False
     _state.pop(key, None)
-    return await _send(bot, text)
+    return await send(bot, text)
 
 
 def record_failure() -> bool:
@@ -124,5 +130,6 @@ def failures_in_window() -> int:
 
 
 __all__ = ["BUDGET", "DISK", "ERRORS", "ERROR_THRESHOLD", "ERROR_WINDOW",
+           "send",
            "MAX_PER_HOUR", "SPIKE", "failures_in_window", "fire", "record_failure",
            "reset", "resolve"]

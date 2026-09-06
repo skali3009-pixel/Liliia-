@@ -13,7 +13,7 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 import config
 from db import init_models
 from services.artwork import ensure_artwork
-from handlers import (access, food, legal, onboarding, profile, progress,
+from handlers import (access, errors, food, legal, onboarding, profile, progress,
                       suggestions, supplements, turn, water, workouts)
 from middlewares.access import AccessMiddleware
 from scheduler import start_scheduler
@@ -45,6 +45,10 @@ dp.include_router(supplements.router)
 dp.include_router(progress.router)
 dp.include_router(workouts.router)
 dp.include_router(suggestions.router)
+
+# Падение любого обработчика: человеку — честный ответ, владельцу — место
+# поломки. Без этого ошибка уходила только в лог, куда никто не смотрит.
+dp.errors.register(errors.on_error)
 
 
 async def setup_menu_button() -> None:
@@ -100,7 +104,7 @@ async def main() -> None:
     # на старте незачем. Ссылку держим, чтобы задачу не собрал сборщик.
     artwork_task = asyncio.create_task(ensure_artwork())
 
-    runner = await start_webapp()
+    runner = await start_webapp(bot)
     scheduler = start_scheduler(bot)
     try:
         await setup_menu_button()

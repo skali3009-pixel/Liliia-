@@ -47,7 +47,7 @@ maker_holder: dict = {}
 
 
 @contextlib.asynccontextmanager
-async def webapp_client():
+async def webapp_client(bot=None):
     """Приложение с базой в памяти, двумя пользователями и одной записью еды."""
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -94,7 +94,7 @@ async def webapp_client():
 
     from webapp.server import create_app
 
-    client = TestClient(TestServer(create_app()))
+    client = TestClient(TestServer(create_app(bot)))
     await client.start_server()
     try:
         yield client, meal_id
@@ -762,6 +762,126 @@ class _FakeUsage:
     output_tokens = 40
     cache_creation_input_tokens = 0
     cache_read_input_tokens = 0
+
+
+class _CrashBot:
+    def __init__(self):
+        self.sent = []
+
+    async def send_message(self, chat_id, text, **kwargs):
+        self.sent.append((chat_id, text))
+
+
+def test_a_broken_screen_tells_the_person_and_the_owner(monkeypatch):
+    """Ошибка в приложении уходила только в лог — то есть в никуда."""
+    async def scenario():
+        bot = _CrashBot()
+        async with webapp_client(bot) as (client, _):
+            import webapp.api as api_module
+            from services import alerts, crashes
+
+            crashes.reset()
+            alerts.reset()
+            monkeypatch.setattr(crashes.config, "ADMIN_IDS", [246959020])
+            monkeypatch.setattr(alerts.config, "ADMIN_IDS", [246959020])
+
+            def explode(*args, **kwargs):
+                raise TypeError("нет такого параметра")
+
+            monkeypatch.setattr(api_module, "get_today_totals", explode)
+
+            response = await call(client, "GET", "/api/today")
+            assert response.status == 500
+            body = await response.json()
+            # Человеку — честно и без трассировки.
+            assert "записи целы" in body["error"]
+            assert ".py" not in body["error"]
+
+            # Владельцу — где именно сломалось.
+            (_, text), = bot.sent
+            assert "нет такого параметра" in text
+            assert "GET /api/today" in text
+            assert f"{USER_ID}" in text
+
+            crashes.reset()
+            alerts.reset()
+    run(scenario)
+
+
+def test_a_broken_screen_on_the_phone_also_reaches_the_owner(monkeypatch):
+    """Ошибка в браузере не видна нигде: на сервере при этом всё в порядке."""
+    async def scenario():
+        bot = _CrashBot()
+        async with webapp_client(bot) as (client, _):
+            from services import alerts, crashes
+
+            crashes.reset()
+            alerts.reset()
+            monkeypatch.setattr(crashes.config, "ADMIN_IDS", [246959020])
+            monkeypatch.setattr(alerts.config, "ADMIN_IDS", [246959020])
+
+            response = await call(client, "POST", "/api/crash", json_body={
+                "message": "undefined is not an object (evaluating 'a.b')",
+                "place": "/static/app.js:1204", "screen": "cube"})
+            assert response.status == 200
+
+            (_, text), = bot.sent
+            assert "a.b" in text and "app.js:1204" in text
+            assert "cube" in text and f"{USER_ID}" in text
+
+            # Сломанный экран умеет сыпать ошибками без конца — владельцу
+            # это должно прийти один раз.
+            for _ in range(5):
+                await call(client, "POST", "/api/crash", json_body={
+                    "message": "undefined is not an object (evaluating 'a.b')",
+                    "place": "/static/app.js:1204", "screen": "cube"})
+            assert len(bot.sent) == 1
+
+            crashes.reset()
+            alerts.reset()
+    run(scenario)
+
+
+def test_a_crash_report_is_trimmed_before_it_reaches_the_chat(monkeypatch):
+    """Текст приходит с телефона человека — в чат владельцу не должно уехать
+    полотно на весь экран."""
+    async def scenario():
+        bot = _CrashBot()
+        async with webapp_client(bot) as (client, _):
+            from services import alerts, crashes
+
+            crashes.reset()
+            alerts.reset()
+            monkeypatch.setattr(crashes.config, "ADMIN_IDS", [246959020])
+            monkeypatch.setattr(alerts.config, "ADMIN_IDS", [246959020])
+
+            await call(client, "POST", "/api/crash",
+                       json_body={"message": "я" * 5000, "place": "ж" * 5000})
+            (_, text), = bot.sent
+            assert len(text) < 1000
+
+            crashes.reset()
+            alerts.reset()
+    run(scenario)
+
+
+def test_an_empty_crash_report_is_ignored():
+    async def scenario():
+        bot = _CrashBot()
+        async with webapp_client(bot) as (client, _):
+            response = await call(client, "POST", "/api/crash", json_body={"message": ""})
+            assert response.status == 200
+            assert bot.sent == []
+    run(scenario)
+
+
+def test_the_crash_endpoint_needs_a_signature_like_everything_else():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/crash", signed=False,
+                                  json_body={"message": "боль"})
+            assert response.status == 401
+    run(scenario)
 
 
 def test_shelf_photo_answers_with_names_the_person_can_check(monkeypatch):
