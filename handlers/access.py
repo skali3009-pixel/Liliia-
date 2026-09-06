@@ -208,9 +208,25 @@ async def admin_stats(message: Message) -> None:
         f"Закончилась: {data['expired']}\n\n"
         f"Платили хоть раз: {data['payers']}\n"
         f"Звёзд за 30 дней: {data['stars_30d']} ⭐\n\n"
+        "Сводка сейчас: /report (или /report неделя)\n"
         "Выдать доступ вручную: /grant ID ДНЕЙ\n"
         "Открыть навсегда: /grant ID навсегда"
     )
+
+
+@router.message(Command("report"))
+async def owner_report(message: Message) -> None:
+    """Сводка не дожидаясь утра. Слово «неделя» — недельный отчёт."""
+    if message.from_user.id not in config.ADMIN_IDS:
+        return
+
+    from services import owner_reports
+
+    weekly = "недел" in (message.text or "").lower()
+    async with get_session() as session:
+        text = await (owner_reports.weekly if weekly else owner_reports.daily)(session)
+
+    await message.answer(text)
 
 
 @router.message(Command("grant"))

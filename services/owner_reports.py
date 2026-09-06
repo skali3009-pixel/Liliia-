@@ -1,0 +1,192 @@
+"""Отчёты владельцу: утренняя сводка и итоги недели.
+
+Правило одно: сообщение читается за минуту и заканчивается понятным
+выводом, а не набором чисел. Если считать вывод не из чего — так и
+написано, чего не хватает. Никаких имён и содержимого переписки: владельцу
+нужны цифры, а не чужие дневники.
+"""
+
+from __future__ import annotations
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+import config
+from services import metrics
+from services.subscriptions import stats
+from services.usage import spent_today
+from utils.disk import usage as disk_usage
+
+
+def _money_lines(money: metrics.Money) -> list[str]:
+    """Экономика: сходится ли подписка с расходами."""
+    lines = [f"💵 Деньги за {money.days} дн."]
+
+    if money.stars:
+        lines.append(
+            f"   Пришло: {money.stars} ⭐ ≈ {money.revenue_usd:.2f} $ "
+            f"({money.payers} платящих)"
+        )
+    else:
+        lines.append("   Выручки нет: оплата ещё не включена")
+
+    lines.append(f"   Расход на модель: {money.model_usd:.2f} $")
+    if money.fixed_usd:
+        lines.append(f"   Постоянные расходы: {money.fixed_usd:.2f} $")
+    if money.tax_usd:
+        lines.append(f"   Налог: {money.tax_usd:.2f} $")
+
+    if money.active:
+        lines.append(
+            f"   Один живой человек обошёлся в {money.per_active_usd:.2f} $ "
+            f"за {money.days} дн."
+        )
+
+    if not money.known:
+        # Без постоянных расходов «прибыль» была бы враньём: сервер и
+        # бухгалтерия платятся всё равно.
+        lines.append(
+            "   Прибыль не считаю: не заполнены постоянные расходы "
+            "(сервер, бухгалтерия) — FIXED_COSTS_USD в .env"
+        )
+        return lines
+
+    lines.append(f"   Итого: {money.profit_usd:+.2f} $")
+    return lines
+
+
+def _breakeven_line(money: metrics.Money) -> str | None:
+    """Сколько платящих нужно, чтобы выйти в ноль."""
+    need = money.breakeven_payers
+    if need is None:
+        return None
+    income = money.per_payer_usd
+    tail = "" if money.payers >= need else f", сейчас {money.payers}"
+    return (f"   Чтобы окупалось, нужно {need} платящих по {income:.2f} $ "
+            f"с подписки{tail}")
+
+
+async def daily(session: AsyncSession) -> str:
+    """Утренняя сводка: что было за сутки."""
+    people = await metrics.audience(session, days=1)
+    doing = await metrics.activity(session, days=1)
+    spend = await spent_today(session, metrics.now().date())
+    month = await metrics.money(session, days=30)
+    subs = await stats(session)
+    disk = disk_usage()
+
+    lines = [
+        "☀️ Сводка за сутки",
+        "",
+        "👥 Люди",
+        f"   Всего зарегистрировано: {people.registered} "
+        f"(дошли до конца анкеты: {people.onboarded})",
+        f"   Пришло за сутки: {people.joined}",
+        f"   Пользовались: {people.active} за сутки, {people.active_7d} за неделю",
+    ]
+
+    if config.PAYWALL:
+        lines.append(
+            f"   Платят: {subs['active']} · на пробном: {subs['trial']} · "
+            f"бесплатно навсегда: {subs['lifetime']}"
+        )
+    else:
+        lines.append("   Оплата выключена — бот бесплатный для всех")
+
+    lines += [
+        "",
+        "📝 Записей за сутки",
+        f"   Еда: {doing.meals} · фото: {doing.photos} · голос: {doing.voices}",
+        f"   Подбор блюд: {doing.dishes} · тренировки: {doing.workouts} · "
+        f"замеры: {doing.measurements}",
+        "",
+        "💰 Расход на модель",
+        f"   Сегодня: {spend.total_usd:.2f} $ ({spend.calls} запросов)",
+        f"   Остаток до потолка: {spend.left_usd:.2f} $ из "
+        f"{config.DAILY_COST_LIMIT_USD:.0f} $",
+    ]
+
+    if spend.by_kind:
+        names = {"photo": "фото", "text": "текст", "voice": "голос",
+                 "build": "подбор блюд"}
+        parts = ", ".join(
+            f"{names.get(kind, kind)} {value:.2f} $"
+            for kind, value in sorted(spend.by_kind.items(), key=lambda item: -item[1])
+        )
+        lines.append(f"   На что: {parts}")
+
+    # Главный вопрос владельца — сходится ли одно с другим — должен быть
+    # виден каждый день, а не только по пятницам.
+    lines += ["", *_month_line(month)]
+    lines += ["", f"💾 Диск: занято {disk.percent}%, свободно {disk.free_gb} ГБ"]
+    return "\n".join(lines)
+
+
+def _month_line(money: metrics.Money) -> list[str]:
+    """Экономика одной-двумя строками — для утренней сводки."""
+    lines = [
+        f"📊 За 30 дней: выручка {money.revenue_usd:.2f} $, "
+        f"расходы {money.costs_usd:.2f} $"
+    ]
+    if money.known:
+        lines.append(f"   Итого: {money.profit_usd:+.2f} $")
+    breakeven = _breakeven_line(money)
+    if breakeven:
+        lines.append(breakeven)
+    return lines
+
+
+async def weekly(session: AsyncSession) -> str:
+    """Итоги недели: за чем следить и что решать."""
+    people = await metrics.audience(session, days=7)
+    doing = await metrics.activity(session, days=7)
+    week_money = await metrics.money(session, days=7)
+    month_money = await metrics.money(session, days=30)
+    subs = await stats(session)
+
+    lines = [
+        "📅 Неделя целиком",
+        "",
+        "👥 Люди",
+        f"   Всего зарегистрировано: {people.registered}",
+        f"   Дошли до конца анкеты: {people.onboarded} "
+        f"(бросили на анкете: {people.stuck})",
+        f"   Пришло за неделю: {people.joined}",
+        f"   Пользовались: {people.active} за неделю, {people.active_30d} за месяц",
+    ]
+
+    if people.registered:
+        share = round(people.active_30d / people.registered * 100)
+        lines.append(f"   Живых от всех пришедших: {share}%")
+
+    if config.PAYWALL:
+        lines.append(
+            f"   Платят: {subs['active']} · на пробном: {subs['trial']} · "
+            f"бесплатно навсегда: {subs['lifetime']} · закончилось: {subs['expired']}"
+        )
+    else:
+        lines.append("   Оплата выключена — бот бесплатный для всех")
+
+    lines += [
+        "",
+        "🔧 Чем пользуются за неделю",
+        f"   Записей еды: {doing.meals}",
+        f"   Фото: {doing.photos} · голос: {doing.voices} · подбор блюд: {doing.dishes}",
+        f"   Тренировки: {doing.workouts} · замеры: {doing.measurements}",
+        "",
+        *_money_lines(week_money),
+        "",
+        "📊 За месяц",
+        f"   Выручка: {month_money.revenue_usd:.2f} $ · "
+        f"расходы: {month_money.costs_usd:.2f} $",
+    ]
+
+    breakeven = _breakeven_line(month_money)
+    if breakeven:
+        lines.append(breakeven)
+    if month_money.known:
+        lines.append(f"   Итого за месяц: {month_money.profit_usd:+.2f} $")
+
+    return "\n".join(lines)
+
+
+__all__ = ["daily", "weekly"]

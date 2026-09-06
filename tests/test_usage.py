@@ -238,11 +238,24 @@ def test_disk_warnings_come_before_the_stop():
 
 # --- что видит человек ----------------------------------------------------
 
+class FakeBot:
+    """Через него уходят сигналы владельцу."""
+
+    def __init__(self):
+        self.sent: list[tuple[int, str]] = []
+
+    async def send_message(self, chat_id, text, **kwargs):
+        self.sent.append((chat_id, text))
+
+
 class FakeMessage:
     """Сообщение в чате: нам важно только, что бот ответил."""
 
     def __init__(self):
         self.said: list[str] = []
+        # У настоящего сообщения бот есть всегда — через него уходят
+        # предупреждения владельцу.
+        self.bot = FakeBot()
 
     async def answer(self, text, **kwargs):
         self.said.append(text)

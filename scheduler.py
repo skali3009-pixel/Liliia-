@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import date
+from datetime import date, time
 
 from aiogram import Bot
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -13,6 +13,9 @@ from db import get_session
 from keyboards.supplements import reminder_keyboard
 from services.meal_reminders import users_without_meals_today
 from services.reminders import collect_due_reminders
+from services import guard, metrics
+from services import owner_reports as owner_reports_text
+from services import usage
 from services.selfupdate import run_update
 from services.subscriptions import expire_overdue, expiring_soon, mark_warned
 from services.water_reminders import render as render_water
@@ -23,6 +26,12 @@ logger = logging.getLogger(__name__)
 
 # Чтобы перезапуск планировщика внутри той же минуты не прислал повтор.
 _already_sent: set[tuple[int, str]] = set()
+
+# Когда владельцу приходят сводки — по его местному времени.
+DAILY_REPORT_TIME = time(9, 0)
+# Пятница: неделя закончилась, а решения по ней принимать ещё не поздно.
+WEEKLY_REPORT_WEEKDAY = 4
+WEEKLY_REPORT_TIME = time(20, 0)
 
 
 async def send_due_reminders(bot: Bot) -> None:
@@ -164,40 +173,59 @@ async def check_subscriptions(bot: Bot) -> None:
 
 
 
-async def report_costs(bot: Bot) -> None:
-    """Утренний отчёт владельцу: сколько вчера потратили и как с диском.
-
-    Расход на модель — единственная статья, которая может вырасти внезапно.
-    Владелец должен видеть её каждый день, а не в конце месяца в счёте.
-    """
-    if not config.ADMIN_IDS:
-        return
-
-    from datetime import date, timedelta
-
-    from services import usage as usage_service
-    from utils.disk import render_warning
-    from utils.disk import usage as disk_usage
-
-    async with get_session() as session:
-        yesterday = await usage_service.spent_today(session, date.today() - timedelta(days=1))
-        await usage_service.cleanup(session)
-
-    lines = [usage_service.render_report(yesterday)]
-    if yesterday.total_usd >= config.DAILY_COST_LIMIT_USD:
-        lines.append("\n⚠️ Дневной потолок вчера был исчерпан — распознавание фото "
-                     "приостанавливалось.")
-
-    disk = disk_usage()
-    if disk.warning:
-        lines.append("\n" + render_warning(disk))
-
-    text = "\n".join(lines)
+async def _send_to_owner(bot: Bot, text: str) -> None:
     for admin in config.ADMIN_IDS:
         try:
             await bot.send_message(admin, text)
         except Exception:  # noqa: BLE001 — владелец мог заблокировать бота
-            logger.warning("Не удалось отправить отчёт о расходах владельцу %s", admin)
+            logger.warning("Не удалось отправить отчёт владельцу %s", admin)
+
+
+async def owner_reports(bot: Bot) -> None:
+    """Сводки владельцу: утренняя каждый день и недельная по пятницам.
+
+    Время местное — то, что стоит у владельца в профиле. Поэтому проверяем
+    раз в минуту, как и остальные напоминания: иначе переезд в другой пояс
+    или переход на летнее время сдвигают отчёт.
+    """
+    if not config.ADMIN_IDS:
+        return
+
+    schedule = (
+        ("owner_daily", DAILY_REPORT_TIME, None, owner_reports_text.daily),
+        ("owner_weekly", WEEKLY_REPORT_TIME, WEEKLY_REPORT_WEEKDAY,
+         owner_reports_text.weekly),
+    )
+
+    try:
+        async with get_session() as session:
+            zone = await metrics.owner_timezone(session)
+            texts = []
+            for key, target, weekday, build in schedule:
+                if (0, key) in _already_sent:
+                    continue
+                if not metrics.is_time_for(zone, target, weekday=weekday):
+                    continue
+                texts.append((key, await build(session)))
+
+            if texts:
+                # Заодно подчищаем старые записи о расходах — раз в сутки
+                # этого достаточно, и отдельная задача под это не нужна.
+                await usage.cleanup(session)
+    except Exception:
+        logger.exception("Не удалось собрать отчёт владельцу")
+        return
+
+    for key, text in texts:
+        await _send_to_owner(bot, text)
+        _already_sent.add((0, key))
+
+
+async def watch_health(bot: Bot) -> None:
+    """Срочные проверки: диск, дневной потолок, резкий скачок расхода."""
+    if not config.ADMIN_IDS:
+        return
+    await guard.watch(bot)
 
 
 def start_scheduler(bot: Bot) -> AsyncIOScheduler:
@@ -210,9 +238,11 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     # Раз в день утром: предупредить об окончании и закрыть просроченные.
     scheduler.add_job(check_subscriptions, "cron", hour=6, minute=0, args=[bot],
                       id="subscriptions")
-    # Отчёт о расходах — раньше, чем начинается день: чтобы владелец успел
-    # среагировать до наплыва.
-    scheduler.add_job(report_costs, "cron", hour=5, minute=30, args=[bot], id="costs")
+    # Сводки владельцу: время местное, поэтому проверяем каждую минуту.
+    scheduler.add_job(owner_reports, "cron", minute="*", args=[bot], id="owner_reports")
+    # Срочные проверки. Раз в десять минут: чаще нет смысла — диск и расход
+    # так быстро не меняются, — а реже владелец узнаёт слишком поздно.
+    scheduler.add_job(watch_health, "cron", minute="*/10", args=[bot], id="watch")
 
     if config.AUTO_UPDATE:
         # Раз в полчаса — не чаще: обновление перезапускает бота, и делать

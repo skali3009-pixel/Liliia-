@@ -21,7 +21,26 @@ cd "$APP_DIR"
 [ -f .env ] && set -a && . ./.env && set +a
 
 log() { printf '%s %s\n' "$(date '+%d.%m %H:%M:%S')" "$*"; }
-fail() { log "ОШИБКА: $*"; exit 1; }
+
+# Сказать владельцу напрямую через Телеграм, минуя бота: копия делается по
+# расписанию ночью, и молча провалившийся бэкап обнаруживается ровно тогда,
+# когда он был нужен, — то есть слишком поздно.
+tell_owner() {
+  local who
+  who="$(printf '%s' "${ADMIN_IDS:-}" | cut -d, -f1 | tr -d ' ')"
+  [ -n "$who" ] && [ -n "${BOT_TOKEN:-}" ] || return 0
+  curl -sS -m 30 -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
+    -d "chat_id=$who" --data-urlencode "text=$1" >/dev/null 2>&1 || true
+}
+
+fail() {
+  log "ОШИБКА: $*"
+  tell_owner "🛑 Резервная копия не сделалась: $*
+
+Данные целы, но новой копии за $(date '+%d.%m') нет. Проверить вручную:
+bash backup.sh --now"
+  exit 1
+}
 
 mkdir -p "$BACKUP_DIR" || fail "не создать $BACKUP_DIR"
 STAMP="$(date '+%Y%m%d-%H%M')"

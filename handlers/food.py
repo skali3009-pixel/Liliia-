@@ -34,6 +34,7 @@ from services.food_vision import (
     analyze_photo,
     analyze_text,
 )
+from services import alerts
 from services.checkins import save_checkin, today_state
 from services.gamification import sync_today
 from services.meals import get_today_totals, list_today_meals, save_meal
@@ -184,6 +185,17 @@ async def _photo_allowed(message: Message, user_id: int) -> bool:
                 "Распознавание фото сегодня недоступно — исчерпан дневной лимит "
                 "на обработку. Опиши блюдо словами: посчитаю так же точно."
             )
+            # Люди упираются в потолок раньше, чем владелец узнаёт о нём из
+            # утреннего отчёта. Сообщаем сразу; повторов не будет.
+            spend = await usage.spent_today(session)
+            await _warn_owner(
+                message, alerts.BUDGET, "over",
+                f"🛑 Дневной потолок исчерпан: {spend.total_usd:.2f} $ из "
+                f"{config.DAILY_COST_LIMIT_USD:.0f} $.\n\n"
+                "Распознавание фото и голоса до полуночи отключено — дневник, "
+                "тренировки и всё остальное работают.\n\n"
+                "Поднять потолок: `bash set-limit.sh <сумма>`",
+            )
             return False
 
         left = await usage.photo_limit_left(session, user_id)
@@ -238,6 +250,7 @@ async def handle_food_photo(message: Message, state: FSMContext) -> None:
     except Exception:
         logger.exception("Ошибка распознавания фото еды")
         await status.edit_text(GENERIC_ERROR)
+        await _report_failures(message)
         return
 
     finally:
@@ -246,6 +259,36 @@ async def handle_food_photo(message: Message, state: FSMContext) -> None:
     _remember_photo(photo.file_unique_id, analysis)
     await status.delete()
     await _show_card(message, state, analysis, photo_file_id=photo.file_id)
+
+
+async def _warn_owner(message: Message, key: str, state: str, text: str) -> None:
+    """Предупредить владельца, не задев человека.
+
+    Сигнал — дело служебное. Если его не удалось отправить, человек всё
+    равно должен получить свой ответ, а не ошибку.
+    """
+    try:
+        await alerts.fire(message.bot, key, state, text)
+    except Exception:  # noqa: BLE001
+        logger.warning("Не удалось предупредить владельца: %s", key)
+
+
+async def _report_failures(message: Message) -> None:
+    """Сказать владельцу, если сбои пошли чередой.
+
+    Сторож снаружи такого не увидит: процесс жив и отвечает, а люди вместо
+    ответа получают извинение. Один сбой — не повод, череда — повод.
+    """
+    if not alerts.record_failure():
+        return
+    await _warn_owner(
+        message, alerts.ERRORS, "many",
+        f"⚠️ Подряд {alerts.failures_in_window()} сбоев распознавания за "
+        f"{alerts.ERROR_WINDOW.seconds // 60} минут. Бот работает, но люди "
+        "вместо ответа видят ошибку.\n\n"
+        "Посмотреть, что случилось:\n"
+        "`journalctl -u nutrition-bot -n 50`",
+    )
 
 
 async def _record_spend(user_id: int, kind: str, spent: list) -> None:

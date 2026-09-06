@@ -112,6 +112,15 @@ async def spent_today(session: AsyncSession, day: date | None = None) -> Spend:
                  calls=sum(count for _, _, count in rows), by_kind=by_kind)
 
 
+async def spent_since(session: AsyncSession, moment) -> float:
+    """Сколько потрачено с указанного момента — для ловли резких скачков."""
+    total = (await session.execute(
+        select(func.coalesce(func.sum(ApiUsage.cost_usd), 0.0))
+        .where(ApiUsage.created_at >= moment)
+    )).scalar_one()
+    return round(float(total or 0.0), 4)
+
+
 async def over_budget(session: AsyncSession) -> bool:
     """Исчерпан ли дневной потолок расходов."""
     if config.DAILY_COST_LIMIT_USD <= 0:
@@ -160,4 +169,4 @@ def render_report(spend: Spend) -> str:
 
 __all__ = ["CACHE_READ_MULTIPLIER", "CACHE_WRITE_MULTIPLIER", "PRICES", "Spend",
            "calls_today", "cleanup", "cost_usd", "over_budget", "photo_limit_left",
-           "price_of", "record", "render_report", "spent_today"]
+           "price_of", "record", "render_report", "spent_since", "spent_today"]

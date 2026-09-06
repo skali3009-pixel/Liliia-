@@ -13,11 +13,16 @@ from sqlalchemy import func, select
 
 import config
 from db import async_session_maker
+from scheduler import DAILY_REPORT_TIME, WEEKLY_REPORT_TIME
 from models import Payment, Subscription, SubscriptionStatus, User
 from services.legal import LEGAL_VERSION
 from services.subscriptions import now, stats
 
 YES, NO = "да", "нет"
+
+
+DAILY_AT = DAILY_REPORT_TIME.strftime("%H:%M")
+WEEKLY_AT = WEEKLY_REPORT_TIME.strftime("%H:%M")
 
 
 def _git_version() -> str:
@@ -126,6 +131,11 @@ async def collect() -> str:
         f"({spend.calls} запросов)",
         f"   Осталось до потолка: {spend.left_usd:.2f} $",
         f"   Модель для фото: {config.VISION_MODEL}",
+        "",
+        "📬 Отчёты владельцу",
+        f"   Сводка за сутки: каждый день в {DAILY_AT}",
+        f"   Итоги недели: по пятницам в {WEEKLY_AT}",
+        "   Срочное (бот упал, диск, потолок расходов) — сразу, как случится",
         "",
         "💾 Диск",
         f"   Занято {disk.percent}% — {disk.used_gb} из {disk.total_gb} ГБ, "
