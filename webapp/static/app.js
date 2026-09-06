@@ -2794,6 +2794,97 @@ function renderEvent(event) {
   card.hidden = false;
 }
 
+/* --- Друзья: только игровой слой, ничего про тело и еду ------------------- */
+let friends = null;
+
+async function refreshFriends() {
+  friends = await api('/api/friends');
+  renderFriends(friends);
+}
+
+function renderFriends(data) {
+  document.getElementById('friends-count').textContent =
+    data.count ? `${data.count} из ${data.limit}` : 'пока никого';
+
+  const goal = document.getElementById('challenge');
+  if (data.challenge) {
+    document.getElementById('challenge-hint').textContent = data.challenge.hint;
+    document.getElementById('challenge-bar').style.width =
+      `${Math.round(data.challenge.share * 100)}%`;
+    goal.hidden = false;
+  } else {
+    goal.hidden = true;
+  }
+
+  const box = document.getElementById('friends-list');
+  box.innerHTML = '';
+  data.friends.forEach((friend, index) => {
+    // Один человек в списке — это не таблица, а просто он сам.
+    if (data.friends.length < 2) return;
+    const row = document.createElement('div');
+    row.className = `friend${friend.me ? ' me' : ''}`;
+    row.innerHTML = `
+      <span class="friend-place"></span>
+      <div class="friend-main">
+        <div class="friend-name"></div>
+        <div class="friend-sub"></div>
+      </div>
+      <span class="friend-week"></span>
+      ${friend.me ? '' : '<button class="friend-drop" title="Убрать">✕</button>'}`;
+    row.querySelector('.friend-place').textContent = `${index + 1}.`;
+    row.querySelector('.friend-name').textContent = friend.me ? 'Ты' : friend.name;
+    row.querySelector('.friend-sub').textContent =
+      `Уровень ${friend.level}${friend.streak ? ` · 🔥 ${friend.streak}` : ''}`;
+    row.querySelector('.friend-week').textContent = `${friend.week} 💎`;
+    const drop = row.querySelector('.friend-drop');
+    if (drop) drop.onclick = () => dropFriend(friend);
+    box.appendChild(row);
+  });
+
+  document.getElementById('friends-invite').onclick = () => shareInvite(data.invite);
+  document.getElementById('friends-renew').onclick = () => renewInvite();
+}
+
+function shareInvite(link) {
+  if (!link) { toast('Ссылка появится, когда у бота будет имя'); return; }
+  const text = 'Присоединяйся — считаем вместе';
+  // Пересылка средствами Telegram: так человек выбирает, кому отправить, а
+  // приложение не трогает его контакты.
+  if (tg?.openTelegramLink) {
+    tg.openTelegramLink(
+      `https://t.me/share/url?url=${encodeURIComponent(link)}` +
+      `&text=${encodeURIComponent(text)}`);
+    return;
+  }
+  navigator.clipboard?.writeText(link);
+  toast('Ссылка скопирована');
+}
+
+async function renewInvite() {
+  if (!confirm('Старая ссылка перестанет работать. Сменить?')) return;
+  try {
+    friends = await api('/api/friends', {
+      method: 'POST', body: JSON.stringify({ renew: true }),
+    });
+    renderFriends(friends);
+    toast('Ссылка обновлена');
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function dropFriend(friend) {
+  if (!confirm(`Убрать ${friend.name} из друзей?`)) return;
+  try {
+    friends = await api('/api/friends', {
+      method: 'POST', body: JSON.stringify({ remove: friend.user_id }),
+    });
+    renderFriends(friends);
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 function switchScreen(name) {
   for (const tab of document.querySelectorAll('.tab')) {
     tab.classList.toggle('active', tab.dataset.screen === name);
@@ -2811,7 +2902,10 @@ function switchScreen(name) {
     buildShopMode();
     buildBasket().catch(() => {});
   }
-  if (name === 'world') refreshWorld().catch((e) => toast(e.message));
+  if (name === 'world') {
+    refreshWorld().catch((e) => toast(e.message));
+    refreshFriends().catch((e) => toast(e.message));
+  }
   if (name === 'progress' && !progress) refreshProgress().catch((e) => toast(e.message));
   if (name === 'gym' && !gym) {
     buildPicker();

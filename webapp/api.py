@@ -1114,6 +1114,56 @@ async def post_cube(request: web.Request) -> web.Response:
     })
 
 
+async def get_friends(request: web.Request) -> web.Response:
+    """Друзья: кто есть, чья неделя как идёт и общая цель.
+
+    Наружу отдаётся только игровой слой. Вес, замеры, фотографии, калории и
+    еда между людьми не передаются ни в каком виде.
+    """
+    from services import challenges, friends
+
+    async with get_session() as session:
+        user_id, tz = request["user_id"], request["timezone"]
+        cards = await friends.board(session, user_id, timezone_name=tz)
+        goal = await challenges.current(session, user_id, timezone_name=tz)
+        code = await friends.invite_code(session, user_id)
+
+    link = (f"https://t.me/{config.BOT_USERNAME}?start=friend_{code}"
+            if config.BOT_USERNAME else "")
+    return web.json_response({
+        "friends": [card.to_dict() for card in cards],
+        "count": len(cards) - 1,
+        "limit": friends.MAX_FRIENDS,
+        "invite": link,
+        "challenge": goal.to_dict() if goal else None,
+    })
+
+
+async def post_friends(request: web.Request) -> web.Response:
+    """Обновить ссылку-приглашение или убрать друга."""
+    from services import friends
+
+    body = await request.json() if request.can_read_body else {}
+    async with get_session() as session:
+        user_id = request["user_id"]
+
+        if body.get("renew"):
+            # Так отзывают ссылку, которую отправили не туда: старая
+            # перестаёт работать сразу.
+            await friends.invite_code(session, user_id, renew=True)
+        elif body.get("remove"):
+            try:
+                other = int(body["remove"])
+            except (TypeError, ValueError):
+                return web.json_response({"error": "Непонятно, кого убрать"},
+                                         status=400)
+            await friends.disconnect(session, user_id, other)
+        else:
+            return web.json_response({"error": "Нечего делать"}, status=400)
+
+    return await get_friends(request)
+
+
 async def get_world(request: web.Request) -> web.Response:
     """Мой мир: какие места открыты, как они выросли и что дальше."""
     from services import world
@@ -1324,3 +1374,5 @@ def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/preps", get_preps)
     app.router.add_post("/api/preps/mine", post_my_prep)
     app.router.add_get("/api/world", get_world)
+    app.router.add_get("/api/friends", get_friends)
+    app.router.add_post("/api/friends", post_friends)

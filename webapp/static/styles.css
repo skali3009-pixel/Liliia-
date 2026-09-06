@@ -1189,3 +1189,22 @@ select.fact-input { text-align: left; width: 130px; }
 .event.done { border-color: var(--ok); }
 .event.done .zone-title { color: var(--ok); }
 .world-level { margin: 6px 0 0; color: var(--gold); font-size: 14px; font-weight: 600; }
+
+
+/* --- Друзья --------------------------------------------------------------- */
+.challenge-hint { margin: 0 0 7px; font-size: 14px; color: var(--gold); }
+.friend {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--stroke);
+}
+.friend:last-child { border-bottom: none; }
+.friend.me .friend-name { color: var(--lilac); }
+.friend-place { width: 22px; color: var(--muted); font-size: 13px; }
+.friend-main { flex: 1; min-width: 0; }
+.friend-name { font-size: 15px; font-weight: 600; }
+.friend-sub { color: var(--muted); font-size: 12px; }
+.friend-week { color: var(--accent); font-size: 14px; font-weight: 600; white-space: nowrap; }
+.friend-drop {
+  border: none; background: none; color: var(--muted);
+  font-size: 15px; cursor: pointer; padding: 4px 6px;
+}

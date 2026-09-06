@@ -931,3 +931,74 @@ def test_a_new_place_is_celebrated_once_and_not_every_reload():
                 again = await (await call(client, "GET", "/api/world")).json()
                 assert again["cheetah"] is None, "празднует одно и то же дважды"
     run(scenario)
+
+
+# --- Друзья через HTTP -----------------------------------------------------
+
+def test_friends_answer_carries_nothing_about_the_body():
+    """Самая важная проверка PHASE 4: наружу уходит только игровое."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import friends as svc
+
+            async with maker_holder["maker"]() as session:
+                await svc.connect(session, USER_ID, OTHER_ID)
+
+            raw = await (await call(client, "GET", "/api/friends")).text()
+            for leak in ("weight", "waist", "hips", "photo", "calorie",
+                         "protein", "meal", "measurement", "target_weight"):
+                assert leak not in raw.lower(), f"в ответе про друзей есть «{leak}»"
+
+            body = await (await call(client, "GET", "/api/friends")).json()
+            assert body["count"] == 1
+            for card in body["friends"]:
+                assert set(card) == {"user_id", "name", "level", "crystals",
+                                     "week", "streak", "me"}
+    run(scenario)
+
+
+def test_a_friend_can_be_removed_and_the_link_renewed():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import friends as svc
+
+            async with maker_holder["maker"]() as session:
+                await svc.connect(session, USER_ID, OTHER_ID)
+
+            first = await (await call(client, "GET", "/api/friends")).json()
+            assert first["count"] == 1
+
+            renewed = await (await call(client, "POST", "/api/friends",
+                                        json_body={"renew": True})).json()
+            assert renewed["invite"] != first["invite"] or not first["invite"]
+
+            after = await (await call(client, "POST", "/api/friends",
+                                      json_body={"remove": OTHER_ID})).json()
+            assert after["count"] == 0
+    run(scenario)
+
+
+def test_you_cannot_remove_someone_elses_friend():
+    """Убрать можно только свою связь — чужие трогать нечем."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import friends as svc
+
+            async with maker_holder["maker"]() as session:
+                await svc.connect(session, OTHER_ID, 999)
+                session.add(User(id=999, onboarding_completed=True))
+                await session.commit()
+
+            await call(client, "POST", "/api/friends", json_body={"remove": 999})
+
+            async with maker_holder["maker"]() as session:
+                assert await svc.are_friends(session, OTHER_ID, 999), \
+                    "разорвана чужая связь"
+    run(scenario)
+
+
+def test_friends_need_a_signature():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            assert (await call(client, "GET", "/api/friends", signed=False)).status == 401
+    run(scenario)

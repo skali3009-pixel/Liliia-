@@ -39,6 +39,28 @@ router = Router(name="onboarding")
 GENDER_RU = {GenderEnum.MALE.value: "мужской", GenderEnum.FEMALE.value: "женский"}
 
 
+INVITE_PREFIX = "friend_"
+
+
+async def _accept_invite(session, user_id: int, args: str | None) -> str | None:
+    """Принять приглашение из ссылки. Возвращает имя друга или None."""
+    if not args or not args.startswith(INVITE_PREFIX):
+        return None
+
+    from services import friends
+
+    owner = await friends.owner_of(session, args[len(INVITE_PREFIX):])
+    if owner is None or owner == user_id:
+        return None
+
+    result = await friends.connect(session, user_id, owner)
+    if result not in {"ok", "already"}:
+        return None
+
+    friend = await session.get(User, owner)
+    return (friend.full_name or "").split(" ")[0] if friend else "друг"
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message, state: FSMContext, command: CommandObject) -> None:
     """Первое знакомство: заводим человека, выдаём пробный период, ведём в анкету.
@@ -58,6 +80,11 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
             user.referral = command.args[:64]
         await session.commit()
 
+        # Ссылка-приглашение от друга: t.me/бот?start=friend_КОД. Связь
+        # создаётся сразу, потому что обе стороны уже согласились — один
+        # прислал ссылку, второй по ней перешёл.
+        joined = await _accept_invite(session, user.id, command.args)
+
         # Пробный период отсчитывается от первого «Привет», а не от конца анкеты.
         await ensure_trial(session, user.id)
         access = await check_access(session, user.id)
@@ -70,6 +97,13 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         await message.answer(welcome_text(), reply_markup=consent_keyboard(),
                              disable_web_page_preview=True)
         return
+
+    if joined:
+        await message.answer(
+            f"🤝 Теперь вы с {joined} друзья.\n\n"
+            "Друг видит только игровое: кристаллы, уровень и серию. "
+            "Вес, замеры, фотографии и дневник еды не видит никто, кроме тебя."
+        )
 
     if completed:
         greeting = "С возвращением! 👋 Чем займёмся сегодня?"
