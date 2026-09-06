@@ -14,9 +14,9 @@ import config
 from db import init_models
 from services.artwork import ensure_artwork
 from services import commands as bot_commands
-from handlers import (access, errors, feedback, food, legal, onboarding, profile,
-                      progress, steps, suggestions, supplements, turn, water,
-                      workouts)
+from handlers import (access, diary, errors, feedback, food, legal, onboarding,
+                      profile, progress, steps, suggestions, supplements, turn,
+                      water, workouts)
 from middlewares.access import AccessMiddleware
 from scheduler import start_scheduler
 from webapp.server import start_webapp
@@ -47,6 +47,7 @@ dp.include_router(turn.router)
 # Шаги тоже раньше еды: число «8500», присланное в ответ, иначе уедет в
 # распознавание как название блюда.
 dp.include_router(steps.router)
+dp.include_router(diary.router)
 dp.include_router(food.router)
 dp.include_router(water.router)
 dp.include_router(supplements.router)

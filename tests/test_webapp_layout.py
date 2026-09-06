@@ -47,23 +47,6 @@ def test_profile_sheet_elements_exist_for_every_id_the_code_wires():
         assert f"'{element_id}'" in APP_JS, element_id
 
 
-def test_meal_picker_and_recipe_sheet_are_wired():
-    """Выбор приёма пищи и шторка рецепта: id должны совпадать с кодом."""
-    for element_id in ("budget-line", "plate-hint", "suggest-btn", "suggestions",
-                       "recipe-sheet", "recipe-close", "recipe-parts", "recipe-steps",
-                       "recipe-eat", "recipe-title", "recipe-macros"):
-        assert f'id="{element_id}"' in INDEX, element_id
-        assert f"'{element_id}'" in APP_JS, element_id
-    # Кнопки приёмов пищи код ищет по классу, а не по id.
-    assert 'class="meal-tab"' in INDEX and ".meal-tab" in APP_JS
-
-
-def _visible_text(source: str) -> str:
-    """Код без комментариев: подписи для человека живут только в строках."""
-    without_block = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
-    return re.sub(r"//[^\n]*", "", without_block)
-
-
 def test_preps_section_is_wired():
     """Заготовки со сроками хранения — отдельный блок и своя шторка."""
     for element_id in ("preps-toggle", "preps-list", "prep-sheet", "prep-close",
@@ -73,21 +56,56 @@ def test_preps_section_is_wired():
         assert f"'{element_id}'" in APP_JS, element_id
 
 
+CHAT = (Path(__file__).resolve().parent.parent / "handlers" /
+        "suggestions.py").read_text(encoding="utf-8")
+
+
+def _chat_strings() -> list[str]:
+    """Строки, которые уходят человеку: без пояснений к коду."""
+    import ast
+
+    tree = ast.parse(CHAT)
+    docs = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef,
+                             ast.ClassDef)):
+            first = node.body[0] if node.body else None
+            if isinstance(first, ast.Expr) and isinstance(first.value, ast.Constant):
+                docs.add(id(first.value))
+    return [node.value for node in ast.walk(tree)
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
+            and id(node) not in docs]
+
+
 def test_estimated_portions_are_disclosed():
-    """Подобранные граммы нельзя показывать как авторские."""
-    assert "item.estimated" in APP_JS
-    assert "Порции подобраны" in APP_JS
+    """Подобранные граммы нельзя показывать как авторские.
+
+    Подбор блюд переехал из приложения в чат целиком — гарантия переехала
+    вместе с ним, а не потерялась по дороге.
+    """
+    assert "offer.estimated" in CHAT
+    assert "Порции подобраны" in CHAT
 
 
 def test_only_author_dishes_carry_a_mark():
     """Блюда сверх меню не помечаются ничем — так решила владелица бота."""
-    assert "AUTHOR_MARK" in APP_JS
-    assert "if (item.author)" in APP_JS
-    visible = _visible_text(APP_JS)
+    assert "AUTHOR_MARK" in CHAT
+    # Смотрим только то, что человек увидит: правило описано и в пояснениях
+    # к коду, но пояснения ему не показывают.
+    shown = " ".join(_chat_strings())
     for label in ("по её принципам", "по принципам Анастасии", "сгенерировано",
                   "собрано по"):
-        assert label not in visible, label
+        assert label not in shown, label
         assert label not in INDEX, label
+
+
+def test_the_dish_picker_is_gone_from_the_app():
+    """Два одинаковых подбора в одном приложении — и человек не знает, какой."""
+    for gone in ("suggest-btn", "meal-tab", "cook-opt", "recipe-sheet"):
+        assert gone not in INDEX, gone
+        assert gone not in APP_JS, gone
+    # А «Кубик» остался: у него другая задача — еда без готовки.
+    assert 'id="screen-cube"' in INDEX
 
 
 def test_shelf_photo_is_wired():

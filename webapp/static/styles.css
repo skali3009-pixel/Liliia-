@@ -1117,6 +1117,10 @@ select.fact-input { text-align: left; width: 130px; }
 .steps-side .btn { margin-top: 8px; }
 .steps-card .kcal-value { font-size: 22px; }
 
+/* Друзья внутри команды: подзаголовок тише главного, но не теряется. */
+.sub-head { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--stroke); }
+.sub-head h3 { margin: 0; font-size: 15px; }
+
 /* --- Команда и рейтинг ---------------------------------------------------- */
 .team-name { margin: 0 0 10px; font-size: 17px; }
 .board-row {
