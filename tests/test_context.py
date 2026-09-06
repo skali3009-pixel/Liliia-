@@ -158,3 +158,18 @@ def test_what_is_almost_done_is_shown_first():
 def test_the_quest_we_are_nudging_about_is_pulled_up():
     codes = main_quest_codes(day(water_ml=0, hour=12), QUESTS)
     assert codes[0] == "water"
+
+
+def test_a_prep_going_off_is_worth_mentioning():
+    """Заготовка, которая испортится, — это и подсказка, и спасённые деньги."""
+    ctx = day(preps_expiring=("Тыквенный суп-пюре",), hour=17,
+              calories=1500, water_ml=2100)
+    action = next_action(ctx)
+    assert action.code == "prep"
+    assert "Тыквенный суп-пюре" in action.text
+
+
+def test_an_empty_diary_still_matters_more():
+    """Сначала записать хоть что-то, потом уже спасать суп."""
+    ctx = day(preps_expiring=("Тыквенный суп-пюре",), meals_logged=0, hour=17)
+    assert next_action(ctx).code == "meal"

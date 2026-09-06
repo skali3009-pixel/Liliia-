@@ -12,7 +12,10 @@ import config
 from db import get_session
 from models import (Meal, MealSourceEnum, Prep, PrepComponent, Product, ProgressPhoto,
                     ScheduleTypeEnum, Supplement, User, WorkoutTypeEnum)
+from services import preps as prep_service
 from services.checkins import save_checkin, today_state
+from services.preps import expiring_names
+from services.workouts import recent_program_codes
 from services.favorites import frequent_meals
 from services.food_vision import FoodAnalysis, FoodRecognitionError
 from services.gamification import awards_summary, sync_today
@@ -227,7 +230,8 @@ async def get_today(request: web.Request) -> web.Response:
         # Что сейчас полезнее всего сделать. Считается после игрового
         # пересчёта, чтобы совет учитывал уже закрытые задания.
         parts = dict(totals=totals, water=water, meals=len(meals), state=state,
-                     game=game, days_since_measure=game.get("days_since_measure"))
+                     game=game, days_since_measure=game.get("days_since_measure"),
+                     preps=await expiring_names(session, user_id, timezone_name=tz))
         action = await _next_action(session, user, tz, **parts)
         main_codes = context.main_quest_codes(
             _day_context(user, tz, suggested=(), **parts), game["quests"])
@@ -1039,19 +1043,27 @@ async def post_cube(request: web.Request) -> web.Response:
         user = await session.get(User, request["user_id"])
         products = await catalogue.products(session)
 
-        if not level:
-            # Человек в магазине не знает свой остаток — подставим сами.
-            totals = await get_today_totals(
-                session, user.id, timezone_name=request["timezone"])
-            left = (user.daily_calories or 0) - totals.calories
-            level = cube.level_for(left if left > 0 else None)
+
+        # Чего не хватает сегодня — берём из дневника, а не спрашиваем.
+        totals = await get_today_totals(session, user.id, timezone_name=request["timezone"])
+        needs = set()
+        if user.daily_protein_g and totals.protein_g < user.daily_protein_g * 0.75:
+            needs.add(cube.NEED_PROTEIN)
+        if user.daily_fiber_g and totals.fiber_g < user.daily_fiber_g * 0.75:
+            needs.add(cube.NEED_FIBER)
 
         diet = user.diet_type.value if user.diet_type else "regular"
         allergies = {part.strip().lower() for part in (user.allergies or "").split(",")
                      if part.strip()}
 
+        if not level:
+            # Человек в магазине не знает свой остаток — подставим сами.
+            left = (user.daily_calories or 0) - totals.calories
+            level = cube.level_for(left if left > 0 else None)
+
         limits = dict(
             no_spoon=no_spoon, exclude=allergies, basket=basket,
+            needs=frozenset(needs),
             vegan=diet == "vegan", vegetarian=diet in {"vegan", "vegetarian"},
             gluten_free=diet == "gluten_free",
         )
@@ -1071,8 +1083,70 @@ async def post_cube(request: web.Request) -> web.Response:
 
     return web.json_response({
         "level": level,
+        # Чтобы приложение могло объяснить, почему подобрало именно это.
+        "needs": sorted(needs),
         "cubes": [dict(_cube_to_dict(item, products), label=label)
                   for label, item in cubes],
+    })
+
+
+async def post_my_prep(request: web.Request) -> web.Response:
+    """Отметить заготовку приготовленной или убрать её из холодильника."""
+    body = await request.json() if request.can_read_body else {}
+    code = str(body.get("code", "")).strip()
+    if not code:
+        return web.json_response({"error": "Нужен код заготовки"}, status=400)
+
+    async with get_session() as session:
+        if body.get("done"):
+            await prep_service.forget(session, request["user_id"], code)
+        else:
+            await prep_service.mark_made(session, request["user_id"], code,
+                                         timezone_name=request["timezone"])
+        fridge = await prep_service.mine(session, request["user_id"],
+                                         timezone_name=request["timezone"])
+
+    return web.json_response({"mine": [item.to_dict() for item in fridge]})
+
+
+async def post_workout_pick(request: web.Request) -> web.Response:
+    """Подобрать занятие под время, силы и место.
+
+    Нового каталога нет: выбираем из тех же программ, что и всегда. Смысл в
+    том, чтобы человек не выбирал сам, когда у него десять минут и мало сил.
+    """
+    from services import workout_picker
+
+    body = await request.json() if request.can_read_body else {}
+    quick = bool(body.get("quick"))
+
+    try:
+        minutes = max(int(body.get("minutes") or 30), 5)
+    except (TypeError, ValueError):
+        minutes = 30
+
+    async with get_session() as session:
+        state = await today_state(session, request["user_id"],
+                                  timezone_name=request["timezone"])
+        # Что делали в последние дни — чтобы не предлагать то же самое.
+        recent = await recent_program_codes(session, request["user_id"],
+                                            timezone_name=request["timezone"])
+
+    energy = state.energy
+    if quick:
+        return web.json_response({
+            "quick": True,
+            "sets": [item.to_dict()
+                     for item in workout_picker.quick_five(energy=energy, recent=recent)],
+        })
+
+    location = body.get("location") or None
+    picks = workout_picker.pick(minutes_available=minutes, energy=energy,
+                                location=location, recent=recent)
+    return web.json_response({
+        "quick": False,
+        "energy": energy,
+        "picks": [item.to_dict() for item in picks],
     })
 
 
@@ -1127,6 +1201,9 @@ async def get_preps(request: web.Request) -> web.Response:
         products = {p.code: p.name for p in
                     (await session.execute(sa_select(Product))).scalars()}
         components = (await session.execute(sa_select(PrepComponent))).scalars().all()
+        # Что из этого уже стоит в холодильнике у конкретного человека.
+        fridge = await prep_service.mine(session, request["user_id"],
+                                         timezone_name=request["timezone"])
 
     by_prep: dict[int, list[dict]] = {}
     for item in components:
@@ -1158,7 +1235,7 @@ async def get_preps(request: web.Request) -> web.Response:
             "components": by_prep.get(prep.id, []),
         }
         for prep in preps
-    ]})
+    ], "mine": [item.to_dict() for item in fridge]})
 
 
 def add_routes(app: web.Application) -> None:
@@ -1188,4 +1265,6 @@ def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/menu", get_menu)
     app.router.add_post("/api/cube", post_cube)
     app.router.add_get("/api/cube/basket", get_basket)
+    app.router.add_post("/api/workouts/pick", post_workout_pick)
     app.router.add_get("/api/preps", get_preps)
+    app.router.add_post("/api/preps/mine", post_my_prep)

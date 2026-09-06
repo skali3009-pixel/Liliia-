@@ -268,3 +268,41 @@ def test_the_basket_always_offers_a_source_of_protein(catalogue):
     rows = {title: items for title, items in BASKET}
     assert {GROUP_INDEX[c] for c in rows["Белок"]} <= PROTEIN_GROUPS
     assert {GROUP_INDEX[c] for c in rows["Выпить"]} <= PROTEIN_GROUPS
+
+
+# --- Кубик смотрит на день -------------------------------------------------
+
+def test_a_fibre_gap_forces_a_vegetable_or_fruit(catalogue):
+    """Клетчатку нечем добрать, кроме овоща или фрукта. Это не пожелание."""
+    for seed in range(4):
+        cubes = cube.build(catalogue, level="normal",
+                           needs=frozenset({cube.NEED_FIBER}),
+                           rng=random.Random(seed), limit=3)
+        assert cubes
+        for item in cubes:
+            groups = {part.group for part in item.items}
+            assert groups & {"фрукт", "овощ", "хруст", "орехи"}, \
+                f"набор без источника клетчатки: {[p.name for p in item.items]}"
+
+
+def test_a_protein_gap_pushes_protein_up(catalogue):
+    """При недоборе белка наборы должны стать белковее."""
+    plain = cube.build(catalogue, level="normal", rng=random.Random(1), limit=3)
+    hungry_for_protein = cube.build(catalogue, level="normal",
+                                    needs=frozenset({cube.NEED_PROTEIN}),
+                                    rng=random.Random(1), limit=3)
+    assert max(c.protein_g for c in hungry_for_protein) >= \
+        max(c.protein_g for c in plain)
+
+
+def test_an_impossible_need_does_not_leave_an_empty_screen(catalogue):
+    """Пустой экран полезен человеку меньше, чем набор без клетчатки."""
+    # В корзине только йогурт и гранола — ни овоща, ни фрукта.
+    basket = {"greek_yogurt", "granola"}
+    assert not cube.build(catalogue, level="normal", basket=basket,
+                          needs=frozenset({cube.NEED_FIBER}), rng=random.Random(2),
+                          _no_fallback=True), "проверка бессмысленна: набор собрался"
+
+    cubes = cube.build(catalogue, level="normal", basket=basket,
+                       needs=frozenset({cube.NEED_FIBER}), rng=random.Random(2))
+    assert cubes, "требование клетчатки оставило человека ни с чем"

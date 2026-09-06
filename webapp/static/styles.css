@@ -1116,3 +1116,32 @@ select.fact-input { text-align: left; width: 130px; }
 .turn-mark { font-size: 15px; }
 .turn-text { margin: 0 0 14px; font-size: 16px; line-height: 1.35; }
 .turn .btn { margin: 0; }
+
+.cube-needs { margin: 0 18px 4px; color: var(--lilac); font-size: 13px; }
+
+
+/* --- Подбор занятия ------------------------------------------------------ */
+.pick {
+  margin-top: 10px; padding: 12px 14px; border-radius: 14px;
+  border: 1px solid var(--stroke); background: rgba(255, 255, 255, .03);
+  cursor: pointer;
+}
+.pick-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.pick-title { font-size: 15px; font-weight: 600; }
+.pick-min { color: var(--lilac); font-size: 13px; white-space: nowrap; }
+.pick-list { margin: 6px 0 0; font-size: 13px; color: var(--fg); }
+.pick-why { margin: 5px 0 0; font-size: 12px; color: var(--muted); }
+
+
+/* Заготовка, которая реально стоит в холодильнике, выглядит иначе. */
+.prep-row { display: flex; align-items: stretch; gap: 6px; }
+.prep-row .prep-open { flex: 1; display: flex; justify-content: space-between;
+  align-items: center; gap: 10px; background: none; border: none;
+  color: inherit; font-family: inherit; text-align: left; cursor: pointer; }
+.prep-row.have .prep-name { color: var(--lilac); }
+.prep-mark {
+  flex: 0 0 34px; border: 1px solid var(--stroke); border-radius: 10px;
+  background: none; color: var(--muted); font-size: 16px; cursor: pointer;
+}
+.prep-row.have .prep-mark { border-color: var(--accent); color: var(--accent); }
+.prep-keep.soon { color: var(--warn); }

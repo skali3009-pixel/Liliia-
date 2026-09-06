@@ -11,6 +11,7 @@ from models.nutrition import Dish, DishComponent, Prep, PrepComponent, Product
 from models.usage import ApiUsage
 from models.day_stat import DayStat
 from models.meal import Meal, MealSourceEnum, MealTypeEnum
+from models.user_prep import UserPrep
 from models.user import (
     ActivityLevelEnum,
     DietTypeEnum,
@@ -49,6 +50,7 @@ __all__ = [
     "Achievement",
     "DayStat",
     "Checkin",
+    "UserPrep",
     "Subscription",
     "SubscriptionStatus",
     "SubscriptionSource",

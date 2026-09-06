@@ -1883,7 +1883,11 @@ async function togglePreps() {
 
   button.textContent = 'загружаю…';
   try {
-    if (!preps) preps = (await api('/api/preps')).preps;
+    if (!preps) {
+      const data = await api('/api/preps');
+      preps = data.preps;
+      myPreps = data.mine || [];
+    }
     renderPreps(preps);
     box.hidden = false;
     button.textContent = 'скрыть';
@@ -1893,19 +1897,51 @@ async function togglePreps() {
   }
 }
 
+// Что стоит в холодильнике: код заготовки -> сколько ещё хранится.
+let myPreps = [];
+
 function renderPreps(items) {
   const box = document.getElementById('preps-list');
+  const fridge = new Map((myPreps || []).map((item) => [item.code, item]));
   box.innerHTML = '';
+
   items.forEach((prep, index) => {
-    const row = document.createElement('button');
-    row.className = 'prep-row';
+    const have = fridge.get(prep.code);
+    const row = document.createElement('div');
+    row.className = `prep-row${have ? ' have' : ''}`;
     row.innerHTML = `
-      <span class="prep-name"></span>
-      <span class="prep-keep"></span>`;
+      <button class="prep-open">
+        <span class="prep-name"></span>
+        <span class="prep-keep"></span>
+      </button>
+      <button class="prep-mark" title="Приготовила"></button>`;
     row.querySelector('.prep-name').textContent = prep.name;
-    // Срок хранения — то, ради чего этот список открывают.
-    row.querySelector('.prep-keep').textContent = prep.fridge || '';
-    row.onclick = () => openPrep(index);
+    // Пока заготовки нет — показываем срок хранения из справочника. Когда
+    // есть — сколько осталось именно у неё.
+    row.querySelector('.prep-keep').textContent = have ? have.hint : (prep.fridge || '');
+    if (have && have.expiring) row.querySelector('.prep-keep').classList.add('soon');
+
+    row.querySelector('.prep-open').onclick = () => openPrep(index);
+    const mark = row.querySelector('.prep-mark');
+    mark.textContent = have ? '✓' : '+';
+    mark.onclick = async (event) => {
+      event.stopPropagation();
+      mark.disabled = true;
+      try {
+        // Повторное нажатие означает «съела»: холодильник должен пустеть
+        // так же легко, как наполняться.
+        const data = await api('/api/preps/mine', {
+          method: 'POST',
+          body: JSON.stringify({ code: prep.code, done: Boolean(have) }),
+        });
+        myPreps = data.mine || [];
+        renderPreps(items);
+        toast(have ? 'Убрала из холодильника' : 'Записала: приготовлено сегодня');
+      } catch (error) {
+        mark.disabled = false;
+        toast(error.message);
+      }
+    };
     box.appendChild(row);
   });
 }
@@ -2501,11 +2537,23 @@ async function rollCube(inStore = cubeState.shop) {
     });
     // Режим мог подставиться сам по остатку калорий — покажем, какой вышел.
     if (!cubeState.level) { cubeState.level = data.level; markCubeLevel(); }
+    renderCubeNeeds(data.needs);
     renderCubes(data.cubes);
   } catch (error) {
     results.innerHTML = '';
     toast(error.message);
   }
+}
+
+function renderCubeNeeds(needs) {
+  // Объясняем, почему подобрали именно это. Молчаливая «умность» выглядит
+  // как случайность.
+  const hint = document.getElementById('cube-needs');
+  const words = { protein: 'белка', fiber: 'клетчатки' };
+  const missing = (needs || []).map((code) => words[code]).filter(Boolean);
+  hint.textContent = missing.length
+    ? `Сегодня не хватает ${missing.join(' и ')} — учла это в подборе.` : '';
+  hint.hidden = missing.length === 0;
 }
 
 function renderCubes(cubes) {
@@ -2573,6 +2621,87 @@ async function eatCube(item, card) {
   }
 }
 
+/* --- Подбор занятия: два вопроса вместо каталога ------------------------- */
+const PICK_TIMES = [[5, '⚡ 5 минут'], [15, '15 минут'], [30, '30 минут'],
+                    [45, '45 минут']];
+
+function buildPicker() {
+  const box = document.getElementById('pick-time');
+  box.innerHTML = '';
+  for (const [minutes, label] of PICK_TIMES) {
+    const chip = document.createElement('button');
+    chip.className = 'chip-btn';
+    chip.textContent = label;
+    chip.onclick = () => {
+      for (const other of box.children) other.classList.toggle('active', other === chip);
+      pickWorkout(minutes);
+    };
+    box.appendChild(chip);
+  }
+}
+
+async function pickWorkout(minutes) {
+  const out = document.getElementById('pick-result');
+  out.innerHTML = '<p class="hint">Подбираю…</p>';
+  try {
+    const data = await api('/api/workouts/pick', {
+      method: 'POST',
+      // Пять минут — особый случай: целой программы такой длины нет, и
+      // сервер собирает короткий набор из тех же упражнений.
+      body: JSON.stringify({ minutes, quick: minutes <= 5 }),
+    });
+    renderPicks(data);
+  } catch (error) {
+    out.innerHTML = '';
+    toast(error.message);
+  }
+}
+
+function renderPicks(data) {
+  const out = document.getElementById('pick-result');
+  out.innerHTML = '';
+  const items = data.quick ? data.sets : data.picks;
+
+  if (!items || !items.length) {
+    out.innerHTML = '<p class="hint">Под это время ничего не нашлось. '
+      + 'Попробуй выбрать побольше.</p>';
+    return;
+  }
+
+  for (const item of items) {
+    const row = document.createElement('div');
+    row.className = 'pick';
+    const list = data.quick
+      ? `<p class="pick-list">${item.exercises.join(' · ')}</p>` : '';
+    row.innerHTML = `
+      <div class="pick-head">
+        <span class="pick-title"></span>
+        <span class="pick-min">≈${item.minutes} мин</span>
+      </div>
+      ${list}
+      <p class="pick-why"></p>`;
+    row.querySelector('.pick-title').textContent = item.title;
+    row.querySelector('.pick-why').textContent = item.why;
+    // Нажатие открывает ту же программу в каталоге ниже — второго списка
+    // упражнений заводить незачем.
+    row.onclick = () => openProgram(item.code, item.category);
+    out.appendChild(row);
+  }
+}
+
+function openProgram(code, itemCategory) {
+  // Программа может быть из другого направления — переключаем и его, иначе
+  // каталог покажет пустоту.
+  if (itemCategory && itemCategory !== category) {
+    category = itemCategory;
+    style = null;
+  }
+  programCode = code;
+  refreshWorkouts()
+    .then(() => document.getElementById('exercises').scrollIntoView({ behavior: 'smooth' }))
+    .catch((e) => toast(e.message));
+}
+
 function switchScreen(name) {
   for (const tab of document.querySelectorAll('.tab')) {
     tab.classList.toggle('active', tab.dataset.screen === name);
@@ -2591,7 +2720,10 @@ function switchScreen(name) {
     buildBasket().catch(() => {});
   }
   if (name === 'progress' && !progress) refreshProgress().catch((e) => toast(e.message));
-  if (name === 'gym' && !gym) refreshWorkouts().catch((e) => toast(e.message));
+  if (name === 'gym' && !gym) {
+    buildPicker();
+    refreshWorkouts().catch((e) => toast(e.message));
+  }
 }
 
 function buildWeekdayPicker() {

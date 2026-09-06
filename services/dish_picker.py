@@ -165,8 +165,14 @@ async def prep_names(session: AsyncSession, dish) -> list[str]:
 
 
 def rank(picks: list[Pick], *, budget: float, gap: str | None,
-         recent: set[str]) -> list[Pick]:
-    """Отсортировать варианты: чем меньше счёт, тем уместнее сейчас."""
+         recent: set[str], have: set[str] | None = None,
+         expiring: set[str] | None = None) -> list[Pick]:
+    """Отсортировать варианты: чем меньше счёт, тем уместнее сейчас.
+
+    `have` — заготовки, которые у человека реально есть, `expiring` — те,
+    что подходят к концу срока. Блюдо, собираемое из готового, почти не
+    требует работы, и это самое ценное, что можно предложить вечером.
+    """
     def score(pick: Pick) -> float:
         value = abs(pick.kcal - budget) / max(budget, 1)
         # Закрыть главный недобор дня важнее, чем попасть в калории до единицы.
@@ -184,13 +190,26 @@ def rank(picks: list[Pick], *, budget: float, gap: str | None,
         value += min(pick.dish.minutes, 60) / 600
         if pick.preps:
             value -= 0.08
+        # А если заготовка не просто упомянута, а реально стоит в холодильнике,
+        # это лучшее предложение из возможных: готовить почти нечего. И тем
+        # более если она подходит к концу срока.
+        if have and set(pick.dish.prep_codes) & have:
+            value -= 0.4
+        if expiring and set(pick.dish.prep_codes) & expiring:
+            value -= 0.5
         return value
 
     return sorted(picks, key=score)
 
 
-def explain(pick: Pick, *, budget: float, gap: str | None) -> str:
+def explain(pick: Pick, *, budget: float, gap: str | None,
+            have: set[str] | None = None, expiring: set[str] | None = None) -> str:
     """Одна фраза, чем вариант хорош именно сейчас."""
+    codes = set(pick.dish.prep_codes)
+    if expiring and codes & expiring:
+        return "Заготовку лучше доесть сегодня — это она"
+    if have and codes & have:
+        return "Собирается из того, что уже готово"
     if pick.preps and pick.dish.minutes <= 12:
         return f"Почти всё готово — собрать за {pick.dish.minutes} минут"
     if gap == "protein_g" and pick.protein_g >= 25:
@@ -216,6 +235,14 @@ async def pick_dishes(session: AsyncSession, user: User, *, meal_type: str,
     allowed = await candidates(session, user, meal_type, no_cook=no_cook)
     recent = await _recent_codes(session, user.id)
 
+    # Что реально стоит в холодильнике: из этого блюдо собирается почти без
+    # работы, и такие варианты должны идти первыми.
+    from services.preps import mine as my_preps
+
+    fridge = await my_preps(session, user.id)
+    have = {item.code for item in fridge if not item.gone}
+    expiring = {item.code for item in fridge if item.expiring and not item.gone}
+
     fitted, near = [], []
     for dish in allowed:
         scale = scale_for(dish, budget)
@@ -229,9 +256,11 @@ async def pick_dishes(session: AsyncSession, user: User, *, meal_type: str,
     for pick in fitted:
         pick.preps = await prep_names(session, pick.dish)
 
-    ranked = rank(fitted, budget=budget, gap=gap, recent=recent)[:limit]
+    ranked = rank(fitted, budget=budget, gap=gap, recent=recent,
+                  have=have, expiring=expiring)[:limit]
     for pick in ranked:
-        pick.reason = explain(pick, budget=budget, gap=gap)
+        pick.reason = explain(pick, budget=budget, gap=gap,
+                              have=have, expiring=expiring)
 
     if ranked:
         return ranked, []

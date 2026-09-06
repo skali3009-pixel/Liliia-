@@ -184,6 +184,26 @@ async def recent_sessions(
     return list(rows)
 
 
+async def recent_program_codes(
+    session: AsyncSession, user_id: int, *, days: int = 3,
+    timezone_name: str = DEFAULT_TIMEZONE,
+) -> tuple[str, ...]:
+    """Какие программы человек делал в последние дни.
+
+    Отдельным запросом, а не через связь у записи: обращение к связанной
+    строке после выборки в асинхронном коде подгружает её лениво и падает.
+    """
+    start, _ = day_bounds(timezone_name,
+                          day=today_in(timezone_name) - timedelta(days=days - 1))
+    rows = (await session.execute(
+        select(Workout.program_code)
+        .join(WorkoutLog, WorkoutLog.workout_id == Workout.id)
+        .where(WorkoutLog.user_id == user_id, WorkoutLog.completed_at >= start)
+        .distinct()
+    )).scalars().all()
+    return tuple(code for code in rows if code)
+
+
 async def week_summary(
     session: AsyncSession, user_id: int, *, timezone_name: str = DEFAULT_TIMEZONE
 ) -> dict:

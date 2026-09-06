@@ -207,7 +207,17 @@ def _round_portion(grams: float, group: str, product: Product) -> float:
     return max(5, round(grams / 5) * 5)
 
 
-def _shapes(level: str, craving: str, pool: dict[str, list[str]]) -> list[tuple[str, ...]]:
+# Чего человеку сегодня не хватает. Приходит из дневника, а не от него самого:
+# он пришёл поесть, а не считать белок.
+NEED_PROTEIN = "protein"
+NEED_FIBER = "fiber"
+
+# Группы, которые дают клетчатку.
+FIBER_GROUPS = frozenset({"фрукт", "овощ", "хруст", "орехи"})
+
+
+def _shapes(level: str, craving: str, pool: dict[str, list[str]],
+            needs: frozenset[str] = frozenset()) -> list[tuple[str, ...]]:
     """Формы наборов, годные для этого режима и настроения.
 
     Сначала привычные сочетания, потом всё остальное — чтобы «кефир с
@@ -220,6 +230,10 @@ def _shapes(level: str, craving: str, pool: dict[str, list[str]]) -> list[tuple[
         if not set(shape) <= available:
             return False
         if not slots_ok(list(shape), level):
+            return False
+        # Не хватило клетчатки — в наборе обязан быть овощ или фрукт. Это
+        # единственный способ её добрать, а не пожелание.
+        if NEED_FIBER in needs and not (FIBER_GROUPS & set(shape)):
             return False
         return not wanted or bool(wanted & set(shape))
 
@@ -252,7 +266,8 @@ def _combinations(items: list[str], count: int) -> list[tuple[str, ...]]:
     return out
 
 
-def _score(cube: Cube, level: str, craving: str) -> float:
+def _score(cube: Cube, level: str, craving: str,
+           needs: frozenset[str] = frozenset()) -> float:
     """Чем меньше, тем лучше."""
     _, low, high, _, _, _ = LEVELS[level]
     middle = (low + high) / 2
@@ -263,7 +278,7 @@ def _score(cube: Cube, level: str, craving: str) -> float:
 
     if craving == "filling":
         penalty -= min(sum(i.grams for i in cube.items) / 1000, 0.5)
-    if craving == "protein":
+    if craving == "protein" or NEED_PROTEIN in needs:
         penalty -= min(cube.protein_g / 100, 0.4)
     return penalty
 
@@ -272,10 +287,15 @@ def build(products: dict[str, Product], *, level: str = "normal",
           craving: str = "random", no_spoon: bool = False,
           exclude: set[str] | None = None, vegan: bool = False,
           vegetarian: bool = False, gluten_free: bool = False,
-          basket: set[str] | None = None,
+          basket: set[str] | None = None, needs: frozenset[str] = frozenset(),
           recent: list[tuple[str, ...]] | None = None,
-          limit: int = 3, rng: random.Random | None = None) -> list[Cube]:
-    """Собрать несколько наборов под режим голода и настроение."""
+          limit: int = 3, rng: random.Random | None = None,
+          _no_fallback: bool = False) -> list[Cube]:
+    """Собрать несколько наборов под режим голода, настроение и недоборы дня.
+
+    `needs` приходит из дневника: если сегодня мало белка или клетчатки,
+    подбор учитывает это сам. Человек пришёл поесть, а не считать граммы.
+    """
     if level not in LEVELS:
         level = "normal"
     rng = rng or random.Random()
@@ -288,7 +308,7 @@ def build(products: dict[str, Product], *, level: str = "normal",
         return []
 
     _, low, high, _, _, _ = LEVELS[level]
-    shapes = _shapes(level, craving, pool)
+    shapes = _shapes(level, craving, pool, needs)
     rng.shuffle(shapes)
 
     seen: set[tuple[str, ...]] = set()
@@ -325,7 +345,15 @@ def build(products: dict[str, Product], *, level: str = "normal",
         if len(found) >= limit * 4:
             break
 
-    found.sort(key=lambda c: _score(c, level, craving))
+    if not found and needs and not _no_fallback:
+        # Под жёсткое требование могло ничего не собраться. Пустой экран
+        # человеку полезен меньше, чем набор без клетчатки.
+        return build(products, level=level, craving=craving, no_spoon=no_spoon,
+                     exclude=exclude, vegan=vegan, vegetarian=vegetarian,
+                     gluten_free=gluten_free, basket=basket,
+                     recent=recent, limit=limit, rng=rng)
+
+    found.sort(key=lambda c: _score(c, level, craving, needs))
     return [_decorate(cube, pool) for cube in _varied(found, limit)]
 
 
@@ -463,5 +491,6 @@ def level_for(kcal_left: float | None) -> str:
     return "meal"
 
 
-__all__ = ["Cube", "GROUP_OF", "Item", "MIN_PROTEIN_SHARE", "REMEMBER",
-           "SHOP_LABELS", "build", "level_for", "shop_offers", "title_for"]
+__all__ = ["Cube", "GROUP_OF", "Item", "MIN_PROTEIN_SHARE", "NEED_FIBER",
+           "NEED_PROTEIN", "REMEMBER", "SHOP_LABELS", "build", "level_for",
+           "shop_offers", "title_for"]

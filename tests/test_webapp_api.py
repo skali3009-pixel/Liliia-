@@ -825,3 +825,40 @@ def test_reopening_the_screen_does_not_burn_the_advice():
                 assert again is not None, "совет пропал от простых обновлений"
                 assert again["code"] == first["code"], "совет менялся сам по себе"
     run(scenario)
+
+
+# --- Подбор занятия через HTTP ---------------------------------------------
+
+def test_workout_pick_fits_the_time():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            for minutes in (15, 30, 45):
+                body = await (await call(client, "POST", "/api/workouts/pick",
+                                         json_body={"minutes": minutes})).json()
+                assert body["picks"], f"под {minutes} мин ничего"
+                for item in body["picks"]:
+                    assert item["minutes"] <= minutes * 1.15
+                    assert item["why"] and item["title"]
+    run(scenario)
+
+
+def test_five_minutes_returns_short_sets_not_programmes():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            body = await (await call(client, "POST", "/api/workouts/pick",
+                                     json_body={"minutes": 5, "quick": True})).json()
+            assert body["quick"] is True
+            assert body["sets"]
+            for item in body["sets"]:
+                assert item["minutes"] <= 7
+                assert len(item["exercises"]) >= 2
+    run(scenario)
+
+
+def test_workout_pick_needs_a_signature():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/workouts/pick",
+                                  signed=False, json_body={"minutes": 30})
+            assert response.status == 401
+    run(scenario)

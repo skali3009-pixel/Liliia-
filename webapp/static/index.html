@@ -409,6 +409,16 @@
         <div class="stat-label">ккал за неделю</div></div>
     </section>
 
+    <!-- Подбор вместо выбора: тринадцать программ, четыре направления и семь
+         форм — это выбор, а не занятие. Человек отвечает на два вопроса и
+         получает одно. Ниже остаётся весь каталог для тех, кто хочет сам. -->
+    <section class="card" id="pick-card">
+      <h2 class="cube-q">✨ Подобрать мне</h2>
+      <p class="hint">Сколько у тебя времени?</p>
+      <div class="chips" id="pick-time"></div>
+      <div id="pick-result"></div>
+    </section>
+
     <div class="filters">
       <div class="chips" id="category-switch"></div>
       <div class="chips" id="style-switch"></div>
@@ -483,6 +493,7 @@
       <button id="cube-go" class="btn">🎲 Собрать кубик</button>
     </section>
 
+    <p class="cube-needs" id="cube-needs" hidden></p>
     <div id="cube-results"></div>
   </main>
 
