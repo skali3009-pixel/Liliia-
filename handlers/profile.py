@@ -9,22 +9,24 @@
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 
 from aiogram import F, Router
 from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.exceptions import TelegramBadRequest
-from aiogram.filters import StateFilter
+from aiogram.filters import Command, StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from db import get_session
 from keyboards.main_menu import (MENU_ADD_MEAL, MENU_PROFILE, MENU_PROGRESS, MENU_WATER,
                                  MENU_WHAT_TO_EAT, MENU_WORKOUT)
 from keyboards.onboarding import activity_keyboard, diet_type_keyboard, goal_keyboard
-from keyboards.profile import (CB_BACK, CB_EDIT, CB_REMINDERS, edit_menu_keyboard,
-                               with_back)
+from keyboards.profile import (CB_BACK, CB_EDIT, CB_EXPORT, CB_REMINDERS,
+                               edit_menu_keyboard, with_back)
 from models import User
 from services import profile as profile_service
+from services.export import build_export
 from services.profile import ACTIVITY_RU, DIET_RU, GENDER_RU, GOAL_RU
 from states.profile import ProfileStates
 from utils.parsing import parse_float, parse_int
@@ -182,6 +184,40 @@ async def switch_reminders(callback: CallbackQuery) -> None:
     await callback.answer(
         "Напоминания включены" if enabled else "Больше не напоминаю"
     )
+
+
+# Выгрузка идёт через бота, а не ссылкой: файл остаётся в переписке, его
+# можно переслать себе и открыть с любого устройства, и никакой адрес с
+# личными данными не гуляет по интернету.
+async def send_export(target: Message, user_id: int) -> None:
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        if user is None or not user.onboarding_completed:
+            await target.answer(NOT_READY)
+            return
+        # Сбор архива с фото занимает секунды — человек должен видеть, что
+        # его услышали.
+        note = await target.answer("Собираю файл со всеми твоими записями…")
+        export = await build_export(session, user)
+
+    await target.answer_document(
+        BufferedInputFile(export.content, filename=export.filename),
+        caption=export.caption(),
+    )
+    with suppress(TelegramBadRequest):
+        await note.delete()
+
+
+@router.message(Command("export"))
+async def export_command(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    await send_export(message, message.from_user.id)
+
+
+@router.callback_query(F.data == CB_EXPORT)
+async def export_button(callback: CallbackQuery) -> None:
+    await callback.answer("Собираю файл")
+    await send_export(callback.message, callback.from_user.id)
 
 
 @router.callback_query(F.data == CB_BACK)

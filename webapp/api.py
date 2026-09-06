@@ -18,6 +18,7 @@ from services.food_vision import FoodAnalysis, FoodRecognitionError
 from services.gamification import awards_summary, sync_today
 from services.meals import get_today_totals, list_today_meals, save_meal
 from services.moments import Moment, analyze_moment, facts as moment_facts
+from services.export import build_export
 from services.profile import (
     ACTIVITY_RU,
     DIET_RU,
@@ -943,6 +944,39 @@ async def patch_profile(request: web.Request) -> web.Response:
     return web.json_response(data)
 
 
+
+async def send_to_chat(user_id: int, export) -> None:
+    """Отдать файл ботом в переписку.
+
+    Ссылкой на скачивание отдавать нельзя: внутри Telegram она открывается
+    во встроенном браузере, где загрузка файла работает через раз, а сам
+    адрес с личными данными жил бы в интернете. В чате файл остаётся
+    навсегда и открывается с любого устройства.
+    """
+    from aiogram import Bot
+    from aiogram.types import BufferedInputFile
+
+    bot = Bot(token=config.BOT_TOKEN)
+    try:
+        await bot.send_document(
+            user_id,
+            BufferedInputFile(export.content, filename=export.filename),
+            caption=export.caption(),
+        )
+    finally:
+        await bot.session.close()
+
+
+async def post_export(request: web.Request) -> web.Response:
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        export = await build_export(session, user)
+
+    await send_to_chat(user.id, export)
+    return web.json_response({"filename": export.filename, "rows": export.rows,
+                              "photos": export.photos_included})
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -967,3 +1001,4 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/checkin", post_checkin)
     app.router.add_get("/api/profile", get_profile)
     app.router.add_patch("/api/profile", patch_profile)
+    app.router.add_post("/api/export", post_export)

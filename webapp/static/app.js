@@ -2024,6 +2024,22 @@ function saveProfileField(field, input) {
   saveProfile({ [field]: value });
 }
 
+async function requestExport() {
+  const button = document.getElementById('prof-export');
+  button.disabled = true;
+  button.textContent = 'Собираю файл…';
+  try {
+    await api('/api/export', { method: 'POST' });
+    haptic('medium');
+    toast('Файл ушёл в чат с ботом');
+  } catch (e) {
+    toast(e.message);
+  } finally {
+    button.disabled = false;
+    button.textContent = '📦 Выгрузить всё одним файлом';
+  }
+}
+
 async function openProfile() {
   document.getElementById('profile-sheet').hidden = false;
   try {
@@ -2105,6 +2121,7 @@ async function init() {
 
   document.getElementById('profile-open').onclick = openProfile;
   document.getElementById('profile-close').onclick = closeProfile;
+  document.getElementById('prof-export').onclick = requestExport;
   document.getElementById('prof-reminders').onclick = () => {
     if (profileData) saveProfile({ reminders: !profileData.profile.reminders });
   };

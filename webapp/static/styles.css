@@ -140,6 +140,8 @@ h2 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
   background: var(--accent); color: var(--accent-fg); font-size: 15px; font-weight: 600; cursor: pointer;
 }
 .btn:active { opacity: .85; }
+/* Кнопка занята делом — это должно быть видно, иначе жмут второй раз. */
+.btn:disabled { opacity: .55; }
 
 .input {
   width: 100%; margin-bottom: 8px; padding: 12px; border: 1px solid var(--stroke);

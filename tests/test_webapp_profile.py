@@ -139,3 +139,32 @@ def test_profile_needs_a_signature():
             response = await call(client, "GET", "/api/profile", signed=False)
             assert response.status == 401
     run(scenario)
+
+
+def test_export_sends_the_file_to_the_chat():
+    """Кнопка в приложении отдаёт архив ботом в переписку, а не ссылкой."""
+    async def scenario():
+        import webapp.api as api_module
+
+        sent = []
+        original = api_module.send_to_chat
+        async def fake_send(user_id, export):
+            sent.append((user_id, export))
+
+        api_module.send_to_chat = fake_send
+        try:
+            async with webapp_client() as (client, _):
+                response = await call(client, "POST", "/api/export")
+                assert response.status == 200
+                data = await response.json()
+                assert data["filename"].endswith(".zip")
+                assert data["rows"]["Еда"] == 1
+        finally:
+            api_module.send_to_chat = original
+
+        assert len(sent) == 1
+        user_id, export = sent[0]
+        assert user_id == USER_ID
+        # Архив собран целиком, а не обещан на будущее.
+        assert export.content[:2] == b"PK"
+    run(scenario)

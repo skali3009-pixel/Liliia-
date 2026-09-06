@@ -8,6 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 CB_EDIT = "prof_edit:"
 CB_BACK = "prof_back"
 CB_REMINDERS = "prof_reminders"
+CB_EXPORT = "prof_export"
 
 # Порядок не случайный: сверху то, что меняют чаще всего.
 FIELD_LABELS: dict[str, str] = {
@@ -31,7 +32,9 @@ def edit_menu_keyboard(*, reminders_on: bool = True) -> InlineKeyboardMarkup:
         text="🔔 Напоминания: вкл" if reminders_on else "🔕 Напоминания: выкл",
         callback_data=CB_REMINDERS,
     )
-    builder.adjust(2, 2, 2, 1, 1)
+    # Выгрузка — не правка анкеты, поэтому стоит последней и отдельной строкой.
+    builder.button(text="📦 Выгрузить мои данные", callback_data=CB_EXPORT)
+    builder.adjust(2, 2, 2, 1, 1, 1)
     return builder.as_markup()
 
 
@@ -42,5 +45,5 @@ def with_back(markup: InlineKeyboardMarkup) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-__all__ = ["CB_BACK", "CB_EDIT", "CB_REMINDERS", "FIELD_LABELS", "edit_menu_keyboard",
-           "with_back"]
+__all__ = ["CB_BACK", "CB_EDIT", "CB_EXPORT", "CB_REMINDERS", "FIELD_LABELS",
+           "edit_menu_keyboard", "with_back"]

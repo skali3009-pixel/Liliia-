@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from handlers.profile import CHOICE_FIELDS, TEXT_FIELDS, profile_text
 from keyboards.onboarding import activity_keyboard, diet_type_keyboard, goal_keyboard
-from keyboards.profile import (CB_BACK, CB_REMINDERS, FIELD_LABELS, edit_menu_keyboard,
-                               with_back)
+from keyboards.profile import (CB_BACK, CB_EXPORT, CB_REMINDERS, FIELD_LABELS,
+                               edit_menu_keyboard, with_back)
 from models import (ActivityLevelEnum, Base, DietTypeEnum, GenderEnum, GoalEnum, User)
 from services import profile as svc
 from services.progress import add_measurement
@@ -166,9 +166,11 @@ def test_every_button_on_the_card_leads_somewhere():
 
 def test_card_buttons_are_wired_to_the_edit_prefix():
     codes = [b.callback_data for row in edit_menu_keyboard().inline_keyboard for b in row]
-    assert len(codes) == len(FIELD_LABELS) + 1  # + переключатель напоминаний
+    # + переключатель напоминаний и выгрузка данных
+    assert len(codes) == len(FIELD_LABELS) + 2
     assert sum(code.startswith("prof_edit:") for code in codes) == len(FIELD_LABELS)
     assert CB_REMINDERS in codes
+    assert CB_EXPORT in codes
 
 
 def test_reminder_button_shows_the_current_state():
