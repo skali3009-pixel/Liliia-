@@ -64,3 +64,28 @@ def test_no_table_means_no_migration():
         await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_a_cleanup_skips_a_column_that_never_existed():
+    """На свежей базе колонки может не быть — и это не повод падать.
+
+    Уборка «обнулить ссылки на фото» осмысленна только там, где эта колонка
+    когда-то была. На новой установке её нет, и попытка выполнить запрос
+    валила запуск целиком — вместе со всеми миграциями.
+    """
+    async def scenario():
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.begin() as conn:
+            # Таблица есть, колонки photo_file_id нет — как на новой базе.
+            await conn.execute(text(
+                "CREATE TABLE meals (id INTEGER PRIMARY KEY, user_id BIGINT,"
+                " name VARCHAR(255), calories FLOAT)"))
+            await conn.execute(text(
+                "INSERT INTO meals (user_id, name, calories) VALUES (1, 'каша', 300)"))
+            # Не должно бросить исключение.
+            await apply_column_additions(conn)
+            left = (await conn.execute(text("SELECT count(*) FROM meals"))).scalar_one()
+            assert left == 1, "уборка не должна трогать данные"
+        await engine.dispose()
+
+    asyncio.run(scenario())

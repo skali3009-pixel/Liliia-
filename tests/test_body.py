@@ -129,8 +129,10 @@ def test_insight_says_how_much_is_left():
 
     assert "−7 кг" in text
     assert "50–68 кг" in text
-    # То, о чём просили: лимфа и мышцы — привычками, а не диагнозами.
-    assert "Лимфа" in text and "белка" in text
+    # Ориентиры, а не диагнозы и не обещания результата.
+    assert "воды" in text and "белка" in text
+    for claim in ("Лимфа", "отёк", "уходит жир", "здоровый"):
+        assert claim not in text, f"осталась категоричная формулировка: {claim}"
 
 
 def test_wide_waist_is_named_as_a_starting_point_not_a_diagnosis():

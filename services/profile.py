@@ -13,10 +13,13 @@ from __future__ import annotations
 
 import logging
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import ActivityLevelEnum, DietTypeEnum, GoalEnum, User
-from utils.formulas import ActivityLevel, Gender, Goal, calculate_macros, daily_water_ml
+from utils.formulas import (MAX_PROTEIN_SHARE, MAX_WATER_ML, MIN_CALORIES,
+                            ActivityLevel, Gender, Goal, calculate_macros,
+                            daily_water_ml)
 
 logger = logging.getLogger(__name__)
 
@@ -91,9 +94,51 @@ def recalculate(user: User) -> bool:
     user.daily_fiber_g = macros.fiber_g
     user.daily_water_ml = daily_water_ml(
         weight_kg=user.current_weight_kg,
+        height_cm=user.height_cm,
         activity_level=ActivityLevel(user.activity_level.value),
     )
     return True
+
+
+def norms_are_impossible(user: User) -> bool:
+    """Сохранённые нормы, которые человек не может выполнить.
+
+    Такие остались у всех, кто завёл профиль до того, как в формулах
+    появились предохранители: углеводы в ноль, вода вёдрами, белок на треть
+    сверх рациона. Держать их в базе нельзя — по ним человек и живёт.
+    """
+    calories = user.daily_calories or 0
+    if not calories:
+        return False
+    if (user.daily_carbs_g or 0) <= 0:
+        return True
+    if (user.daily_water_ml or 0) > MAX_WATER_ML:
+        return True
+    if (user.daily_protein_g or 0) * 4 > calories * (MAX_PROTEIN_SHARE + 0.01):
+        return True
+    gender = Gender(user.gender.value) if user.gender else Gender.FEMALE
+    return calories < MIN_CALORIES[gender]
+
+
+async def repair_impossible_norms(session: AsyncSession) -> int:
+    """Пересчитать нормы тем, у кого они невыполнимы. Возвращает число людей.
+
+    Запускается при старте. Повторный проход ничего не делает: после
+    пересчёта под условие уже никто не подходит.
+    """
+    users = (await session.execute(
+        select(User).where(User.onboarding_completed.is_(True))
+    )).scalars().all()
+
+    fixed = 0
+    for user in users:
+        if norms_are_impossible(user) and recalculate(user):
+            fixed += 1
+
+    if fixed:
+        await session.commit()
+        logger.warning("Пересчитаны невыполнимые нормы: %d человек", fixed)
+    return fixed
 
 
 async def set_goal(session: AsyncSession, user: User, value: str) -> bool:

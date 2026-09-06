@@ -415,3 +415,63 @@ def test_guard_knows_every_menu_button():
 
     buttons = {b.text for row in main_menu_keyboard().keyboard for b in row}
     assert buttons == MENU_TEXTS
+
+
+# --- Починка невыполнимых норм --------------------------------------------
+
+def test_impossible_norms_are_recalculated_on_start():
+    """Человек живёт по тому, что видит на экране. Ноль углеводов — не норма."""
+    async def scenario():
+        from services.profile import repair_impossible_norms
+
+        async with db() as (session, user):
+            # Ровно то, что было у живого человека до правки.
+            user.current_weight_kg = 120.2
+            user.height_cm = 165
+            user.age = 35
+            user.gender = GenderEnum.FEMALE
+            user.activity_level = ActivityLevelEnum.SEDENTARY
+            user.goal = GoalEnum.LOSE_WEIGHT
+            user.daily_calories = 1821
+            user.daily_protein_g = 240
+            user.daily_fat_g = 96
+            user.daily_carbs_g = 0
+            user.daily_water_ml = 3606
+            await session.commit()
+
+            assert await repair_impossible_norms(session) == 1
+
+            fixed = user
+            assert fixed.daily_carbs_g > 100
+            assert fixed.daily_protein_g < 200
+            assert fixed.daily_water_ml <= 3000
+
+            # Второй проход уже ничего не трогает.
+            assert await repair_impossible_norms(session) == 0
+    run(scenario)
+
+
+def test_healthy_norms_are_left_alone():
+    """Починка не должна переписывать то, что и так в порядке."""
+    async def scenario():
+        from services.profile import repair_impossible_norms
+
+        async with db() as (session, user):
+            user.current_weight_kg = 60
+            user.height_cm = 165
+            user.age = 30
+            user.gender = GenderEnum.FEMALE
+            user.activity_level = ActivityLevelEnum.MODERATE
+            user.goal = GoalEnum.MAINTAIN
+            user.daily_calories = 1900
+            user.daily_protein_g = 96
+            user.daily_fat_g = 60
+            user.daily_carbs_g = 200
+            user.daily_water_ml = 2100
+            await session.commit()
+
+            assert await repair_impossible_norms(session) == 0
+            untouched = user
+            assert untouched.daily_calories == 1900
+            assert untouched.daily_carbs_g == 200
+    run(scenario)

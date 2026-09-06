@@ -215,6 +215,7 @@ async def _finish_onboarding(message: Message, state: FSMContext) -> None:
     )
     water_ml = daily_water_ml(
         weight_kg=data["current_weight_kg"],
+        height_cm=data["height_cm"],
         activity_level=ActivityLevel(data["activity_level"]),
     )
 

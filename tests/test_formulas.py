@@ -149,3 +149,95 @@ def test_calculate_macros_macros_sum_to_calories():
     )
     recomputed_calories = macros.protein_g * 4 + macros.fat_g * 9 + macros.carbs_g * 4
     assert recomputed_calories == pytest.approx(macros.calories, abs=5)
+
+
+# --- Предохранители: норма обязана быть выполнимой -------------------------
+# Появилось после живого случая: женщине 120 кг приложение выдало 240 г белка,
+# 3606 мл воды и 0 г углеводов. Проверяем не один этот случай, а весь диапазон
+# людей — чтобы класс ошибок закрылся целиком, а не один его представитель.
+
+import itertools
+
+from utils.formulas import (MAX_FAT_SHARE, MAX_PROTEIN_SHARE, MAX_WATER_ML,
+                            MIN_CALORIES, MIN_CARB_SHARE, MIN_WATER_ML,
+                            reference_weight_kg)
+
+EVERYONE = list(itertools.product(
+    [Gender.FEMALE, Gender.MALE],
+    range(40, 201, 10),          # вес
+    range(145, 201, 5),          # рост
+    [18, 35, 60, 80],            # возраст
+    list(ActivityLevel),
+    list(Goal),
+))
+
+
+def test_no_target_is_ever_impossible_for_anyone():
+    """Ни один человек не должен получить невыполнимую норму."""
+    problems = []
+    for gender, weight, height, age, activity, goal in EVERYONE:
+        macros = calculate_macros(gender=gender, weight_kg=weight, height_cm=height,
+                                  age_years=age, activity_level=activity, goal=goal)
+        who = f"{gender.value} {weight}кг {height}см {age}л {activity.value} {goal.value}"
+
+        if macros.carbs_g <= 0:
+            problems.append(f"{who}: углеводы {macros.carbs_g} г")
+        if macros.calories < MIN_CALORIES[gender]:
+            problems.append(f"{who}: {macros.calories} ккал — ниже минимума")
+        if macros.protein_g * 4 > macros.calories * (MAX_PROTEIN_SHARE + 0.01):
+            problems.append(f"{who}: белок {macros.protein_g} г — больше трети рациона")
+        if macros.fat_g * 9 > macros.calories * (MAX_FAT_SHARE + 0.01):
+            problems.append(f"{who}: жир {macros.fat_g} г — больше трети рациона")
+        if macros.carbs_g * 4 < macros.calories * (MIN_CARB_SHARE - 0.01):
+            problems.append(f"{who}: углеводов меньше {MIN_CARB_SHARE:.0%} рациона")
+        # Сумма макросов должна сходиться с калорийностью.
+        total = macros.protein_g * 4 + macros.fat_g * 9 + macros.carbs_g * 4
+        if abs(total - macros.calories) > macros.calories * 0.02:
+            problems.append(f"{who}: БЖУ даёт {total:.0f} ккал вместо {macros.calories}")
+
+    assert not problems, f"{len(problems)} нарушений, первые пять:\n" + \
+        "\n".join(problems[:5])
+
+
+def test_water_stays_within_reason_for_everyone():
+    problems = []
+    for gender, weight, height, age, activity, goal in EVERYONE:
+        water = daily_water_ml(weight_kg=weight, height_cm=height,
+                               activity_level=activity)
+        if not MIN_WATER_ML <= water <= MAX_WATER_ML:
+            problems.append(f"{weight}кг {height}см {activity.value}: {water} мл")
+    assert not problems, f"вода вне разумного: {problems[:5]}"
+
+
+def test_the_case_that_started_this():
+    """Женщина 120 кг, 165 см, сидячая, худеет — тот самый профиль из отчёта."""
+    macros = calculate_macros(gender=Gender.FEMALE, weight_kg=120.2, height_cm=165,
+                              age_years=35, activity_level=ActivityLevel.SEDENTARY,
+                              goal=Goal.LOSE_WEIGHT)
+    water = daily_water_ml(weight_kg=120.2, height_cm=165,
+                           activity_level=ActivityLevel.SEDENTARY)
+
+    assert macros.carbs_g > 100, "углеводы снова обнулились"
+    assert 130 <= macros.protein_g <= 180, f"белок {macros.protein_g} г"
+    assert water <= MAX_WATER_ML, f"вода {water} мл"
+
+
+def test_a_normal_weight_person_is_counted_by_their_own_weight():
+    """Поправка касается только большого веса — остальных она не трогает."""
+    assert reference_weight_kg(weight_kg=60, height_cm=165) == 60
+    assert reference_weight_kg(weight_kg=45, height_cm=175) == 45
+    # 120 кг при росте 165 — здоровый верх около 68, значит расчётный меньше 120.
+    heavy = reference_weight_kg(weight_kg=120, height_cm=165)
+    assert 80 < heavy < 100, heavy
+
+
+def test_targets_still_grow_with_weight():
+    """Предохранитель не должен превратить норму в константу."""
+    light = calculate_macros(gender=Gender.FEMALE, weight_kg=60, height_cm=165,
+                             age_years=35, activity_level=ActivityLevel.MODERATE,
+                             goal=Goal.MAINTAIN)
+    heavy = calculate_macros(gender=Gender.FEMALE, weight_kg=110, height_cm=165,
+                             age_years=35, activity_level=ActivityLevel.MODERATE,
+                             goal=Goal.MAINTAIN)
+    assert heavy.protein_g > light.protein_g
+    assert heavy.calories > light.calories

@@ -51,6 +51,17 @@ async def init_models() -> None:
     if applied:
         logger.info("Схема БД обновлена: %s", ", ".join(applied))
 
+    # Нормы, посчитанные до появления предохранителей, невыполнимы: углеводы
+    # в ноль, вода вёдрами. Человек живёт по тому, что видит на экране,
+    # поэтому чиним при первом же запуске.
+    from services.profile import repair_impossible_norms
+
+    try:
+        async with async_session_maker() as session:
+            await repair_impossible_norms(session)
+    except Exception:
+        logger.exception("Не удалось пересчитать нормы — бот работает как есть")
+
     # Заливка справочников не должна мешать боту запуститься. Если данные
     # почему-то не легли, лучше работать без части справочника, чем не
     # работать вовсе: человек и так может вести дневник и смотреть прогресс.

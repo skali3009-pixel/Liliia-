@@ -22,10 +22,13 @@ logger = logging.getLogger(__name__)
 # Расширение уже созданных колонок: (таблица, колонка, новый тип).
 # SQLite длину строк не проверяет, а PostgreSQL проверяет — значение, которое
 # спокойно легло в тесте, на сервере роняет заливку справочника.
-# Разовые уборки данных: (таблица, что делаем, зачем).
+# Разовые уборки данных: (таблица, колонка, что делаем).
 # Выполняются при каждом запуске, но повторный проход ничего не меняет.
-CLEANUPS: list[tuple[str, str]] = [
-    ("meals",
+# Колонка указана не для красоты: на новой базе её может не быть вовсе —
+# она осталась только у тех, кто ставил бота раньше. Уборка по несуществующей
+# колонке валит запуск целиком, вместе с миграциями.
+CLEANUPS: list[tuple[str, str, str]] = [
+    ("meals", "photo_file_id",
      "UPDATE meals SET photo_file_id = NULL WHERE photo_file_id IS NOT NULL"),
 ]
 
@@ -101,9 +104,10 @@ async def apply_column_additions(connection: AsyncConnection) -> list[str]:
 async def _run_cleanups(connection: AsyncConnection) -> list[str]:
     """Разовые уборки данных. Повторный запуск ничего не делает."""
     applied: list[str] = []
-    for table, statement in CLEANUPS:
+    for table, column, statement in CLEANUPS:
         existing = await connection.run_sync(_describe, table)
-        if existing is None:
+        # Ни таблицы, ни колонки может не быть — на свежей базе это норма.
+        if existing is None or column not in existing:
             continue
         result = await connection.execute(text(statement))
         if result.rowcount:
@@ -117,7 +121,10 @@ async def _create_indexes(connection: AsyncConnection) -> list[str]:
     applied: list[str] = []
     for name, table, columns in INDEXES:
         existing = await connection.run_sync(_describe, table)
-        if existing is None:
+        # Как и с уборками: таблица может быть без нужной колонки, и тогда
+        # создание индекса валит запуск вместе со всеми миграциями.
+        needed = {part.strip() for part in columns.strip("()").split(",")}
+        if existing is None or not needed <= existing:
             continue
         await connection.execute(
             text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} {columns}")
