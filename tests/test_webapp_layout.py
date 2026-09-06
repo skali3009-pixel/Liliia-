@@ -5,6 +5,7 @@
 «сколько осталось» оказывалось ниже сгиба.
 """
 
+import re
 from pathlib import Path
 
 STATIC = Path(__file__).resolve().parent.parent / "webapp" / "static"
@@ -44,3 +45,31 @@ def test_profile_sheet_elements_exist_for_every_id_the_code_wires():
                        "prof-allergies", "prof-reminders", "prof-norms"):
         assert f'id="{element_id}"' in INDEX, element_id
         assert f"'{element_id}'" in APP_JS, element_id
+
+
+def test_meal_picker_and_recipe_sheet_are_wired():
+    """Выбор приёма пищи и шторка рецепта: id должны совпадать с кодом."""
+    for element_id in ("budget-line", "plate-hint", "suggest-btn", "suggestions",
+                       "recipe-sheet", "recipe-close", "recipe-parts", "recipe-steps",
+                       "recipe-eat", "recipe-title", "recipe-macros"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+    # Кнопки приёмов пищи код ищет по классу, а не по id.
+    assert 'class="meal-tab"' in INDEX and ".meal-tab" in APP_JS
+
+
+def _visible_text(source: str) -> str:
+    """Код без комментариев: подписи для человека живут только в строках."""
+    without_block = re.sub(r"/\*.*?\*/", "", source, flags=re.S)
+    return re.sub(r"//[^\n]*", "", without_block)
+
+
+def test_only_author_dishes_carry_a_mark():
+    """Блюда сверх меню не помечаются ничем — так решила владелица бота."""
+    assert "AUTHOR_MARK" in APP_JS
+    assert "if (item.author)" in APP_JS
+    visible = _visible_text(APP_JS)
+    for label in ("по её принципам", "по принципам Анастасии", "сгенерировано",
+                  "собрано по"):
+        assert label not in visible, label
+        assert label not in INDEX, label

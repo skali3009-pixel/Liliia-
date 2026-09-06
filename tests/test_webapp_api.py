@@ -65,6 +65,10 @@ async def webapp_client():
         await conn.run_sync(Base.metadata.create_all)
 
     async with maker() as session:
+        # Справочник питания — источник блюд для подбора.
+        from seed.nutrition.loader import seed_nutrition
+
+        await seed_nutrition(session)
         for uid in (USER_ID, OTHER_ID):
             session.add(User(
                 id=uid, full_name="Лилия", gender=GenderEnum.FEMALE, age=30, height_cm=165,

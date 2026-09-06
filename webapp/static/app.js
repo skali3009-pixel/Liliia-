@@ -1629,18 +1629,40 @@ function renderFrequent(items) {
 
 /* --- Что съесть -------------------------------------------------------- */
 
-async function loadSuggestions() {
+/* --- Подбор блюда: меню Анастасии плюс сборка по её принципам --- */
+let mealType = null;
+let menuBoard = null;
+
+// Значок у блюд из её меню. Ставится только им — остальное без пометок.
+const AUTHOR_MARK = '⭐';
+
+function setMealTabs(active) {
+  for (const tab of document.querySelectorAll('.meal-tab')) {
+    tab.classList.toggle('on', tab.dataset.meal === active);
+  }
+}
+
+async function loadMenu(meal) {
   const button = document.getElementById('suggest-btn');
   const box = document.getElementById('suggestions');
-
   button.disabled = true;
   button.textContent = 'Подбираю…';
 
   try {
-    const data = await api('/api/suggestions', { method: 'POST' });
+    const query = meal ? `?meal=${meal}` : '';
+    menuBoard = await api(`/api/menu${query}`);
+    mealType = menuBoard.meal_type;
+    setMealTabs(mealType);
+
+    document.getElementById('budget-line').textContent =
+      `На ${menuBoard.meal_name} — около ${menuBoard.budget} ккал`;
+    document.getElementById('plate-hint').textContent = menuBoard.hint;
     document.getElementById('gap-hint').textContent =
-      data.gap ? `не хватает ${data.gap}` : '';
-    renderSuggestions(data.suggestions);
+      menuBoard.gap === 'protein_g' ? 'не хватает белка'
+      : menuBoard.gap === 'fiber_g' ? 'не хватает клетчатки'
+      : menuBoard.gap === 'carbs_g' ? 'не хватает углеводов' : '';
+
+    renderOffers(menuBoard);
     button.textContent = 'Подобрать ещё';
   } catch (e) {
     box.innerHTML = `<div class="empty">${e.message}</div>`;
@@ -1650,11 +1672,23 @@ async function loadSuggestions() {
   }
 }
 
-function renderSuggestions(items) {
+function renderOffers(data) {
   const box = document.getElementById('suggestions');
-  box.innerHTML = items.length ? '' : '<div class="empty">Ничего не подобралось</div>';
+  box.innerHTML = '';
 
-  for (const item of items) {
+  if (!data.offers.length) {
+    box.innerHTML = '<div class="empty">На такой бюджет подходящего блюда нет. ' +
+      'Попробуй другой приём пищи.</div>';
+    return;
+  }
+  if (data.approximate) {
+    const note = document.createElement('div');
+    note.className = 'empty soft';
+    note.textContent = 'Точного варианта нет — вот что ближе всего.';
+    box.appendChild(note);
+  }
+
+  data.offers.forEach((item, index) => {
     const row = document.createElement('div');
     row.className = 'suggestion';
     row.innerHTML = `
@@ -1664,26 +1698,72 @@ function renderSuggestions(items) {
       </div>
       <div class="sug-macros"></div>
       <div class="sug-why"></div>
-      <button class="sug-eat">Съела это</button>`;
+      <div class="row">
+        <button class="chip sug-recipe">Рецепт</button>
+        <button class="btn narrow sug-eat">Съела это</button>
+      </div>`;
 
-    row.querySelector('.sug-name').textContent = item.name;
+    const name = row.querySelector('.sug-name');
+    name.textContent = item.name;
+    if (item.author) {
+      const mark = document.createElement('span');
+      mark.className = 'author-mark';
+      mark.textContent = ` ${AUTHOR_MARK}`;
+      mark.title = 'Рецепт из меню Анастасии';
+      name.appendChild(mark);
+    }
+
     row.querySelector('.sug-macros').textContent =
       `${Math.round(item.weight_g)} г · Б ${Math.round(item.protein_g)} · ` +
       `Ж ${Math.round(item.fat_g)} · У ${Math.round(item.carbs_g)}` +
-      (item.fiber_g ? ` · 🥦 ${Math.round(item.fiber_g)}` : '');
-    row.querySelector('.sug-why').textContent = item.why;
+      (item.fiber_g ? ` · 🥦 ${Math.round(item.fiber_g)}` : '') +
+      ` · ⏱ ${item.minutes} мин`;
+    row.querySelector('.sug-why').textContent = item.reason;
 
-    row.querySelector('.sug-eat').onclick = async () => {
-      try {
-        await api('/api/meals', { method: 'POST', body: JSON.stringify(item) });
-        haptic('medium');
-        toast(`Записала: ${item.name}`);
-        row.remove();
-        await refresh();
-      } catch (e) { toast(e.message); }
-    };
+    row.querySelector('.sug-recipe').onclick = () => openRecipe(index);
+    row.querySelector('.sug-eat').onclick = () => eatOffer(item, row);
     box.appendChild(row);
+  });
+}
+
+async function eatOffer(item, row) {
+  try {
+    await api('/api/meals', { method: 'POST', body: JSON.stringify(item) });
+    haptic('medium');
+    toast(`Записала: ${item.name}`);
+    if (row) row.remove();
+    document.getElementById('recipe-sheet').hidden = true;
+    await refresh();
+  } catch (e) { toast(e.message); }
+}
+
+function openRecipe(index) {
+  const item = menuBoard?.offers?.[index];
+  if (!item) return;
+
+  document.getElementById('recipe-title').textContent =
+    item.name + (item.author ? ` ${AUTHOR_MARK}` : '');
+  document.getElementById('recipe-macros').textContent =
+    `${Math.round(item.calories)} ккал · Б ${Math.round(item.protein_g)} · ` +
+    `Ж ${Math.round(item.fat_g)} · У ${Math.round(item.carbs_g)} г` +
+    (item.fiber_g ? ` · клетчатка ${Math.round(item.fiber_g)} г` : '');
+
+  const parts = document.getElementById('recipe-parts');
+  parts.innerHTML = '';
+  for (const part of item.components || []) {
+    const li = document.createElement('li');
+    // «Соль, перец» без граммов: считать их незачем, но в рецепте они нужны.
+    li.textContent = part.seasoning
+      ? `${part.name} — ${part.raw || 'по вкусу'}`
+      : `${part.name} — ${part.grams} г`;
+    parts.appendChild(li);
   }
+
+  document.getElementById('recipe-steps').textContent = item.instructions || '';
+  document.getElementById('recipe-source').textContent =
+    item.author && item.source ? `${AUTHOR_MARK} ${item.source}` : '';
+  document.getElementById('recipe-eat').onclick = () => eatOffer(item, null);
+  document.getElementById('recipe-sheet').hidden = false;
 }
 
 /* --- Быстрая отметка состояния прямо с плитки --- */
@@ -2182,7 +2262,13 @@ async function init() {
   document.getElementById('m-save').onclick = saveMeasurement;
 
   document.getElementById('finish-workout').onclick = finishWorkout;
-  document.getElementById('suggest-btn').onclick = loadSuggestions;
+  document.getElementById('suggest-btn').onclick = () => loadMenu(mealType);
+  document.getElementById('recipe-close').onclick = () => {
+    document.getElementById('recipe-sheet').hidden = true;
+  };
+  for (const tab of document.querySelectorAll('.meal-tab')) {
+    tab.onclick = () => { mealType = tab.dataset.meal; loadMenu(mealType); };
+  }
   document.getElementById('rest-skip').onclick = stopRest;
   document.getElementById('photo-input').onchange = (event) => {
     if (event.target.files[0]) uploadPhoto(event.target.files[0]);

@@ -17,6 +17,7 @@ from services.favorites import frequent_meals
 from services.food_vision import FoodAnalysis, FoodRecognitionError
 from services.gamification import awards_summary, sync_today
 from services.meals import get_today_totals, list_today_meals, save_meal
+from services.menu import board as menu_board
 from services.moments import Moment, analyze_moment, facts as moment_facts
 from services.export import build_export
 from services.profile import (
@@ -46,7 +47,6 @@ from services.progress import (
     save_photo,
 )
 from services.subscriptions import check_access
-from services.suggestions import suggest_meals
 from services.timeline import day_timeline
 from services.supplements import add_supplement, list_due_today, mark
 from services.workouts import (
@@ -666,45 +666,6 @@ async def post_workout_log(request: web.Request) -> web.Response:
     )
 
 
-async def post_suggestions(request: web.Request) -> web.Response:
-    """Три варианта еды под остаток нормы — подбирает Claude."""
-    user_id, tz = request["user_id"], request["timezone"]
-
-    async with get_session() as session:
-        user = await session.get(User, user_id)
-        totals = await get_today_totals(session, user_id, timezone_name=tz)
-        norms = {
-            "calories": user.daily_calories or 0,
-            "protein_g": user.daily_protein_g or 0,
-            "fat_g": user.daily_fat_g or 0,
-            "carbs_g": user.daily_carbs_g or 0,
-            "fiber_g": user.daily_fiber_g or 0,
-        }
-
-    left = remaining(
-        {"calories": totals.calories, "protein_g": totals.protein_g,
-         "fat_g": totals.fat_g, "carbs_g": totals.carbs_g, "fiber_g": totals.fiber_g},
-        norms,
-    )
-
-    try:
-        suggestions = await suggest_meals(user, left, norms)
-    except FoodRecognitionError as e:
-        return web.json_response({"error": str(e)}, status=503)
-
-    gap = dominant_gap(left, norms)
-    return web.json_response(
-        {
-            "remaining": {
-                "calories": left.calories, "protein_g": left.protein_g,
-                "fat_g": left.fat_g, "carbs_g": left.carbs_g, "fiber_g": left.fiber_g,
-            },
-            "gap": GAP_LABELS.get(gap) if gap else None,
-            "suggestions": [item.to_dict() for item in suggestions],
-        }
-    )
-
-
 async def post_meal(request: web.Request) -> web.Response:
     """Записать блюдо целиком — например, выбранное из рекомендаций."""
     body = await request.json()
@@ -977,6 +938,23 @@ async def post_export(request: web.Request) -> web.Response:
                               "photos": export.photos_included})
 
 
+
+async def get_menu(request: web.Request) -> web.Response:
+    """Подбор блюда: что съесть на этот приём пищи.
+
+    Всё строится на справочнике питания; сборка сверх меню включается
+    параметром build=0 (в тестах и когда ключ модели не нужен).
+    """
+    meal = request.query.get("meal")
+    allow_build = request.query.get("build", "1") != "0"
+
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        result = await menu_board(session, user, meal_type=meal, allow_build=allow_build)
+
+    return web.json_response(result.to_dict())
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -993,7 +971,6 @@ def add_routes(app: web.Application) -> None:
     app.router.add_delete("/api/photos/{photo_id}", delete_photo)
     app.router.add_get("/api/workouts", get_workouts)
     app.router.add_post("/api/workouts/log", post_workout_log)
-    app.router.add_post("/api/suggestions", post_suggestions)
     app.router.add_post("/api/meals", post_meal)
     app.router.add_post("/api/moment", post_moment)
     app.router.add_post("/api/moment/confirm", confirm_moment)
@@ -1002,3 +979,4 @@ def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/profile", get_profile)
     app.router.add_patch("/api/profile", patch_profile)
     app.router.add_post("/api/export", post_export)
+    app.router.add_get("/api/menu", get_menu)

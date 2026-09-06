@@ -1,8 +1,14 @@
-"""Кнопка «Что съесть» в чате: остаток нормы и подбор блюд."""
+"""Кнопка «Что съесть» в чате: подбор блюда под остаток нормы.
+
+Показывает то же, что и приложение: блюда из меню Анастасии со значком и
+блюда, собранные по её принципам, — без пометок. Всё КБЖУ посчитано по
+справочнику, поэтому запись в дневник точная, а не «примерно».
+"""
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 
 from aiogram import F, Router
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
@@ -11,99 +17,142 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from db import get_session
 from keyboards.main_menu import MENU_WHAT_TO_EAT
 from models import MealSourceEnum, User
-from services.food_vision import FoodAnalysis, FoodRecognitionError
+from services.food_vision import FoodAnalysis
 from services.meals import get_today_totals, save_meal
-from services.suggestions import Suggestion, suggest_meals
-from utils.macros import GAP_LABELS, dominant_gap, remaining
-from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
+from services.menu import MEAL_RU, Offer, board
+from utils.meal_time import guess_meal_type
 from utils.timeframe import get_zone
-
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 router = Router(name="suggestions")
 
 CB_EAT = "eat:"
+CB_MEAL = "meal:"
+CB_RECIPE = "recipe:"
 
-# Варианты живут до перезапуска бота: класть их в базу ради одной кнопки ни к чему.
-_offered: dict[str, Suggestion] = {}
+AUTHOR_MARK = "⭐"
+
+# Предложенные варианты живут до перезапуска бота: класть их в базу ради
+# одной кнопки ни к чему, а устаревший ключ обрабатывается отдельно.
+_offered: dict[str, Offer] = {}
 
 
-def _keyboard(key: str) -> InlineKeyboardMarkup:
+def _keyboard(key: str, *, with_recipe: bool) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
+    if with_recipe:
+        builder.button(text="📖 Рецепт", callback_data=f"{CB_RECIPE}{key}")
     builder.button(text="✅ Съела это", callback_data=f"{CB_EAT}{key}")
+    builder.adjust(2)
     return builder.as_markup()
+
+
+def _meal_keyboard(active: str) -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for code, title in MEAL_RU.items():
+        mark = "· " if code == active else ""
+        builder.button(text=f"{mark}{title.capitalize()}", callback_data=f"{CB_MEAL}{code}")
+    builder.adjust(4)
+    return builder.as_markup()
+
+
+def offer_text(offer: Offer) -> str:
+    mark = f" {AUTHOR_MARK}" if offer.author else ""
+    lines = [
+        f"🍽 {offer.name}{mark}",
+        f"{round(offer.weight_g)} г · {round(offer.calories)} ккал · {offer.minutes} мин",
+        f"Б {round(offer.protein_g)} · Ж {round(offer.fat_g)} · У {round(offer.carbs_g)} г",
+    ]
+    if offer.fiber_g:
+        lines.append(f"🥦 Клетчатка {round(offer.fiber_g)} г")
+    if offer.reason:
+        lines.append(f"\n💬 {offer.reason}")
+    return "\n".join(lines)
+
+
+def recipe_text(offer: Offer) -> str:
+    mark = f" {AUTHOR_MARK}" if offer.author else ""
+    lines = [f"📖 {offer.name}{mark}", ""]
+    for part in offer.components or []:
+        if part.get("seasoning"):
+            lines.append(f"• {part['name']} — {part.get('raw') or 'по вкусу'}")
+        else:
+            lines.append(f"• {part['name']} — {part['grams']} г")
+    if offer.instructions:
+        lines += ["", offer.instructions]
+    if offer.author and offer.source:
+        lines += ["", f"{AUTHOR_MARK} {offer.source}"]
+    return "\n".join(lines)
+
+
+async def _show(message: Message, user_id: int, meal_type: str | None) -> None:
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        if user is None or not user.onboarding_completed:
+            await message.answer("Сначала настроим профиль — напиши /start.")
+            return
+        result = await board(session, user, meal_type=meal_type)
+
+    header = [
+        f"🍽 {result.meal_name.capitalize()} — около {result.budget} ккал",
+        f"На сегодня осталось {result.left_calories} ккал",
+        "",
+        result.hint,
+    ]
+    if result.approximate:
+        header.append("\nТочного варианта нет — вот что ближе всего.")
+    await message.answer("\n".join(header), reply_markup=_meal_keyboard(result.meal_type))
+
+    if not result.offers:
+        await message.answer(
+            "На такой бюджет подходящего блюда нет. Попробуй другой приём пищи "
+            "или загляни позже."
+        )
+        return
+
+    for index, offer in enumerate(result.offers):
+        key = f"{user_id}:{result.meal_type}:{index}"
+        _offered[key] = offer
+        await message.answer(
+            offer_text(offer),
+            reply_markup=_keyboard(key, with_recipe=bool(offer.components)),
+        )
 
 
 @router.message(F.text == MENU_WHAT_TO_EAT)
 async def what_to_eat(message: Message) -> None:
-    async with get_session() as session:
-        user = await session.get(User, message.from_user.id)
-        if user is None or not user.onboarding_completed:
-            await message.answer("Сначала настроим профиль — напиши /start.")
-            return
-
-        totals = await get_today_totals(session, user.id, timezone_name=user.timezone)
-        norms = {
-            "calories": user.daily_calories or 0,
-            "protein_g": user.daily_protein_g or 0,
-            "fat_g": user.daily_fat_g or 0,
-            "carbs_g": user.daily_carbs_g or 0,
-            "fiber_g": user.daily_fiber_g or 0,
-        }
-
-    left = remaining(
-        {"calories": totals.calories, "protein_g": totals.protein_g,
-         "fat_g": totals.fat_g, "carbs_g": totals.carbs_g, "fiber_g": totals.fiber_g},
-        norms,
-    )
-    gap = dominant_gap(left, norms)
-
-    header = [
-        f"🍽 Осталось на сегодня: {left.calories} ккал",
-        f"Б {left.protein_g} · Ж {left.fat_g} · У {left.carbs_g} г",
-        f"🥦 Клетчатки: {left.fiber_g} г",
-    ]
-    if gap:
-        header.append(f"Сильнее всего не хватает {GAP_LABELS[gap]}.")
-    if left.all_done:
-        header.append("Норма на сегодня уже выбрана — лучше остановиться.")
-
-    status = await message.answer("\n".join(header) + "\n\n🔍 Подбираю варианты…")
-
+    status = await message.answer("🔍 Подбираю…")
     try:
-        async with get_session() as session:
-            user = await session.get(User, message.from_user.id)
-            suggestions = await suggest_meals(user, left, norms)
-    except FoodRecognitionError as e:
-        await status.edit_text("\n".join(header) + f"\n\n{e}")
-        return
-    except Exception:
-        logger.exception("Ошибка подбора блюд")
-        await status.edit_text("\n".join(header) + "\n\nНе получилось подобрать. Попробуй ещё раз.")
-        return
+        await _show(message, message.from_user.id, None)
+    finally:
+        try:
+            await status.delete()
+        except Exception:  # noqa: BLE001 — сообщение могли удалить руками
+            pass
 
-    await status.edit_text("\n".join(header))
 
-    for index, item in enumerate(suggestions):
-        key = f"{message.from_user.id}:{index}"
-        _offered[key] = item
-        await message.answer(
-            f"🍽 {item.name}\n"
-            f"{round(item.weight_g)} г · {round(item.calories)} ккал\n"
-            f"Б {round(item.protein_g)} · Ж {round(item.fat_g)} · У {round(item.carbs_g)} г\n"
-            f"🥦 Клетчатка {round(item.fiber_g)} г\n\n"
-            f"💬 {item.why}",
-            reply_markup=_keyboard(key),
-        )
+@router.callback_query(F.data.startswith(CB_MEAL))
+async def switch_meal(callback: CallbackQuery) -> None:
+    meal = callback.data.removeprefix(CB_MEAL)
+    await callback.answer()
+    await _show(callback.message, callback.from_user.id, meal)
+
+
+@router.callback_query(F.data.startswith(CB_RECIPE))
+async def show_recipe(callback: CallbackQuery) -> None:
+    offer = _offered.get(callback.data.removeprefix(CB_RECIPE))
+    if offer is None:
+        await callback.answer("Вариант устарел — подбери заново", show_alert=True)
+        return
+    await callback.message.answer(recipe_text(offer))
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith(CB_EAT))
 async def eat_suggestion(callback: CallbackQuery) -> None:
     key = callback.data.removeprefix(CB_EAT)
-    item = _offered.get(key)
-    if item is None:
-        await callback.answer("Вариант устарел — запроси подбор заново", show_alert=True)
+    offer = _offered.get(key)
+    if offer is None:
+        await callback.answer("Вариант устарел — подбери заново", show_alert=True)
         return
 
     async with get_session() as session:
@@ -116,10 +165,11 @@ async def eat_suggestion(callback: CallbackQuery) -> None:
             session,
             user_id=user.id,
             analysis=FoodAnalysis(
-                name=item.name, weight_g=item.weight_g, calories=item.calories,
-                protein_g=item.protein_g, fat_g=item.fat_g, carbs_g=item.carbs_g,
-                fiber_g=item.fiber_g,
-                confidence="medium", comment="",
+                name=offer.name, weight_g=offer.weight_g, calories=offer.calories,
+                protein_g=offer.protein_g, fat_g=offer.fat_g, carbs_g=offer.carbs_g,
+                fiber_g=offer.fiber_g,
+                # Состав известен до грамма — это не догадка распознавания.
+                confidence="high", comment="",
             ),
             source=MealSourceEnum.TEXT,
             meal_type=guess_meal_type(datetime.now(get_zone(user.timezone))),

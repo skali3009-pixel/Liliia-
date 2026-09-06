@@ -220,24 +220,20 @@
     <section class="card">
       <div class="card-head"><h2>🍽️ Что съесть</h2><span id="gap-hint" class="muted"></span></div>
 
-      <div class="plate-row">
-        <svg class="plate" viewBox="0 0 100 100" aria-hidden="true">
-          <circle cx="50" cy="50" r="46" class="plate-rim"/>
-          <path d="M50 4 A46 46 0 0 0 50 96 Z" class="plate-veg"/>
-          <path d="M50 4 A46 46 0 0 1 96 50 L50 50 Z" class="plate-protein"/>
-          <path d="M50 50 L96 50 A46 46 0 0 1 50 96 Z" class="plate-carb"/>
-        </svg>
-        <ul class="plate-legend">
-          <li><i class="dot veg"></i>½ тарелки — овощи и зелень</li>
-          <li><i class="dot protein"></i>¼ — белок: мясо, рыба, творог</li>
-          <li><i class="dot carb"></i>¼ — сложные углеводы: крупы, паста</li>
-        </ul>
+      <!-- Приём пищи выбирается явно: по времени бот угадывает, но человек
+           может собираться готовить ужин днём. -->
+      <div class="meal-tabs" id="meal-tabs">
+        <button class="meal-tab" data-meal="breakfast">Завтрак</button>
+        <button class="meal-tab" data-meal="lunch">Обед</button>
+        <button class="meal-tab" data-meal="dinner">Ужин</button>
+        <button class="meal-tab" data-meal="snack">Перекус</button>
       </div>
 
-      <button id="suggest-btn" class="btn">Подобрать блюда</button>
+      <div class="budget-line" id="budget-line"></div>
+      <p class="hint plate-hint" id="plate-hint"></p>
+
+      <button id="suggest-btn" class="btn">Подобрать блюдо</button>
       <div id="suggestions"></div>
-      <p class="hint">Подбирает Claude — учитывает остаток нормы, время суток,
-        твой тип питания и аллергии.</p>
     </section>
   </main>
 
@@ -552,6 +548,23 @@
     <p class="hint">Придёт в чат: таблицы с едой, водой, весом, тренировками и
       самочувствием — открываются в Numbers и Excel. Данные твои, забрать их
       можно в любой момент.</p>
+  </div>
+</div>
+
+<!-- Рецепт: состав пересчитан под порцию человека, а не под авторскую. -->
+<div id="recipe-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="recipe-title">Рецепт</h2>
+      <button class="icon-btn" id="recipe-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="recipe-macros" id="recipe-macros"></div>
+    <div class="eyebrow ruled">Состав на порцию</div>
+    <ul class="recipe-parts" id="recipe-parts"></ul>
+    <div class="eyebrow ruled">Как приготовить</div>
+    <p class="recipe-steps" id="recipe-steps"></p>
+    <p class="hint" id="recipe-source"></p>
+    <button class="btn" id="recipe-eat">Съела это</button>
   </div>
 </div>
 

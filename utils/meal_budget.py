@@ -7,7 +7,7 @@
 будет, ориентиром становится сам остаток.
 
 Здесь только арифметика и формулировки; сам подбор — в
-services/suggestions.py.
+services/menu.py.
 """
 
 from __future__ import annotations

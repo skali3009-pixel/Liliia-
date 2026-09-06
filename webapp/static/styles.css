@@ -979,3 +979,30 @@ select.fact-input { text-align: left; width: 130px; }
 .prof-row .input.tight { width: 108px; margin: 0; text-align: right; }
 .prof-row.switch { padding-top: 4px; }
 .prof-row.switch .chip { flex: 0 0 auto; }
+
+/* --- Подбор блюда --- */
+.meal-tabs { display: flex; gap: 6px; margin: 12px 0 10px; }
+.meal-tab {
+  flex: 1 1 0; padding: 9px 4px; cursor: pointer; font-family: inherit;
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  border: 1px solid var(--stroke); border-radius: 11px; background: var(--surface-2);
+}
+.meal-tab.on { color: var(--fg); border-color: var(--violet);
+               background: rgba(139, 92, 246, .22); }
+.meal-tab:active { transform: scale(.97); }
+
+.budget-line { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.plate-hint { margin-top: 4px; }
+
+/* Значок у рецептов Анастасии: тихая метка, а не ярлык поверх названия. */
+.author-mark { font-size: 12px; opacity: .9; }
+
+.empty.soft { color: var(--muted); font-size: 13px; padding: 10px 0 2px; }
+
+.recipe-macros {
+  padding: 11px 13px; border-radius: 14px; font-size: 14px; font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--stroke); background: var(--surface-2);
+}
+.recipe-parts { margin: 4px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.7; }
+.recipe-steps { font-size: 14px; line-height: 1.55; margin: 4px 0 0; }

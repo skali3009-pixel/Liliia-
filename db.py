@@ -51,3 +51,9 @@ async def init_models() -> None:
 
     async with async_session_maker() as session:
         await seed_workouts(session)
+
+    # Справочник питания — источник всех блюд, которые бот предлагает.
+    from seed.nutrition.loader import seed_nutrition
+
+    async with async_session_maker() as session:
+        await seed_nutrition(session)
