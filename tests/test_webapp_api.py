@@ -5,8 +5,10 @@ import hashlib
 import hmac
 import json
 import time
+from types import SimpleNamespace
 from urllib.parse import urlencode
 
+import aiohttp
 import pytest
 from aiohttp.test_utils import TestClient, TestServer
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -730,6 +732,189 @@ def test_cube_builds_only_from_what_is_in_the_basket():
             assert response.status == 200
             for item in (await response.json())["cubes"]:
                 assert {part["code"] for part in item["items"]} <= set(basket)
+    run(scenario)
+
+
+async def upload_shelf(client, *, user_id=USER_ID, content=b"\xff\xd8\xff\xe0jpeg"):
+    """Загрузка фото полки идёт формой, а не JSON — как настоящий снимок."""
+    form = aiohttp.FormData()
+    form.add_field("photo", content, filename="shelf.jpg", content_type="image/jpeg")
+    return await client.request("POST", "/api/cube/shelf",
+                                headers={"X-Telegram-Init-Data": init_data(user_id)},
+                                data=form)
+
+
+def _fake_shelf(monkeypatch, codes, other=()):
+    from services import shelf_vision
+
+    async def recognize(image_bytes, names, *, media_type="image/jpeg", on_usage=None):
+        assert image_bytes, "фото должно доехать до распознавания"
+        # Расход записывается по настоящему ответу модели — подделываем и его.
+        if on_usage is not None:
+            on_usage(_FakeUsage())
+        return shelf_vision.Shelf(codes=tuple(codes), other=tuple(other))
+
+    monkeypatch.setattr(shelf_vision, "recognize", recognize)
+
+
+class _FakeUsage:
+    input_tokens = 1500
+    output_tokens = 40
+    cache_creation_input_tokens = 0
+    cache_read_input_tokens = 0
+
+
+def test_shelf_photo_answers_with_names_the_person_can_check(monkeypatch):
+    """Сначала показываем, что увидели, и только потом собираем набор."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            _fake_shelf(monkeypatch, ["kefir", "banana"], other=["авокадо"])
+            response = await upload_shelf(client)
+            assert response.status == 200
+            body = await response.json()
+            assert body["codes"] == ["kefir", "banana"]
+            # Кодов человек не видит — он видит названия из нашего справочника.
+            assert [item["code"] for item in body["items"]] == ["kefir", "banana"]
+            names = [item["name"] for item in body["items"]]
+            assert all(names) and "кефир" in names[0].lower()
+            # Незнакомое не прячем: иначе человек решит, что бот его проглядел.
+            assert body["other"] == ["авокадо"]
+    run(scenario)
+
+
+def test_shelf_photo_feeds_the_cube_with_exactly_what_was_recognized(monkeypatch):
+    """Ради этого всё и делалось: снял полку — собрал набор из того, что на ней."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            _fake_shelf(monkeypatch, ["kefir", "banana", "walnut", "crispbread"])
+            codes = (await (await upload_shelf(client)).json())["codes"]
+
+            response = await call(client, "POST", "/api/cube",
+                                  json_body={"level": "normal", "basket": codes})
+            cubes = (await response.json())["cubes"]
+            assert cubes
+            for item in cubes:
+                assert {part["code"] for part in item["items"]} <= set(codes)
+    run(scenario)
+
+
+def test_shelf_photo_gives_a_smaller_set_instead_of_an_empty_screen(monkeypatch):
+    """С пустым дневником бот метит в «почти обед», а на полке четыре продукта.
+
+    Режим голода в этот момент выбрали мы сами, а не человек. Значит, его и
+    надо уступить: снял полку — получил набор, а не объяснение, почему нет.
+    """
+    async def scenario():
+        async with webapp_client() as (client, _):
+            _fake_shelf(monkeypatch, ["kefir", "banana", "crispbread", "walnut"])
+            codes = (await (await upload_shelf(client)).json())["codes"]
+
+            # Уровень не передаём — ровно так и ходит приложение после фото.
+            body = await (await call(client, "POST", "/api/cube",
+                                     json_body={"basket": codes})).json()
+            assert body["cubes"], "из полки должно собираться хоть что-то"
+            assert body["level"] in ("light", "normal", "hungry")
+            for item in body["cubes"]:
+                assert {part["code"] for part in item["items"]} <= set(codes)
+    run(scenario)
+
+
+def test_a_hunger_level_the_person_chose_is_never_quietly_lowered(monkeypatch):
+    """Уступаем только собственную догадку. Просьбу человека — нет."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            _fake_shelf(monkeypatch, ["kefir", "banana", "crispbread", "walnut"])
+            codes = (await (await upload_shelf(client)).json())["codes"]
+
+            body = await (await call(client, "POST", "/api/cube",
+                                     json_body={"level": "meal",
+                                                "basket": codes})).json()
+            assert body["level"] == "meal"
+    run(scenario)
+
+
+def test_shelf_photo_is_paid_for_and_counted_against_the_daily_limit(monkeypatch):
+    """Снимок полки стоит те же деньги, что снимок блюда, и лимит у них общий."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import usage
+
+            _fake_shelf(monkeypatch, ["kefir"])
+            assert (await upload_shelf(client)).status == 200
+
+            async with maker_holder["maker"]() as session:
+                spend = await usage.spent_today(session)
+                assert spend.by_kind["shelf"] > 0
+                left = await usage.photo_limit_left(session, USER_ID)
+                assert left == config.PHOTO_LIMIT_PER_DAY - 1
+    run(scenario)
+
+
+def test_shelf_photo_stops_when_the_person_is_out_of_photos(monkeypatch):
+    async def scenario():
+        async with webapp_client() as (client, _):
+            monkeypatch.setattr(config, "PHOTO_LIMIT_PER_DAY", 1)
+            _fake_shelf(monkeypatch, ["kefir"])
+            assert (await upload_shelf(client)).status == 200
+
+            second = await upload_shelf(client)
+            assert second.status == 429
+            assert "корзине руками" in (await second.json())["error"]
+    run(scenario)
+
+
+def test_shelf_photo_stops_when_the_daily_budget_is_spent(monkeypatch):
+    """Потолок расходов останавливает распознавание, а не всё приложение."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            monkeypatch.setattr(config, "DAILY_COST_LIMIT_USD", 0.0001)
+            _fake_shelf(monkeypatch, ["kefir"])
+            assert (await upload_shelf(client)).status == 200
+
+            assert (await upload_shelf(client)).status == 429
+            # Подбор руками при этом продолжает работать.
+            manual = await call(client, "POST", "/api/cube",
+                                json_body={"level": "normal", "basket": ["kefir", "banana"]})
+            assert manual.status == 200
+    run(scenario)
+
+
+def test_shelf_photo_refuses_when_the_disk_is_full(monkeypatch):
+    async def scenario():
+        async with webapp_client() as (client, _):
+            import webapp.api as api_module
+
+            _fake_shelf(monkeypatch, ["kefir"])
+            monkeypatch.setattr(api_module, "disk_usage",
+                                lambda: SimpleNamespace(full=True, percent=99))
+            response = await upload_shelf(client)
+            assert response.status == 507
+    run(scenario)
+
+
+def test_shelf_photo_explains_a_model_failure_instead_of_crashing(monkeypatch):
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import shelf_vision
+            from services.food_vision import FoodRecognitionError
+
+            async def failing(*args, **kwargs):
+                raise FoodRecognitionError("Claude ответил ошибкой (529).")
+
+            monkeypatch.setattr(shelf_vision, "recognize", failing)
+            response = await upload_shelf(client)
+            assert response.status == 502
+            assert "529" in (await response.json())["error"]
+    run(scenario)
+
+
+def test_shelf_photo_needs_a_signature_like_everything_else():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            form = aiohttp.FormData()
+            form.add_field("photo", b"jpeg", filename="shelf.jpg")
+            response = await client.request("POST", "/api/cube/shelf", data=form)
+            assert response.status == 401
     run(scenario)
 
 

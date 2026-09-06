@@ -534,6 +534,16 @@
       <div class="chips" id="cube-shop-cravings"></div>
     </section>
 
+    <!-- Третий путь: ничего не отмечать руками, а просто показать полку. -->
+    <section class="card" id="cube-shelf-card">
+      <h2 class="cube-q">📸 Сфоткай полку</h2>
+      <p class="hint">Сними холодильник, витрину или пакет с покупками. Отмечу
+        то, что узнаю, — а собирать буду только из этого.</p>
+      <label class="btn ghost" for="shelf-input">📸 Сфоткать полку</label>
+      <input id="shelf-input" type="file" accept="image/*" capture="environment" hidden>
+      <div id="shelf-found" hidden></div>
+    </section>
+
     <section class="card" id="cube-basket-card">
       <div class="card-head"><h2 class="cube-q">🧺 Что у тебя в корзине</h2>
         <button class="link-btn" id="cube-basket-toggle">показать</button></div>

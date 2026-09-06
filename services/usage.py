@@ -128,11 +128,18 @@ async def over_budget(session: AsyncSession) -> bool:
     return (await spent_today(session)).total_usd >= config.DAILY_COST_LIMIT_USD
 
 
-async def calls_today(session: AsyncSession, user_id: int, kind: str) -> int:
-    """Сколько раз человек уже пользовался платной функцией сегодня."""
+# Что считается «фотографией» для дневного лимита человека: и снимок блюда,
+# и снимок полки. Оба уходят в ту же модель и стоят те же деньги, поэтому
+# лимит у них общий — иначе он обходится сменой экрана.
+PHOTO_KINDS = ("photo", "shelf")
+
+
+async def calls_today(session: AsyncSession, user_id: int, *kinds: str) -> int:
+    """Сколько раз человек уже пользовался платными функциями сегодня."""
     return (await session.execute(
         select(func.count(ApiUsage.id)).where(
-            ApiUsage.user_id == user_id, ApiUsage.kind == kind, ApiUsage.day == date.today()
+            ApiUsage.user_id == user_id, ApiUsage.kind.in_(kinds),
+            ApiUsage.day == date.today()
         )
     )).scalar() or 0
 
@@ -141,7 +148,8 @@ async def photo_limit_left(session: AsyncSession, user_id: int) -> int:
     """Сколько распознаваний фото осталось человеку сегодня."""
     if config.PHOTO_LIMIT_PER_DAY <= 0:
         return 10 ** 6
-    return max(config.PHOTO_LIMIT_PER_DAY - await calls_today(session, user_id, "photo"), 0)
+    used = await calls_today(session, user_id, *PHOTO_KINDS)
+    return max(config.PHOTO_LIMIT_PER_DAY - used, 0)
 
 
 async def cleanup(session: AsyncSession, keep_days: int = 90) -> int:
@@ -159,7 +167,8 @@ def render_report(spend: Spend) -> str:
     if not spend.calls:
         return "💰 Вчера на распознавание не потратили ничего."
 
-    names = {"photo": "фото", "text": "текст", "voice": "голос", "build": "подбор блюд"}
+    names = {"photo": "фото", "shelf": "полка", "text": "текст", "voice": "голос",
+             "build": "подбор блюд"}
     parts = ", ".join(f"{names.get(kind, kind)} {value:.2f} $"
                       for kind, value in sorted(spend.by_kind.items(),
                                                 key=lambda item: -item[1]))
@@ -167,6 +176,6 @@ def render_report(spend: Spend) -> str:
             f"({spend.calls} запросов)\n{parts}")
 
 
-__all__ = ["CACHE_READ_MULTIPLIER", "CACHE_WRITE_MULTIPLIER", "PRICES", "Spend",
-           "calls_today", "cleanup", "cost_usd", "over_budget", "photo_limit_left",
+__all__ = ["CACHE_READ_MULTIPLIER", "CACHE_WRITE_MULTIPLIER", "PHOTO_KINDS",
+           "PRICES", "Spend", "calls_today", "cleanup", "cost_usd", "over_budget", "photo_limit_left",
            "price_of", "record", "render_report", "spent_since", "spent_today"]

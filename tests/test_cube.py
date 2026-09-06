@@ -306,3 +306,27 @@ def test_an_impossible_need_does_not_leave_an_empty_screen(catalogue):
     cubes = cube.build(catalogue, level="normal", basket=basket,
                        needs=frozenset({cube.NEED_FIBER}), rng=random.Random(2))
     assert cubes, "требование клетчатки оставило человека ни с чем"
+
+
+def test_lighter_than_walks_down_from_the_nearest():
+    from services.cube import lighter_than
+
+    assert lighter_than("meal") == ["hungry", "normal", "light"]
+    assert lighter_than("normal") == ["light"]
+    assert lighter_than("light") == []
+    assert lighter_than("выдумка") == []
+
+
+def test_three_offers_never_carry_the_same_name_when_there_is_a_choice(catalogue):
+    """Две карточки с одинаковым заголовком человек читает как поломку.
+
+    Так и выходило после «сфоткай полку»: продуктов мало, все наборы на
+    одном кефире, и два из трёх назывались «Банановая страховка».
+    """
+    shelf = {"kefir", "banana", "crispbread", "walnut"}
+    offers = cube.build(catalogue, level="hungry", basket=shelf,
+                        rng=random.Random(7), limit=3)
+    # Лучше два разных набора, чем три, из которых два называются одинаково.
+    assert len(offers) >= 2
+    titles = [item.title for item in offers]
+    assert len(set(titles)) == len(titles), titles

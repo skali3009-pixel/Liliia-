@@ -2502,6 +2502,7 @@ async function buildBasket() {
     for (const item of row.items) {
       const chip = document.createElement('button');
       chip.className = 'basket-item';
+      chip.dataset.code = item.code;
       chip.textContent = item.name;
       chip.onclick = () => {
         chip.classList.toggle('on');
@@ -2530,6 +2531,112 @@ function markBasket() {
     : 'Ничего не отмечено — беру весь магазин.';
   cubeState.recent = [];
 }
+
+function syncBasketChips() {
+  // Фишки корзины и есть подтверждение: отмеченное с фото должно быть на
+  // них видно, иначе счётчик говорит одно, а экран показывает другое.
+  for (const chip of document.querySelectorAll('.basket-item')) {
+    chip.classList.toggle('on', cubeState.basket.has(chip.dataset.code));
+  }
+  markBasket();
+}
+
+
+/* --- Сфоткай полку ------------------------------------------------------ */
+// Отмечать пятьдесят продуктов пальцем у витрины никто не станет. Фотография
+// делает это за человека, но решает всё равно он: сначала показываем, что
+// увидели, и только потом собираем набор.
+
+function buildShelf() {
+  const input = document.getElementById('shelf-input');
+  input.onchange = () => {
+    const file = input.files && input.files[0];
+    // Сбрасываем сразу: иначе повторный выбор того же файла не сработает.
+    input.value = '';
+    if (file) sendShelf(file);
+  };
+}
+
+async function sendShelf(file) {
+  const box = document.getElementById('shelf-found');
+  box.hidden = false;
+  box.innerHTML = '<p class="hint">Смотрю, что на полке…</p>';
+
+  const form = new FormData();
+  form.append('photo', file, 'shelf.jpg');
+  try {
+    const response = await fetch('/api/cube/shelf', {
+      method: 'POST',
+      headers: { 'X-Telegram-Init-Data': tg?.initData || '', 'X-Timezone': deviceZone() },
+      body: form,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `Ошибка ${response.status}`);
+    haptic('medium');
+    renderShelf(data);
+  } catch (error) {
+    box.innerHTML = '';
+    const line = document.createElement('p');
+    line.className = 'hint';
+    line.textContent = error.message;
+    box.appendChild(line);
+  }
+}
+
+function renderShelf(data) {
+  const box = document.getElementById('shelf-found');
+  box.hidden = false;
+  box.innerHTML = '';
+  const picked = new Set((data.items || []).map((item) => item.code));
+
+  if (!picked.size) {
+    box.innerHTML = '<p class="hint">Знакомых продуктов на фото не вижу. '
+      + 'Попробуй снять поближе или отметь всё в корзине руками.</p>';
+  } else {
+    const title = document.createElement('p');
+    title.className = 'hint';
+    title.textContent = 'Вижу вот это. Нажми на то, чего на полке нет:';
+    box.appendChild(title);
+
+    const items = document.createElement('div');
+    items.className = 'basket-items';
+    for (const item of data.items) {
+      const chip = document.createElement('button');
+      chip.className = 'basket-item on';
+      chip.textContent = item.name;
+      chip.onclick = () => {
+        if (picked.has(item.code)) picked.delete(item.code);
+        else picked.add(item.code);
+        chip.classList.toggle('on', picked.has(item.code));
+      };
+      items.appendChild(chip);
+    }
+    box.appendChild(items);
+  }
+
+  // Еда, которую бот видит, но считать не умеет. Молчать об этом нельзя:
+  // человек решит, что бот её проглядел, и перестанет доверять остальному.
+  if (data.other && data.other.length) {
+    const other = document.createElement('p');
+    other.className = 'hint';
+    other.textContent = 'Ещё вижу: ' + data.other.join(', ')
+      + '. Этого в моём справочнике нет — в набор не возьму.';
+    box.appendChild(other);
+  }
+
+  if (!picked.size) return;
+
+  const go = document.createElement('button');
+  go.className = 'btn';
+  go.textContent = '🎲 Собрать из этого';
+  go.onclick = () => {
+    cubeState.basket = new Set(picked);
+    syncBasketChips();
+    rollCube(false);
+  };
+  box.appendChild(go);
+}
+
 
 function markCubeLevel() {
   for (const button of document.querySelectorAll('.cube-level')) {
@@ -2901,6 +3008,7 @@ function switchScreen(name) {
     buildCubeControls();
     buildShopMode();
     buildBasket().catch(() => {});
+    buildShelf();
   }
   if (name === 'world') {
     refreshWorld().catch((e) => toast(e.message));

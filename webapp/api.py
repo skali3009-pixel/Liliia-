@@ -19,6 +19,7 @@ from services.preps import expiring_names
 from services.workouts import recent_program_codes
 from services.favorites import frequent_meals
 from services.food_vision import FoodAnalysis, FoodRecognitionError
+from services import usage
 from services.gamification import awards_summary, sync_today
 from services import context
 from services.gamification import (days_away, remember_suggestion,
@@ -1080,7 +1081,10 @@ async def post_cube(request: web.Request) -> web.Response:
         allergies = {part.strip().lower() for part in (user.allergies or "").split(",")
                      if part.strip()}
 
-        if not level:
+        # Режим, который человек выбрал сам, менять нельзя. Тот, что мы
+        # подставили за него, — можно: он был догадкой, а не просьбой.
+        auto_level = not level
+        if auto_level:
             # Человек в магазине не знает свой остаток — подставим сами.
             left = (user.daily_calories or 0) - totals.calories
             level = cube.level_for(left if left > 0 else None)
@@ -1103,6 +1107,16 @@ async def post_cube(request: web.Request) -> web.Response:
             if not found and basket:
                 found = cube.build(products, level=level, craving="random",
                                    recent=recent, limit=3, **limits)
+            # И тем более глупо отказывать из-за режима голода, который мы
+            # выбрали за него сами: из четырёх продуктов с полки полноценный
+            # приём не соберётся, а перекус соберётся.
+            if not found and basket and auto_level:
+                for lighter in cube.lighter_than(level):
+                    found = cube.build(products, level=lighter, craving="random",
+                                       recent=recent, limit=3, **limits)
+                    if found:
+                        level = lighter
+                        break
             cubes = [("", item) for item in found]
 
     return web.json_response({
@@ -1255,6 +1269,88 @@ async def post_workout_pick(request: web.Request) -> web.Response:
     })
 
 
+async def post_shelf(request: web.Request) -> web.Response:
+    """«Сфоткай полку»: что из этого мы умеем считать.
+
+    Модель только называет продукты — калории, порции и сочетания считает
+    Кубик. Наружу отдаём распознанное списком, чтобы человек подтвердил его
+    до того, как увидит наборы: снять лишнее одним нажатием он может, а
+    догадаться, почему бот предложил ерунду, — нет.
+    """
+    from services import catalogue, shelf_vision
+
+    # Место на диске и деньги кончаются раньше всего именно на фотографиях.
+    disk = disk_usage()
+    if disk.full:
+        logger.warning("Диск заполнен на %s%% — распознавание полки остановлено", disk.percent)
+        return web.json_response(
+            {"error": "На сервере кончается место — фото пока не принимаются"}, status=507)
+
+    async with get_session() as session:
+        if await usage.over_budget(session):
+            return web.json_response(
+                {"error": "Распознавание фото сегодня недоступно — исчерпан дневной "
+                          "лимит. Отметь продукты в корзине руками, подбор работает."},
+                status=429)
+        if await usage.photo_limit_left(session, request["user_id"]) <= 0:
+            return web.json_response(
+                {"error": f"На сегодня распознавание фото исчерпано — это "
+                          f"{config.PHOTO_LIMIT_PER_DAY} снимков в сутки. "
+                          f"Отметь продукты в корзине руками."},
+                status=429)
+
+    reader = await request.multipart()
+    field = await reader.next()
+    if field is None or field.name != "photo":
+        return web.json_response({"error": "Нет файла"}, status=400)
+
+    content = bytearray()
+    while chunk := await field.read_chunk():
+        content.extend(chunk)
+        if len(content) > MAX_PHOTO_BYTES:
+            return web.json_response({"error": "Фото слишком большое (максимум 10 МБ)"},
+                                     status=400)
+    if not content:
+        return web.json_response({"error": "Пустой файл"}, status=400)
+
+    async with get_session() as session:
+        products = await catalogue.products(session)
+
+    spent: list = []
+    try:
+        shelf = await shelf_vision.recognize(
+            bytes(content), {code: item.name for code, item in products.items()},
+            on_usage=spent.append)
+    except FoodRecognitionError as e:
+        return web.json_response({"error": str(e)}, status=502)
+    finally:
+        # Запрос состоялся — значит, он уже стоил денег, даже если ответ
+        # разобрать не удалось.
+        await _record_usage(request["user_id"], "shelf", spent)
+
+    return web.json_response({
+        "codes": list(shelf.codes),
+        "items": [{"code": code, "name": products[code].name}
+                  for code in shelf.codes if code in products],
+        # Еда, которую бот видит, но считать не умеет. Показываем честно:
+        # иначе человек думает, что бот её проглядел.
+        "other": list(shelf.other),
+    })
+
+
+async def _record_usage(user_id: int, kind: str, spent: list) -> None:
+    """Записать расход на модель. Сбой учёта не должен ломать ответ человеку."""
+    if not spent:
+        return
+    try:
+        async with get_session() as session:
+            for item in spent:
+                await usage.record(session, user_id=user_id, kind=kind,
+                                   model=config.VISION_MODEL, usage=item)
+    except Exception:  # noqa: BLE001
+        logger.exception("Не записался расход на распознавание полки")
+
+
 async def get_basket(request: web.Request) -> web.Response:
     """Что можно отметить как «уже в корзине»."""
     from services import catalogue
@@ -1370,6 +1466,7 @@ def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/menu", get_menu)
     app.router.add_post("/api/cube", post_cube)
     app.router.add_get("/api/cube/basket", get_basket)
+    app.router.add_post("/api/cube/shelf", post_shelf)
     app.router.add_post("/api/workouts/pick", post_workout_pick)
     app.router.add_get("/api/preps", get_preps)
     app.router.add_post("/api/preps/mine", post_my_prep)

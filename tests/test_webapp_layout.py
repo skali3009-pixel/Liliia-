@@ -88,3 +88,19 @@ def test_only_author_dishes_carry_a_mark():
                   "собрано по"):
         assert label not in visible, label
         assert label not in INDEX, label
+
+
+def test_shelf_photo_is_wired():
+    """«Сфоткай полку»: скрытый input и карточка результата ищутся по id."""
+    for element_id in ("shelf-input", "shelf-found"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+    # Снимать надо заднюю камерой и сразу: полка перед человеком, а не в галерее.
+    assert 'capture="environment"' in INDEX
+    # Кнопка выбора файла — label, и без display:block она уезжает влево.
+    assert "label.btn" in STYLES
+
+
+def test_shelf_offer_comes_before_the_hand_marked_basket():
+    """Сфотографировать проще, чем отмечать полсотни продуктов пальцем."""
+    assert INDEX.index('id="cube-shelf-card"') < INDEX.index('id="cube-basket-card"')

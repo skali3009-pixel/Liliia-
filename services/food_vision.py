@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import base64
+import contextlib
 import logging
 from dataclasses import asdict, dataclass
 from typing import Any
@@ -194,9 +195,16 @@ def _build_analysis(payload: dict[str, Any]) -> FoodAnalysis:
     )
 
 
-async def _analyze(content: list[dict[str, Any]], on_usage=None) -> FoodAnalysis:
+@contextlib.contextmanager
+def friendly_errors():
+    """Ошибки Anthropic — человеческим языком.
+
+    Один и тот же список отказов нужен и распознаванию блюда, и разбору полки:
+    ключ, доступ, лимит запросов, деньги на счёте, сеть. Держим его в одном
+    месте, чтобы человек везде видел одинаковое понятное объяснение.
+    """
     try:
-        response = await _request(content)
+        yield
     except anthropic.AuthenticationError:
         raise VisionNotConfigured(
             "Ключ Anthropic не принят — он неверный, отозван или скопирован не полностью.\n\n"
@@ -225,6 +233,11 @@ async def _analyze(content: list[dict[str, Any]], on_usage=None) -> FoodAnalysis
         raise FoodRecognitionError(
             "Не получилось связаться с Claude — похоже, у сервера проблемы с сетью."
         ) from None
+
+
+async def _analyze(content: list[dict[str, Any]], on_usage=None) -> FoodAnalysis:
+    with friendly_errors():
+        response = await _request(content)
 
     tool_use = next((block for block in response.content if block.type == "tool_use"), None)
     if tool_use is None:

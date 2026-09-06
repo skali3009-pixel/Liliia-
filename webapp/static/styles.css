@@ -1106,6 +1106,12 @@ select.fact-input { text-align: left; width: 130px; }
 .basket-item.on { border-color: var(--accent); background: rgba(124, 92, 255, .18); color: var(--fg); }
 .basket-count { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
 
+/* «Сфоткай полку». Кнопка выбора файла — это label, а не button: без этих
+   трёх свойств она не растягивается на карточку и уезжает влево. */
+label.btn { display: block; box-sizing: border-box; text-align: center; }
+#shelf-found { margin-top: 12px; }
+#shelf-found .basket-items { margin: 8px 0; }
+
 
 /* --- «Твой ход»: одно действие -------------------------------------------- */
 .turn {

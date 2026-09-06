@@ -375,12 +375,26 @@ def _varied(cubes: list[Cube], limit: int) -> list[Cube]:
         if len(chosen) >= limit:
             return chosen
 
-    # Разных белков не хватило — дополняем чем есть, лишь бы не пусто.
+    # Разных белков не хватило — дополняем чем есть, лишь бы не пусто. Но
+    # два одинаковых названия в одном ответе читаются как поломка, поэтому
+    # сначала берём наборы с другими именами. Такое случается там, где выбор
+    # и так узкий: в корзине или на сфотографированной полке.
+    taken = {title_for(cube) for cube in chosen}
     for cube in cubes:
+        if cube in chosen or title_for(cube) in taken:
+            continue
+        chosen.append(cube)
+        taken.add(title_for(cube))
+        if len(chosen) >= limit:
+            return chosen
+
+    # Один вариант — это не выбор, поэтому второй добираем даже с повтором
+    # имени. Третий с тем же именем уже не добавляет ничего.
+    for cube in cubes:
+        if len(chosen) >= min(2, limit):
+            break
         if cube not in chosen:
             chosen.append(cube)
-        if len(chosen) >= limit:
-            break
     return chosen
 
 
@@ -480,17 +494,33 @@ def shop_offers(products: dict[str, Product], *, craving: str = "random",
     return offers
 
 
+# От самого лёгкого к самому сытному.
+ORDER = ("light", "normal", "hungry", "meal")
+
+
 def level_for(kcal_left: float | None) -> str:
     """Подсказать режим по остатку калорий, если он известен."""
     if kcal_left is None:
         return "normal"
-    for name in ("light", "normal", "hungry", "meal"):
+    for name in ORDER:
         _, low, high, _, _, _ = LEVELS[name]
         if kcal_left <= high:
             return name
     return "meal"
 
 
+def lighter_than(level: str) -> list[str]:
+    """Режимы полегче заданного, начиная с ближайшего.
+
+    Нужно там, где выбор ограничен тем, что человек уже держит в руках: из
+    четырёх продуктов с полки «почти обед» может не собраться, а перекус —
+    вполне. Пустой экран в такой момент бесполезнее меньшего набора.
+    """
+    if level not in ORDER:
+        return []
+    return list(reversed(ORDER[:ORDER.index(level)]))
+
+
 __all__ = ["Cube", "GROUP_OF", "Item", "MIN_PROTEIN_SHARE", "NEED_FIBER",
-           "NEED_PROTEIN", "REMEMBER", "SHOP_LABELS", "build", "level_for",
-           "shop_offers", "title_for"]
+           "NEED_PROTEIN", "ORDER", "REMEMBER", "SHOP_LABELS", "build",
+           "level_for", "lighter_than", "shop_offers", "title_for"]
