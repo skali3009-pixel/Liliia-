@@ -301,6 +301,14 @@ function questRow(quest) {
 }
 
 /* --- «Твой ход»: одно действие, которое сейчас полезнее всего ------------- */
+function renderCheetah(mood, prefix) {
+  const line = document.getElementById(prefix);
+  if (!mood) { line.hidden = true; return; }
+  document.getElementById(`${prefix}-emoji`).textContent = mood.emoji;
+  document.getElementById(`${prefix}-line`).textContent = mood.line;
+  line.hidden = false;
+}
+
 function renderTurn(action) {
   const card = document.getElementById('turn');
   if (!action) {
@@ -2355,6 +2363,7 @@ async function closeProfile() {
 async function refresh() {
   state = await api('/api/today');
   renderToday(state);
+  renderCheetah(state.cheetah, 'cheetah');
   renderTurn(state.next_action);
   renderGame(state.game);
   renderAwards(state.game?.awards);
@@ -2714,6 +2723,8 @@ function renderWorld(data) {
   document.getElementById('world-title').textContent = data.title;
   document.getElementById('world-sub').textContent = data.subtitle;
   document.getElementById('world-count').textContent = `${data.open} из ${data.total}`;
+  // Гепард радуется новому месту ровно один раз — сервер следит за этим сам.
+  renderCheetah(data.cheetah, 'world-cheetah');
 
   const nextCard = document.getElementById('world-next-card');
   if (data.next) {

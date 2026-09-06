@@ -902,3 +902,32 @@ def test_the_world_needs_a_signature():
         async with webapp_client() as (client, _):
             assert (await call(client, "GET", "/api/world", signed=False)).status == 401
     run(scenario)
+
+
+# --- Гепард через HTTP -----------------------------------------------------
+
+def test_today_comes_with_the_cheetah():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            body = await (await call(client, "GET", "/api/today")).json()
+            assert body["cheetah"]["code"]
+            assert body["cheetah"]["emoji"] and body["cheetah"]["line"]
+    run(scenario)
+
+
+def test_a_new_place_is_celebrated_once_and_not_every_reload():
+    """Радость, повторённая пять раз, перестаёт быть радостью."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            # В дневнике уже есть запись, значит сад открылся — и это надо
+            # заметить ровно один раз.
+            await call(client, "GET", "/api/today")
+            opened = await (await call(client, "GET", "/api/world")).json()
+            assert opened["open"] >= 1, "запись в дневнике не открыла сад"
+            assert opened["cheetah"], "открытие места прошло незамеченным"
+            assert opened["cheetah"]["code"] == "world_unlock"
+
+            for _ in range(3):
+                again = await (await call(client, "GET", "/api/world")).json()
+                assert again["cheetah"] is None, "празднует одно и то же дважды"
+    run(scenario)

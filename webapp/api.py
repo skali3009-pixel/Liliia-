@@ -20,7 +20,9 @@ from services.favorites import frequent_meals
 from services.food_vision import FoodAnalysis, FoodRecognitionError
 from services.gamification import awards_summary, sync_today
 from services import context
-from services.gamification import remember_suggestion, suggestions_today
+from services.gamification import (days_away, remember_suggestion,
+                                   suggestions_today)
+from utils.cheetah import mood as cheetah_mood
 from services.meals import get_today_totals, list_today_meals, save_meal
 from services.menu import board as menu_board
 from services.moments import Moment, analyze_moment, facts as moment_facts
@@ -238,8 +240,22 @@ async def get_today(request: web.Request) -> web.Response:
         for quest in game["quests"]:
             quest["main"] = quest["code"] in main_codes
 
+        # Гепард не советует — он реагирует. Считается по тем же данным.
+        cheetah = cheetah_mood(
+            hour=context.hour_in(tz),
+            energy=state.energy, stress=state.stress,
+            water_share=(water / user.daily_water_ml) if user.daily_water_ml else 1.0,
+            workouts_today=game.get("workouts_today", 0),
+            streak=game.get("streak", 0),
+            days_away=await days_away(session, user_id, timezone_name=tz),
+            new_awards=len(game.get("new_awards") or []),
+            quests_done=game.get("quests_done", 0),
+            quests_total=game.get("quests_total", 0),
+        )
+
         return web.json_response(
             {
+                "cheetah": cheetah.to_dict(),
                 "next_action": action.to_dict() if action else None,
                 "profile": {
                     "name": (user.full_name or "").split(" ")[0],

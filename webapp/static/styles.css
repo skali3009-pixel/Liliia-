@@ -2,6 +2,11 @@
    Telegram — это осознанный выбор, а не наследование чужих цветов.
    Игровое (кристалл, награды, задания) держится на фиолетовом и бирюзовом,
    взрослое (данные, графики, списки) — на почти чёрном фоне и хайрлайнах. */
+/* Атрибут hidden должен скрывать всегда. Любое правило с display у автора
+   перебивает браузерное [hidden]{display:none}, и элемент, который код
+   считает спрятанным, остаётся на экране пустой строкой. */
+[hidden] { display: none !important; }
+
 :root {
   --void: #0A0912;
   --surface: #151327;
@@ -1167,3 +1172,11 @@ select.fact-input { text-align: left; width: 130px; }
 .zone-step { flex: 1; height: 4px; border-radius: 2px; background: var(--stroke); }
 .zone-step.on { background: var(--accent); }
 .zone-note { color: var(--muted); font-size: 12px; }
+
+
+/* Гепард: одна строка настроения, не карточка. */
+.cheetah {
+  display: flex; align-items: center; gap: 8px; margin: 8px 0 0;
+  color: var(--lilac); font-size: 13px; line-height: 1.3;
+}
+.cheetah-emoji { font-size: 17px; }

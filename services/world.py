@@ -11,6 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import BodyMeasurement, DayStat, User
+from utils.cheetah import mood
 from utils.game import level_from_xp
 from utils.timeframe import DEFAULT_TIMEZONE
 from utils.world import ZoneState, build, headline, next_unlock
@@ -29,6 +30,18 @@ async def _days_with(session: AsyncSession, user_id: int, quest: str) -> int:
     )).scalar_one())
 
 
+async def _diary_days(session: AsyncSession, user_id: int,
+                      timezone_name: str) -> int:
+    """Сколько разных дней в дневнике есть хоть одна запись еды."""
+    from models import Meal
+    from utils.timeframe import to_local
+
+    moments = (await session.execute(
+        select(Meal.logged_at).where(Meal.user_id == user_id)
+    )).scalars()
+    return len({to_local(moment, timezone_name).date() for moment in moments})
+
+
 async def facts(session: AsyncSession, user: User, *,
                 timezone_name: str = DEFAULT_TIMEZONE) -> dict[str, float]:
     """Числа, которыми двигается мир."""
@@ -45,7 +58,10 @@ async def facts(session: AsyncSession, user: User, *,
     weight_lost, _ = await _losses(session, user)
 
     return {
-        "diary_days": await _days_with(session, user.id, "meals"),
+        # Дни, когда человек хоть что-то записал, — а не дни, когда закрыто
+        # задание про три приёма пищи. «Первая запись — росток», а не
+        # «три записи — росток».
+        "diary_days": await _diary_days(session, user.id, timezone_name),
         "water_days": await _days_with(session, user.id, "water"),
         "workout_days": await _workout_days_total(session, user.id, timezone_name),
         "measurements": measurements,
@@ -55,20 +71,52 @@ async def facts(session: AsyncSession, user: User, *,
     }
 
 
+async def _just_unlocked(session: AsyncSession, user_id: int, opened: int, *,
+                         timezone_name: str) -> bool:
+    """Открылось ли место именно сегодня.
+
+    Сравниваем с тем, сколько было открыто в прошлые дни. Заодно
+    запоминаем сегодняшнее число — иначе радоваться пришлось бы каждый раз.
+    """
+    from utils.timeframe import today_in
+
+    today = today_in(timezone_name)
+    before = (await session.execute(
+        select(func.max(DayStat.world_open)).where(
+            DayStat.user_id == user_id, DayStat.day < today)
+    )).scalar_one_or_none() or 0
+
+    row = (await session.execute(
+        select(DayStat).where(DayStat.user_id == user_id, DayStat.day == today)
+    )).scalar_one_or_none()
+    seen_today = row.world_open if row else 0
+
+    if row is not None and row.world_open != opened:
+        row.world_open = opened
+        await session.commit()
+
+    # Радуемся один раз: если сегодня уже записано столько же, значит
+    # человек это открытие уже видел.
+    return opened > before and seen_today < opened
+
+
 async def state(session: AsyncSession, user: User, *,
                 timezone_name: str = DEFAULT_TIMEZONE) -> dict:
     """Всё, что нужно экрану «Мой мир», одним ответом."""
     zones: list[ZoneState] = build(await facts(session, user, timezone_name=timezone_name))
     title, subtitle = headline(zones)
     upcoming = next_unlock(zones)
+    opened = sum(1 for zone in zones if zone.open)
+    fresh = await _just_unlocked(session, user.id, opened, timezone_name=timezone_name)
 
     return {
         "title": title,
         "subtitle": subtitle,
         "zones": [zone.to_dict() for zone in zones],
-        "open": sum(1 for zone in zones if zone.open),
+        "open": opened,
         "total": len(zones),
         "next": upcoming.to_dict() if upcoming else None,
+        "cheetah": mood(hour=0, world_unlock=True).to_dict() if fresh else None,
     }
 
 

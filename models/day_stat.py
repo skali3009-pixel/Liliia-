@@ -32,3 +32,6 @@ class DayStat(Base):
     # Без этого один и тот же совет показывался бы весь день, и человек
     # перестал бы читать карточку вообще — вместе со всеми остальными советами.
     suggested: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    # Сколько мест мира было открыто в этот день. Нужно ровно для одного:
+    # заметить, что сегодня открылось новое, и порадоваться вместе с человеком.
+    world_open: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

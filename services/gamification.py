@@ -246,6 +246,23 @@ async def sync_today(
     }
 
 
+async def days_away(session: AsyncSession, user_id: int, *,
+                    timezone_name: str = DEFAULT_TIMEZONE) -> int:
+    """Сколько дней человек не заходил до сегодняшнего.
+
+    Нужно, чтобы встретить вернувшегося, а не сделать вид, что ничего не
+    было. Ноль означает «был вчера или сегодня».
+    """
+    today = today_in(timezone_name)
+    last = (await session.execute(
+        select(func.max(DayStat.day)).where(
+            DayStat.user_id == user_id, DayStat.day < today)
+    )).scalar_one_or_none()
+    if last is None:
+        return 0
+    return max((today - last).days - 1, 0)
+
+
 async def remember_suggestion(
     session: AsyncSession, user_id: int, code: str, *,
     timezone_name: str = DEFAULT_TIMEZONE, keep: int = 12,

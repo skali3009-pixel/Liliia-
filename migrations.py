@@ -72,6 +72,7 @@ COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
     ("subscriptions", "lifetime", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("nutrition_products", "tags", "VARCHAR(200) NOT NULL DEFAULT ''"),
     ("day_stats", "suggested", "VARCHAR(255) NOT NULL DEFAULT ''"),
+    ("day_stats", "world_open", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 
