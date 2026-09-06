@@ -125,6 +125,8 @@ class Dish(Base):
     prep_codes: Mapped[str] = mapped_column(String(200), default="", nullable=False)
     # Порции подобраны нами, а не взяты из источника. Человек должен это видеть.
     estimated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Собирается без готовки: купил в магазине и сложил в миску.
+    no_cook: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     kcal: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     protein_g: Mapped[float] = mapped_column(Float, default=0, nullable=False)

@@ -1025,3 +1025,13 @@ select.fact-input { text-align: left; width: 130px; }
 /* Подписи под рецептом: каждая своей строкой, иначе сливаются в абзац. */
 .recipe-note { margin-top: 6px; }
 .recipe-note:first-child { margin-top: 0; }
+/* Переключатель «готовлю / не готовлю» */
+.cook-switch { display: flex; gap: 6px; margin-bottom: 10px; }
+.cook-opt {
+  flex: 1 1 0; padding: 9px 6px; cursor: pointer; font-family: inherit;
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  border: 1px solid var(--stroke); border-radius: 11px; background: var(--surface-2);
+}
+.cook-opt.on { color: var(--fg); border-color: var(--gold);
+               background: rgba(201, 169, 97, .18); }
+.cook-opt:active { transform: scale(.97); }

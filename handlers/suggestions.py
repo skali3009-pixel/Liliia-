@@ -29,6 +29,7 @@ router = Router(name="suggestions")
 
 CB_EAT = "eat:"
 CB_MEAL = "meal:"
+CB_COOK = "cook:"
 CB_RECIPE = "recipe:"
 
 AUTHOR_MARK = "⭐"
@@ -47,12 +48,17 @@ def _keyboard(key: str, *, with_recipe: bool) -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def _meal_keyboard(active: str) -> InlineKeyboardMarkup:
+def _meal_keyboard(active: str, *, no_cook: bool) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     for code, title in MEAL_RU.items():
         mark = "· " if code == active else ""
         builder.button(text=f"{mark}{title.capitalize()}", callback_data=f"{CB_MEAL}{code}")
-    builder.adjust(4)
+    # Готовить негде — обычное состояние в дороге и на работе.
+    builder.button(text=("· 🍳 Приготовлю" if not no_cook else "🍳 Приготовлю"),
+                   callback_data=f"{CB_COOK}{active}:1")
+    builder.button(text=("· 🛒 Без готовки" if no_cook else "🛒 Без готовки"),
+                   callback_data=f"{CB_COOK}{active}:0")
+    builder.adjust(4, 2)
     return builder.as_markup()
 
 
@@ -83,24 +89,22 @@ def recipe_text(offer: Offer) -> str:
     if offer.instructions:
         lines += ["", offer.instructions]
     if offer.estimated:
-        lines += ["", "⚖️ Порции подобраны по обычным размерам её рецептов — "
-                      "в источнике граммы не указаны."]
+        lines += ["", "⚖️ Порции подобраны — точных граммов в рецепте нет."]
     elif offer.notes:
         lines += ["", offer.notes]
     if offer.preps:
         lines += ["", f"🥘 Из заготовок: {', '.join(offer.preps)}"]
-    if offer.author and offer.source:
-        lines += ["", f"{AUTHOR_MARK} {offer.source}"]
     return "\n".join(lines)
 
 
-async def _show(message: Message, user_id: int, meal_type: str | None) -> None:
+async def _show(message: Message, user_id: int, meal_type: str | None,
+                no_cook: bool = False) -> None:
     async with get_session() as session:
         user = await session.get(User, user_id)
         if user is None or not user.onboarding_completed:
             await message.answer("Сначала настроим профиль — напиши /start.")
             return
-        result = await board(session, user, meal_type=meal_type)
+        result = await board(session, user, meal_type=meal_type, no_cook=no_cook)
 
     header = [
         f"🍽 {result.meal_name.capitalize()} — около {result.budget} ккал",
@@ -110,17 +114,20 @@ async def _show(message: Message, user_id: int, meal_type: str | None) -> None:
     ]
     if result.approximate:
         header.append("\nТочного варианта нет — вот что ближе всего.")
-    await message.answer("\n".join(header), reply_markup=_meal_keyboard(result.meal_type))
+    await message.answer("\n".join(header),
+                         reply_markup=_meal_keyboard(result.meal_type, no_cook=no_cook))
 
     if not result.offers:
         await message.answer(
+            "Готовых наборов на такой бюджет нет — попробуй другой приём пищи."
+            if no_cook else
             "На такой бюджет подходящего блюда нет. Попробуй другой приём пищи "
             "или загляни позже."
         )
         return
 
     for index, offer in enumerate(result.offers):
-        key = f"{user_id}:{result.meal_type}:{index}"
+        key = f"{user_id}:{result.meal_type}:{int(no_cook)}:{index}"
         _offered[key] = offer
         await message.answer(
             offer_text(offer),
@@ -168,6 +175,13 @@ async def switch_meal(callback: CallbackQuery) -> None:
     meal = callback.data.removeprefix(CB_MEAL)
     await callback.answer()
     await _show(callback.message, callback.from_user.id, meal)
+
+
+@router.callback_query(F.data.startswith(CB_COOK))
+async def switch_cooking(callback: CallbackQuery) -> None:
+    meal, flag = callback.data.removeprefix(CB_COOK).rsplit(":", 1)
+    await callback.answer()
+    await _show(callback.message, callback.from_user.id, meal or None, no_cook=flag == "0")
 
 
 @router.callback_query(F.data.startswith(CB_RECIPE))

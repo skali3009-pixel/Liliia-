@@ -78,7 +78,9 @@ def check(*, meal_type: str, components: list[dict], kcal: float,
     protein = by_role.get("белок", 0.0)
     grain = by_role.get("крупа", 0.0)
     vegetables = by_role.get("овощи", 0.0)
-    fat = by_role.get("жир", 0.0)
+    # Добавленный жир — только масло. Орехи, авокадо и оливки жирные,
+    # но это еда, а не долив в тарелку.
+    added_fat = by_role.get("масло", 0.0)
 
     if meal_type == "snack":
         if kcal > SNACK_MAX_KCAL:
@@ -106,8 +108,8 @@ def check(*, meal_type: str, components: list[dict], kcal: float,
         problems.append(Violation(
             "порция крупы", f"{grain:.0f} г крупы — больше, чем в любом её рецепте"))
 
-    if fat > ADDED_FAT_G[1]:
-        problems.append(Violation("жир", f"{fat:.0f} г добавленного жира — многовато"))
+    if added_fat > ADDED_FAT_G[1]:
+        problems.append(Violation("жир", f"{added_fat:.0f} г масла — многовато"))
 
     return problems
 

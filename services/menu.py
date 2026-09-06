@@ -27,6 +27,8 @@ from utils.timeframe import get_zone
 logger = logging.getLogger(__name__)
 
 WANTED = 3
+NO_COOK_HINT = ("Ничего готовить не нужно: всё это есть в обычном магазине. "
+                "Белок в каждом наборе обязателен — это её правило.")
 MEAL_CODES = {"breakfast": MealTypeEnum.BREAKFAST, "lunch": MealTypeEnum.LUNCH,
               "dinner": MealTypeEnum.DINNER, "snack": MealTypeEnum.SNACK}
 MEAL_RU = {"breakfast": "завтрак", "lunch": "обед", "dinner": "ужин", "snack": "перекус"}
@@ -56,6 +58,7 @@ class Offer:
     approximate: bool = False
     # Порции подобраны нами, а не взяты из источника.
     estimated: bool = False
+    no_cook: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -77,6 +80,7 @@ class Offer:
             "preps": self.preps,
             "notes": self.notes,
             "estimated": self.estimated,
+            "no_cook": self.no_cook,
             "approximate": self.approximate,
         }
 
@@ -93,6 +97,7 @@ class Board:
     hint: str
     offers: list[Offer]
     approximate: bool = False
+    no_cook: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -103,6 +108,7 @@ class Board:
             "gap": self.gap,
             "hint": self.hint,
             "approximate": self.approximate,
+            "no_cook": self.no_cook,
             "offers": [offer.to_dict() for offer in self.offers],
         }
 
@@ -160,6 +166,7 @@ def _from_pick(pick: dish_picker.Pick) -> Offer:
         reason=pick.reason, author=pick.dish.author, source=pick.dish.source,
         scale=pick.scale, instructions=pick.dish.instructions,
         preps=pick.preps, notes=pick.dish.notes, estimated=pick.dish.estimated,
+        no_cook=pick.dish.no_cook,
     )
 
 
@@ -199,20 +206,26 @@ async def _built_offers(session: AsyncSession, user: User, *, meal_type: str,
 
 
 async def board(session: AsyncSession, user: User, *, meal_type: str | None = None,
-                allow_build: bool = True) -> Board:
-    """Собрать экран подбора для человека."""
+                allow_build: bool = True, no_cook: bool = False) -> Board:
+    """Собрать экран подбора для человека.
+
+    `no_cook` — «готовить негде»: только то, что собирается из купленного.
+    Сборку моделью в этом режиме не зовём: она предложит что-то, что нужно
+    варить, а человек стоит в магазине.
+    """
     meal = meal_type or default_meal(user.timezone)
     if meal not in MEAL_CODES:
         meal = "lunch"
 
     budget, left, gap = await _budget_and_gap(session, user, meal)
     fitted, near = await dish_picker.pick_dishes(
-        session, user, meal_type=meal, budget=budget, gap=gap, limit=WANTED)
+        session, user, meal_type=meal, budget=budget, gap=gap, limit=WANTED,
+        no_cook=no_cook)
 
     offers = [_from_pick(pick) for pick in fitted]
     approximate = False
 
-    if len(offers) < WANTED and allow_build:
+    if len(offers) < WANTED and allow_build and not no_cook:
         offers += await _built_offers(
             session, user, meal_type=meal, budget=budget, gap=gap,
             avoid=[o.name for o in offers], count=WANTED - len(offers))
@@ -233,8 +246,8 @@ async def board(session: AsyncSession, user: User, *, meal_type: str | None = No
     return Board(
         meal_type=meal, meal_name=MEAL_RU[meal], budget=int(budget),
         left_calories=int(left), gap=gap,
-        hint=method.plate_hint(meal),
-        offers=offers, approximate=approximate,
+        hint=method.plate_hint(meal) if not no_cook else NO_COOK_HINT,
+        offers=offers, approximate=approximate, no_cook=no_cook,
     )
 
 

@@ -18,6 +18,7 @@ from models import Dish, DishComponent, Prep, PrepComponent, Product
 from seed.nutrition.dishes import DISHES
 from seed.nutrition.dishes_4days import FOURDAY_DISHES
 from seed.nutrition.dishes_guide import GUIDE_DISHES
+from seed.nutrition.dishes_store import STORE_DISHES
 from seed.nutrition.preps import PREPS
 from seed.nutrition.products import PRODUCTS
 
@@ -108,7 +109,7 @@ async def seed_nutrition(session: AsyncSession) -> tuple[int, int, int]:
 
     dishes = {d.code: d for d in (await session.execute(select(Dish))).scalars()}
 
-    for data in DISHES + GUIDE_DISHES + FOURDAY_DISHES:
+    for data in DISHES + GUIDE_DISHES + FOURDAY_DISHES + STORE_DISHES:
         components = data["components"]
         values = {k: v for k, v in data.items() if k != "components"}
         values.update(nutrition_of(components, products, data["portions"]))
@@ -130,7 +131,8 @@ async def seed_nutrition(session: AsyncSession) -> tuple[int, int, int]:
             session.add(DishComponent(dish_id=dish.id, **item))
 
     await session.commit()
-    total_dishes = len(DISHES) + len(GUIDE_DISHES) + len(FOURDAY_DISHES)
+    total_dishes = (len(DISHES) + len(GUIDE_DISHES) + len(FOURDAY_DISHES)
+                    + len(STORE_DISHES))
     logger.info("Справочник питания: %d продуктов, %d заготовок, %d блюд",
                 len(PRODUCTS), len(PREPS), total_dishes)
     return len(PRODUCTS), len(PREPS), total_dishes

@@ -947,10 +947,13 @@ async def get_menu(request: web.Request) -> web.Response:
     """
     meal = request.query.get("meal")
     allow_build = request.query.get("build", "1") != "0"
+    # cook=0 — «готовить негде»: только то, что собирается из купленного.
+    no_cook = request.query.get("cook", "1") == "0"
 
     async with get_session() as session:
         user = await session.get(User, request["user_id"])
-        result = await menu_board(session, user, meal_type=meal, allow_build=allow_build)
+        result = await menu_board(session, user, meal_type=meal,
+                                  allow_build=allow_build, no_cook=no_cook)
 
     return web.json_response(result.to_dict())
 

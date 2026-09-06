@@ -1632,6 +1632,9 @@ function renderFrequent(items) {
 /* --- Подбор блюда: меню Анастасии плюс сборка по её принципам --- */
 let mealType = null;
 let menuBoard = null;
+// «Готовить негде» — отдельный режим, а не фильтр по времени: человеку в
+// дороге не нужны блюда на 10 минут, ему нужны те, что не требуют плиты.
+let canCook = true;
 
 // Значок у блюд из её меню. Ставится только им — остальное без пометок.
 const AUTHOR_MARK = '⭐';
@@ -1639,6 +1642,9 @@ const AUTHOR_MARK = '⭐';
 function setMealTabs(active) {
   for (const tab of document.querySelectorAll('.meal-tab')) {
     tab.classList.toggle('on', tab.dataset.meal === active);
+  }
+  for (const opt of document.querySelectorAll('.cook-opt')) {
+    opt.classList.toggle('on', (opt.dataset.cook === '1') === canCook);
   }
 }
 
@@ -1649,8 +1655,11 @@ async function loadMenu(meal) {
   button.textContent = 'Подбираю…';
 
   try {
-    const query = meal ? `?meal=${meal}` : '';
-    menuBoard = await api(`/api/menu${query}`);
+    const params = new URLSearchParams();
+    if (meal) params.set('meal', meal);
+    if (!canCook) params.set('cook', '0');
+    const query = params.toString();
+    menuBoard = await api(`/api/menu${query ? '?' + query : ''}`);
     mealType = menuBoard.meal_type;
     setMealTabs(mealType);
 
@@ -1677,8 +1686,10 @@ function renderOffers(data) {
   box.innerHTML = '';
 
   if (!data.offers.length) {
-    box.innerHTML = '<div class="empty">На такой бюджет подходящего блюда нет. ' +
-      'Попробуй другой приём пищи.</div>';
+    box.innerHTML = '<div class="empty">' + (data.no_cook
+      ? 'Готовых наборов на такой бюджет нет — попробуй другой приём пищи.'
+      : 'На такой бюджет подходящего блюда нет. Попробуй другой приём пищи.') +
+      '</div>';
     return;
   }
   if (data.approximate) {
@@ -1777,11 +1788,9 @@ function openRecipe(index) {
   footer.innerHTML = '';
   const lines = [];
   if (item.preps?.length) lines.push(`🥘 Из заготовок: ${item.preps.join(', ')}`);
-  if (item.estimated) {
-    lines.push('⚖️ Порции подобраны по обычным размерам её рецептов — ' +
-               'в источнике граммы не указаны.');
-  }
-  if (item.author && item.source) lines.push(`${AUTHOR_MARK} ${item.source}`);
+  // Откуда рецепт — видно по звёздочке у названия. Писать «меню, неделя 2,
+  // день 3» незачем: человеку это ничего не даёт.
+  if (item.estimated) lines.push('⚖️ Порции подобраны — точных граммов в рецепте нет.');
   for (const line of lines) {
     const row = document.createElement('div');
     row.className = 'recipe-note';
@@ -2371,6 +2380,9 @@ async function init() {
   };
   for (const tab of document.querySelectorAll('.meal-tab')) {
     tab.onclick = () => { mealType = tab.dataset.meal; loadMenu(mealType); };
+  }
+  for (const opt of document.querySelectorAll('.cook-opt')) {
+    opt.onclick = () => { canCook = opt.dataset.cook === '1'; loadMenu(mealType); };
   }
   document.getElementById('rest-skip').onclick = stopRest;
   document.getElementById('photo-input').onchange = (event) => {

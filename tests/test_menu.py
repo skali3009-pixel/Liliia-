@@ -12,6 +12,7 @@ from models import (ActivityLevelEnum, Base, Dish, DietTypeEnum, GenderEnum, Goa
 from seed.nutrition.dishes import DISHES
 from seed.nutrition.dishes_4days import FOURDAY_DISHES
 from seed.nutrition.dishes_guide import GUIDE_DISHES
+from seed.nutrition.dishes_store import STORE_DISHES
 from seed.nutrition.loader import nutrition_of, seed_nutrition
 from seed.nutrition.products import BY_CODE, PRODUCTS
 from services import dish_picker, method
@@ -65,7 +66,8 @@ def test_seeding_twice_does_not_duplicate():
         async with db() as (session, _):
             await seed_nutrition(session)
             dishes = (await session.execute(select(Dish))).scalars().all()
-            assert len(dishes) == len(DISHES) + len(GUIDE_DISHES) + len(FOURDAY_DISHES)
+            assert len(dishes) == (len(DISHES) + len(GUIDE_DISHES) + len(FOURDAY_DISHES)
+                                  + len(STORE_DISHES))
     run(scenario)
 
 
@@ -600,3 +602,122 @@ def test_estimated_flag_reaches_the_screen():
             result = await board(session, user, meal_type="dinner", allow_build=False)
             assert all("estimated" in offer.to_dict() for offer in result.offers)
     run(scenario)
+
+
+# --- комбо без готовки ----------------------------------------------------
+
+def test_store_combos_are_built_only_from_her_product_lists():
+    unknown = {c["product_code"] for d in STORE_DISHES for c in d["components"]} - set(BY_CODE)
+    assert not unknown
+
+
+def test_store_combos_carry_no_author_mark():
+    """Это не её рецепты — звёздочки быть не должно."""
+    for dish in STORE_DISHES:
+        assert dish["author"] is False
+        assert dish["source"] == ""
+        assert dish["no_cook"] is True
+
+
+def test_no_cook_mode_offers_only_things_you_can_buy():
+    async def scenario():
+        async with db() as (session, user):
+            for meal in ("breakfast", "lunch", "dinner", "snack"):
+                result = await board(session, user, meal_type=meal,
+                                     allow_build=False, no_cook=True)
+                assert result.offers, meal
+                for offer in result.offers:
+                    assert offer.no_cook, offer.name
+                    assert offer.minutes <= 5, offer.name
+                    assert not offer.author
+    run(scenario)
+
+
+def test_cooking_mode_still_offers_her_recipes():
+    async def scenario():
+        async with db() as (session, user):
+            result = await board(session, user, meal_type="lunch", allow_build=False)
+            assert any(offer.author for offer in result.offers)
+    run(scenario)
+
+
+def test_every_store_combo_has_a_protein_source():
+    """Её главное правило: без белка приёма пищи не бывает."""
+    async def scenario():
+        async with db() as (session, _):
+            dishes = (await session.execute(
+                select(Dish).where(Dish.no_cook.is_(True)))).scalars().all()
+            assert len(dishes) == len(STORE_DISHES)
+            for dish in dishes:
+                parts = await dish_picker.components_of(session, dish)
+                protein = sum(p["grams"] for p in parts if p["role"] == "белок")
+                assert protein >= 30, f"{dish.name}: {protein} г белка"
+    run(scenario)
+
+
+def test_store_combos_pass_her_method():
+    async def scenario():
+        async with db() as (session, _):
+            for dish in (await session.execute(
+                    select(Dish).where(Dish.no_cook.is_(True)))).scalars():
+                parts = await dish_picker.components_of(session, dish)
+                for meal in dish.meal_types.split(";"):
+                    problems = method.check(
+                        meal_type=meal,
+                        components=[{"role": p["role"], "grams": p["grams"]} for p in parts],
+                        kcal=dish.kcal, protein_g=dish.protein_g)
+                    assert not problems, f"{dish.name} [{meal}]: {problems}"
+    run(scenario)
+
+
+def test_no_cook_mode_does_not_call_the_model():
+    """Человек стоит в магазине — предлагать ему «потушить 20 минут» нельзя."""
+    async def scenario():
+        async with db() as (session, user):
+            import services.menu as menu_module
+
+            called = []
+
+            async def boom(*args, **kwargs):
+                called.append(1)
+                raise AssertionError("сборку звать нельзя")
+
+            original = menu_module.build_dish
+            menu_module.build_dish = boom
+            try:
+                result = await board(session, user, meal_type="lunch",
+                                     allow_build=True, no_cook=True)
+            finally:
+                menu_module.build_dish = original
+            assert not called
+            assert result.offers
+    run(scenario)
+
+
+def test_added_fat_rule_counts_oil_not_avocado():
+    """Авокадо и орехи жирные, но это еда, а не долив масла в тарелку."""
+    problems = method.check(meal_type="breakfast", kcal=400, protein_g=20,
+                            components=[{"role": "белок", "grams": 120},
+                                        {"role": "жир", "grams": 90},
+                                        {"role": "овощи", "grams": 100}])
+    assert not [p for p in problems if p.rule == "жир"]
+    problems = method.check(meal_type="breakfast", kcal=400, protein_g=20,
+                            components=[{"role": "белок", "grams": 120},
+                                        {"role": "масло", "grams": 60},
+                                        {"role": "овощи", "grams": 100}])
+    assert any(p.rule == "жир" for p in problems)
+
+
+def test_the_source_line_is_not_shown_to_a_person():
+    """«Меню, неделя 2, день 3» человеку ничего не даёт — только звёздочка."""
+    from handlers.suggestions import offer_text, recipe_text
+    from services.menu import Offer
+
+    offer = Offer(name="Блюдо", calories=400, protein_g=30, fat_g=10, carbs_g=40,
+                  fiber_g=5, weight_g=350, minutes=15, reason="", author=True,
+                  source="Меню Анастасии, неделя 1, день 3",
+                  components=[{"name": "Курица", "grams": 150, "raw": "", "seasoning": False}],
+                  instructions="Приготовить.")
+    for text in (offer_text(offer), recipe_text(offer)):
+        assert "неделя" not in text and "день" not in text
+        assert "⭐" in text

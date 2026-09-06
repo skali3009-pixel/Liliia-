@@ -68,6 +68,7 @@ class Pick:
             "reason": self.reason,
             "preps": self.preps,
             "estimated": self.dish.estimated,
+            "no_cook": self.dish.no_cook,
         }
 
 
@@ -115,11 +116,17 @@ async def _recent_codes(session: AsyncSession, user_id: int, days: int = REPEAT_
     return {name.strip().lower() for name in names}
 
 
-async def candidates(session: AsyncSession, user: User, meal_type: str) -> list[Dish]:
-    """Блюда, которые этому человеку в принципе можно показывать."""
-    dishes = (await session.execute(
-        select(Dish).where(Dish.meal_types.contains(meal_type))
-    )).scalars().all()
+async def candidates(session: AsyncSession, user: User, meal_type: str,
+                     *, no_cook: bool = False) -> list[Dish]:
+    """Блюда, которые этому человеку в принципе можно показывать.
+
+    `no_cook` — режим «готовить негде»: остаются только комбо, которые
+    собираются из купленного в магазине.
+    """
+    query = select(Dish).where(Dish.meal_types.contains(meal_type))
+    if no_cook:
+        query = query.where(Dish.no_cook.is_(True))
+    dishes = (await session.execute(query)).scalars().all()
     if not dishes:
         return []
 
@@ -209,15 +216,15 @@ def explain(pick: Pick, *, budget: float, gap: str | None) -> str:
 
 
 async def pick_dishes(session: AsyncSession, user: User, *, meal_type: str,
-                      budget: float, gap: str | None = None,
-                      limit: int = 3) -> tuple[list[Pick], list[Pick]]:
+                      budget: float, gap: str | None = None, limit: int = 3,
+                      no_cook: bool = False) -> tuple[list[Pick], list[Pick]]:
     """Подобрать блюда под приём пищи.
 
     Возвращает (подошедшие, ближайшие). Второй список не пустой только когда
     первый пуст: это честный ответ «точного варианта нет, вот что рядом»
     вместо выдуманного блюда.
     """
-    allowed = await candidates(session, user, meal_type)
+    allowed = await candidates(session, user, meal_type, no_cook=no_cook)
     recent = await _recent_codes(session, user.id)
 
     fitted, near = [], []
