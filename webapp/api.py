@@ -986,6 +986,10 @@ async def post_cube(request: web.Request) -> web.Response:
     level = str(body.get("level") or "").strip()
     craving = str(body.get("craving") or "random").strip()
     no_spoon = bool(body.get("no_spoon"))
+    # «Я уже в магазине»: один вопрос, сразу три ответа.
+    in_store = bool(body.get("shop"))
+    # Отмеченное в корзине: собираем только из того, что человек уже нашёл.
+    basket = {str(code) for code in body.get("basket") or []} or None
     recent = [tuple(item) for item in body.get("recent") or []][: cube.REMEMBER]
 
     async with get_session() as session:
@@ -996,26 +1000,53 @@ async def post_cube(request: web.Request) -> web.Response:
             # Человек в магазине не знает свой остаток — подставим сами.
             totals = await get_today_totals(
                 session, user.id, timezone_name=request["timezone"])
-            left = (user.daily_calories or 0) - totals.get("calories", 0)
+            left = (user.daily_calories or 0) - totals.calories
             level = cube.level_for(left if left > 0 else None)
 
         diet = user.diet_type.value if user.diet_type else "regular"
         allergies = {part.strip().lower() for part in (user.allergies or "").split(",")
                      if part.strip()}
 
-        cubes = cube.build(
-            products, level=level, craving=craving, no_spoon=no_spoon,
-            exclude=allergies,
+        limits = dict(
+            no_spoon=no_spoon, exclude=allergies, basket=basket,
             vegan=diet == "vegan", vegetarian=diet in {"vegan", "vegetarian"},
             gluten_free=diet == "gluten_free",
-            recent=recent, limit=3,
         )
+
+        if in_store:
+            offers = cube.shop_offers(products, craving=craving, **limits)
+            cubes = [(label, item) for label, item in offers]
+        else:
+            found = cube.build(products, level=level, craving=craving,
+                               recent=recent, limit=3, **limits)
+            # Из отмеченного в корзине собираем что получится: человек уже
+            # держит это в руках, отказывать ему из-за настроения глупо.
+            if not found and basket:
+                found = cube.build(products, level=level, craving="random",
+                                   recent=recent, limit=3, **limits)
+            cubes = [("", item) for item in found]
 
     return web.json_response({
         "level": level,
-        "levels": [{"code": code, "label": data[0]} for code, data in cube.LEVELS.items()],
-        "cubes": [_cube_to_dict(item, products) for item in cubes],
+        "cubes": [dict(_cube_to_dict(item, products), label=label)
+                  for label, item in cubes],
     })
+
+
+async def get_basket(request: web.Request) -> web.Response:
+    """Что можно отметить как «уже в корзине»."""
+    from services import catalogue
+    from seed.nutrition.cube_rules import BASKET
+
+    async with get_session() as session:
+        products = await catalogue.products(session)
+
+    return web.json_response({"rows": [
+        {"title": title,
+         "items": [{"code": code, "name": products[code].name}
+                   for code in codes if code in products]}
+        for title, codes in BASKET
+    ]})
 
 
 def _cube_to_dict(item, products: dict) -> dict:
@@ -1113,4 +1144,5 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/export", post_export)
     app.router.add_get("/api/menu", get_menu)
     app.router.add_post("/api/cube", post_cube)
+    app.router.add_get("/api/cube/basket", get_basket)
     app.router.add_get("/api/preps", get_preps)

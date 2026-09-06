@@ -2269,7 +2269,8 @@ const CRAVINGS = [
 ];
 
 // Что уже показывали: одно и то же подряд выглядит как поломка.
-const cubeState = { level: '', craving: 'random', recent: [], ready: false };
+const cubeState = { level: '', craving: 'random', recent: [], ready: false,
+                    shop: false, basket: new Set() };
 
 function buildCubeControls() {
   const levels = [
@@ -2314,13 +2315,107 @@ function buildCubeControls() {
   cubeState.ready = true;
 }
 
+// Быстрый путь: один вопрос вместо трёх. Человек уже у полки.
+const SHOP_CRAVINGS = [
+  ['sweet', '🍫 Сладкого'], ['salty', '🧂 Солёного'], ['drink', '🥤 Выпить'],
+  ['crunchy', '🥕 Похрустеть'], ['filling', '🍗 Сытного'], ['random', '🎲 Всё равно'],
+];
+
+function buildShopMode() {
+  const chips = document.getElementById('cube-shop-cravings');
+  chips.innerHTML = '';
+  for (const [code, label] of SHOP_CRAVINGS) {
+    const chip = document.createElement('button');
+    chip.className = 'chip-btn';
+    chip.textContent = label;
+    // Никаких «а теперь нажми собрать»: выбрал настроение — получил ответ.
+    chip.onclick = () => {
+      for (const other of chips.children) other.classList.toggle('active', other === chip);
+      cubeState.craving = code;
+      rollCube(true);
+    };
+    chips.appendChild(chip);
+  }
+
+  document.getElementById('cube-shop').onclick = () => {
+    cubeState.shop = !cubeState.shop;
+    cubeState.recent = [];
+    document.getElementById('cube-shop').classList.toggle('on', cubeState.shop);
+    document.getElementById('cube-shop-ask').hidden = !cubeState.shop;
+    document.getElementById('cube-ask').hidden = cubeState.shop;
+    document.getElementById('cube-results').innerHTML = '';
+    if (!cubeState.shop) {
+      // Выходя из магазина, возвращаем то настроение, которое человек видит
+      // отмеченным на основном экране: иначе бот считает одно, а показывает другое.
+      const active = document.querySelector('#cube-cravings .chip-btn.active');
+      cubeState.craving = active ? active.dataset.craving : 'random';
+      for (const chip of document.getElementById('cube-shop-cravings').children) {
+        chip.classList.remove('active');
+      }
+    }
+  };
+}
+
+async function buildBasket() {
+  const box = document.getElementById('cube-basket');
+  const toggle = document.getElementById('cube-basket-toggle');
+  toggle.onclick = () => {
+    box.hidden = !box.hidden;
+    toggle.textContent = box.hidden ? 'показать' : 'скрыть';
+  };
+
+  let data;
+  try {
+    data = await api('/api/cube/basket');
+  } catch (error) {
+    return;
+  }
+
+  box.innerHTML = '';
+  for (const row of data.rows) {
+    const block = document.createElement('div');
+    block.className = 'basket-row';
+    block.innerHTML = `<h3>${row.title}</h3><div class="basket-items"></div>`;
+    const items = block.querySelector('.basket-items');
+    for (const item of row.items) {
+      const chip = document.createElement('button');
+      chip.className = 'basket-item';
+      chip.textContent = item.name;
+      chip.onclick = () => {
+        chip.classList.toggle('on');
+        if (cubeState.basket.has(item.code)) cubeState.basket.delete(item.code);
+        else cubeState.basket.add(item.code);
+        markBasket();
+      };
+      items.appendChild(chip);
+    }
+    box.appendChild(block);
+  }
+
+  const count = document.createElement('p');
+  count.className = 'basket-count';
+  count.id = 'cube-basket-count';
+  box.appendChild(count);
+  markBasket();
+}
+
+function markBasket() {
+  const count = document.getElementById('cube-basket-count');
+  if (!count) return;
+  const size = cubeState.basket.size;
+  count.textContent = size
+    ? `Отмечено ${size} — собираю только из этого. Нажми ещё раз, чтобы снять.`
+    : 'Ничего не отмечено — беру весь магазин.';
+  cubeState.recent = [];
+}
+
 function markCubeLevel() {
   for (const button of document.querySelectorAll('.cube-level')) {
     button.classList.toggle('on', button.dataset.level === cubeState.level);
   }
 }
 
-async function rollCube() {
+async function rollCube(inStore = cubeState.shop) {
   const results = document.getElementById('cube-results');
   results.innerHTML = '<div class="card cube-empty">Собираю…</div>';
   try {
@@ -2329,6 +2424,8 @@ async function rollCube() {
       body: JSON.stringify({
         level: cubeState.level,
         craving: cubeState.craving,
+        shop: inStore,
+        basket: [...cubeState.basket],
         no_spoon: document.getElementById('cube-nospoon').checked,
         recent: cubeState.recent,
       }),
@@ -2346,8 +2443,13 @@ function renderCubes(cubes) {
   const results = document.getElementById('cube-results');
   results.innerHTML = '';
   if (!cubes || !cubes.length) {
-    results.innerHTML = '<div class="card cube-empty">Под эти условия ничего не '
-      + 'собралось. Попробуй другое настроение или выключи «без ложки».</div>';
+    results.innerHTML = '<div class="card cube-empty">'
+      + (cubeState.basket.size
+        ? 'Из отмеченного набор не складывается — не хватает белка. Отметь ещё '
+          + 'что-нибудь из ряда «Белок» или «Выпить».'
+        : 'Под эти условия ничего не собралось. Попробуй другое настроение '
+          + 'или выключи «без ложки».')
+      + '</div>';
     return;
   }
 
@@ -2362,7 +2464,9 @@ function renderCubes(cubes) {
       return `<li>${part.name} — <span class="cube-measure">${part.measure}</span>${swap}</li>`;
     }).join('');
 
+    const label = item.label ? `<span class="cube-label">${item.label}</span>` : '';
     card.innerHTML = `
+      ${label}
       <p class="cube-name">🧊 ${item.title}</p>
       <ul class="cube-items">${parts}</ul>
       <p class="cube-macros">≈ ${item.kcal_low}–${item.kcal_high} ккал ·
@@ -2412,7 +2516,11 @@ function switchScreen(name) {
   window.scrollTo(0, 0);
   moveArt();
 
-  if (name === 'cube' && !cubeState.ready) buildCubeControls();
+  if (name === 'cube' && !cubeState.ready) {
+    buildCubeControls();
+    buildShopMode();
+    buildBasket().catch(() => {});
+  }
   if (name === 'progress' && !progress) refreshProgress().catch((e) => toast(e.message));
   if (name === 'gym' && !gym) refreshWorkouts().catch((e) => toast(e.message));
 }

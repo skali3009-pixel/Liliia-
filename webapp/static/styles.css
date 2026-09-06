@@ -1073,3 +1073,30 @@ select.fact-input { text-align: left; width: 130px; }
 .cube-empty { padding: 18px; color: var(--muted); font-size: 14px; }
 /* Вторая кнопка на карточке не должна спорить с главной. */
 .btn.ghost { background: rgba(255, 255, 255, .06); color: var(--fg); }
+
+/* Большая кнопка магазина: её жмут одной рукой, не глядя. */
+.cube-shop {
+  display: block; width: calc(100% - 36px); margin: 0 18px 12px;
+  padding: 18px; border: none; border-radius: 18px;
+  background: linear-gradient(135deg, var(--violet), var(--indigo));
+  color: var(--accent-fg); font-family: inherit; font-size: 17px;
+  font-weight: 700; cursor: pointer;
+}
+.cube-shop.on { background: rgba(255, 255, 255, .08); color: var(--fg); }
+.cube-label {
+  display: inline-block; margin-bottom: 6px; padding: 3px 9px;
+  border-radius: 999px; background: rgba(124, 92, 255, .2);
+  color: var(--lilac); font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+/* Корзина: ряды галочек, по ряду на полку магазина. */
+.basket-row { margin-bottom: 12px; }
+.basket-row h3 { margin: 0 0 7px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.basket-items { display: flex; flex-wrap: wrap; gap: 6px; }
+.basket-item {
+  padding: 7px 11px; border: 1px solid var(--stroke); border-radius: 999px;
+  background: none; color: var(--muted); font-family: inherit;
+  font-size: 13px; cursor: pointer;
+}
+.basket-item.on { border-color: var(--accent); background: rgba(124, 92, 255, .18); color: var(--fg); }
+.basket-count { margin: 4px 0 0; font-size: 13px; color: var(--muted); }

@@ -11,6 +11,7 @@ import pytest
 
 from models import Product
 from seed.nutrition.cube_rules import (
+    BASKET,
     CURATED,
     GROUP_INDEX,
     LEVELS,
@@ -211,3 +212,59 @@ def test_three_offers_are_three_different_offers(catalogue):
             proteins = [frozenset(i.code for i in c.items if i.group in PROTEIN_GROUPS)
                         for c in cubes]
             assert len(set(proteins)) == len(proteins), f"{level}: белок повторился"
+
+
+# --- «Я уже в магазине» ----------------------------------------------------
+
+def test_one_question_gives_three_different_answers(catalogue):
+    """Человек стоит у полки: гонять его по кругу «покажи другое» нельзя."""
+    offers = cube.shop_offers(catalogue, craving="salty", no_spoon=True,
+                              rng=random.Random(1))
+    assert len(offers) == 3
+    assert [label for label, _ in offers] == list(cube.SHOP_LABELS)
+
+    proteins = [frozenset(i.code for i in item.items if i.group in PROTEIN_GROUPS)
+                for _, item in offers]
+    assert len(set(proteins)) == 3, "три варианта на одном белке — это один вариант"
+
+
+def test_the_simple_option_is_the_simplest(catalogue):
+    """«Самый простой» — тот, за которым меньше всего бегать по магазину."""
+    offers = dict(cube.shop_offers(catalogue, rng=random.Random(2), no_spoon=True))
+    simple = offers[cube.SHOP_LABELS[0]]
+    filling = offers[cube.SHOP_LABELS[1]]
+    assert len(simple.items) <= len(filling.items)
+    assert simple.kcal < filling.kcal
+
+
+# --- Корзина ---------------------------------------------------------------
+
+def test_only_what_is_already_in_the_basket_is_offered(catalogue):
+    """Предлагать то, за чем надо вернуться, — не решать задачу человека."""
+    basket = {"kefir", "banana", "walnut", "apple"}
+    cubes = cube.build(catalogue, level="normal", basket=basket,
+                       rng=random.Random(3), limit=5)
+    assert cubes
+    for item in cubes:
+        assert {part.code for part in item.items} <= basket
+
+
+def test_a_basket_without_protein_yields_nothing(catalogue):
+    """Честнее ничего не предложить, чем выдать яблоко с орехами за обед."""
+    assert cube.build(catalogue, level="meal", basket={"apple", "walnut"},
+                      rng=random.Random(4)) == []
+
+
+def test_the_basket_offers_only_things_from_the_catalogue(catalogue):
+    codes = [code for _, items in BASKET for code in items]
+    assert len(codes) == len(set(codes)), "продукт попал в корзину дважды"
+    for code in codes:
+        assert code in catalogue, f"в корзине нет такого продукта: {code}"
+        assert code in GROUP_INDEX, f"{code} не входит ни в одну группу"
+
+
+def test_the_basket_always_offers_a_source_of_protein(catalogue):
+    """Иначе человек отметит полкорзины и получит пустой экран."""
+    rows = {title: items for title, items in BASKET}
+    assert {GROUP_INDEX[c] for c in rows["Белок"]} <= PROTEIN_GROUPS
+    assert {GROUP_INDEX[c] for c in rows["Выпить"]} <= PROTEIN_GROUPS

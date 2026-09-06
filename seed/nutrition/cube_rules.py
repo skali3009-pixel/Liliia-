@@ -411,6 +411,27 @@ CURATED: list[tuple[str, tuple[str, ...]]] = [
     ("K110", ("tofu", "pita", "veg_platter", "olives")),
 ]
 
-__all__ = ["CRAVING_GROUPS", "CURATED", "FAVOURITES", "GROUPS", "GROUP_INDEX",
+# --- Что показывать в корзине ---------------------------------------------
+# Отмечать галочками все семьдесят продуктов человек не станет: он стоит у
+# полки. Поэтому в корзине только то, что лежит в любом магазине, собранное
+# в понятные ряды.
+BASKET: list[tuple[str, tuple[str, ...]]] = [
+    ("Выпить", ("kefir", "ryazhenka", "ayran", "yogurt_drink",
+                "yogurt_greek_drink", "protein_shake", "milk")),
+    ("Белок", ("egg", "cottage_cheese", "greek_yogurt", "cheese_hard",
+               "cheese_sticks", "mozzarella_mini", "turkey_fillet", "pastrami",
+               "chicken_smoked", "tuna_canned", "surimi", "jerky",
+               "protein_bar", "hummus", "tofu")),
+    ("Фрукты", ("banana", "apple", "pear", "mandarin", "orange", "grapes",
+                "berries", "plum", "nectarine")),
+    ("Овощи", ("cucumber", "tomato", "carrot", "pepper_bell", "radish",
+               "veg_platter", "celery")),
+    ("Хруст", ("crispbread", "crispbread_rye", "crackers", "galette",
+               "bread_wholegrain", "pita", "granola", "cereal_bar")),
+    ("Орехи", ("almond", "cashew", "walnut", "peanut", "pistachio",
+               "pumpkin_seeds", "nut_mix", "olives", "dark_chocolate")),
+]
+
+__all__ = ["BASKET", "CRAVING_GROUPS", "CURATED", "FAVOURITES", "GROUPS", "GROUP_INDEX",
            "LEVELS", "MAX_PER_GROUP", "PAIRING", "PORTIONS", "PROTEIN_GROUPS",
            "pairing_ok", "slots_ok"]

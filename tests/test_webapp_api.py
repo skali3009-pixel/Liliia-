@@ -688,3 +688,66 @@ def test_nonsense_timezone_is_ignored():
                 user = await session.get(User, USER_ID)
                 assert user.timezone == "Europe/Moscow"
     run(scenario)
+
+
+# --- Кубик через настоящий HTTP -------------------------------------------
+
+def test_cube_picks_the_hunger_level_from_the_diary_itself():
+    """Человек у полки не знает свой остаток — сервер обязан посчитать сам."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            # Уровень не передаём: именно этот путь и ломался.
+            response = await call(client, "POST", "/api/cube",
+                                  json_body={"craving": "salty", "no_spoon": True})
+            assert response.status == 200
+            body = await response.json()
+            assert body["level"] in {"light", "normal", "hungry", "meal"}
+            assert body["cubes"]
+            for item in body["cubes"]:
+                assert item["items"] and item["kcal_high"] > item["kcal_low"]
+    run(scenario)
+
+
+def test_cube_in_store_mode_answers_with_three_labelled_options():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/cube",
+                                  json_body={"shop": True, "craving": "sweet"})
+            assert response.status == 200
+            cubes = (await response.json())["cubes"]
+            assert [item["label"] for item in cubes] == \
+                ["Самый простой", "Посытнее", "Запасной"]
+    run(scenario)
+
+
+def test_cube_builds_only_from_what_is_in_the_basket():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            basket = ["kefir", "banana", "walnut"]
+            response = await call(client, "POST", "/api/cube",
+                                  json_body={"level": "normal", "basket": basket})
+            assert response.status == 200
+            for item in (await response.json())["cubes"]:
+                assert {part["code"] for part in item["items"]} <= set(basket)
+    run(scenario)
+
+
+def test_the_basket_list_comes_with_names():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "GET", "/api/cube/basket")
+            assert response.status == 200
+            rows = (await response.json())["rows"]
+            assert [row["title"] for row in rows][:2] == ["Выпить", "Белок"]
+            for row in rows:
+                assert row["items"] and all(item["name"] for item in row["items"])
+    run(scenario)
+
+
+def test_cube_needs_a_signature_like_everything_else():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/cube", signed=False,
+                                  json_body={"level": "normal"})
+            assert response.status == 401
+    run(scenario)

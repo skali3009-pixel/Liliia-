@@ -435,7 +435,24 @@
       <p class="cube-sub">Купить и съесть без приборов — в машине, на работе, на бегу.</p>
     </section>
 
-    <section class="card">
+    <!-- Быстрый путь: человек уже стоит у полки, вопросы задавать некогда. -->
+    <button id="cube-shop" class="cube-shop">🛒 Я уже в магазине</button>
+
+    <!-- Второй вопрос этого пути и он же единственный. -->
+    <section class="card" id="cube-shop-ask" hidden>
+      <h2 class="cube-q">Что сейчас хочется?</h2>
+      <div class="chips" id="cube-shop-cravings"></div>
+    </section>
+
+    <section class="card" id="cube-basket-card">
+      <div class="card-head"><h2 class="cube-q">🧺 Что у тебя в корзине</h2>
+        <button class="link-btn" id="cube-basket-toggle">показать</button></div>
+      <p class="hint">Отметь, что уже нашла — соберу только из этого, не гоняя
+        тебя в другой конец магазина.</p>
+      <div id="cube-basket" hidden></div>
+    </section>
+
+    <section class="card" id="cube-ask">
       <h2 class="cube-q">Насколько голодна?</h2>
       <div class="cube-levels" id="cube-levels"></div>
 

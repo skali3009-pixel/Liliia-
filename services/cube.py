@@ -134,12 +134,19 @@ def _allowed(product: Product, *, no_spoon: bool, exclude: set[str],
     return True
 
 
-def _pool(products: dict[str, Product], **limits) -> dict[str, list[str]]:
-    """Что доступно в каждой группе после всех ограничений."""
+def _pool(products: dict[str, Product], *, basket: set[str] | None = None,
+          **limits) -> dict[str, list[str]]:
+    """Что доступно в каждой группе после всех ограничений.
+
+    Если человек отметил, что у него уже в корзине, — берём только это:
+    предлагать то, за чем надо возвращаться в другой конец магазина, значит
+    не решать его задачу.
+    """
     pool: dict[str, list[str]] = {}
     for group, codes in GROUPS.items():
         fit = [c for c in codes
-               if c in products and _allowed(products[c], **limits)]
+               if c in products and (basket is None or c in basket)
+               and _allowed(products[c], **limits)]
         if fit:
             pool[group] = fit
     return pool
@@ -265,6 +272,7 @@ def build(products: dict[str, Product], *, level: str = "normal",
           craving: str = "random", no_spoon: bool = False,
           exclude: set[str] | None = None, vegan: bool = False,
           vegetarian: bool = False, gluten_free: bool = False,
+          basket: set[str] | None = None,
           recent: list[tuple[str, ...]] | None = None,
           limit: int = 3, rng: random.Random | None = None) -> list[Cube]:
     """Собрать несколько наборов под режим голода и настроение."""
@@ -273,8 +281,9 @@ def build(products: dict[str, Product], *, level: str = "normal",
     rng = rng or random.Random()
     recent_set = set(recent or [])
 
-    pool = _pool(products, no_spoon=no_spoon, exclude=exclude or set(),
-                 vegan=vegan, vegetarian=vegetarian, gluten_free=gluten_free)
+    pool = _pool(products, basket=basket, no_spoon=no_spoon,
+                 exclude=exclude or set(), vegan=vegan, vegetarian=vegetarian,
+                 gluten_free=gluten_free)
     if not pool:
         return []
 
@@ -403,6 +412,46 @@ def title_for(cube: Cube) -> str:
     ]
 
 
+# --- «Я уже в магазине» ----------------------------------------------------
+# Человек стоит у полки. Вопрос ровно один, ответов сразу три: попроще,
+# посытнее и запасной — чтобы не гонять его по кругу «а покажи другое».
+SHOP_LABELS = ("Самый простой", "Посытнее", "Запасной")
+
+
+def shop_offers(products: dict[str, Product], *, craving: str = "random",
+                rng: random.Random | None = None,
+                **limits) -> list[tuple[str, Cube]]:
+    """Три варианта на один вопрос: простой, сытный и запасной."""
+    rng = rng or random.Random()
+
+    light = build(products, level="normal", craving=craving, limit=8,
+                  rng=rng, **limits)
+    heavy = build(products, level="hungry", craving=craving, limit=8,
+                  rng=rng, **limits)
+
+    offers: list[tuple[str, Cube]] = []
+    used: set[str] = set()
+
+    def take(label: str, options: list[Cube], key=None) -> None:
+        for cube in sorted(options, key=key) if key else options:
+            proteins = {i.code for i in cube.items if i.group in PROTEIN_GROUPS}
+            if proteins & used or cube.signature in {c.signature for _, c in offers}:
+                continue
+            offers.append((label, cube))
+            used.update(proteins)
+            return
+
+    # Простой — тот, где меньше всего бегать по магазину.
+    take(SHOP_LABELS[0], light, key=lambda c: len(c.items))
+    take(SHOP_LABELS[1], heavy)
+    take(SHOP_LABELS[2], light + heavy)
+
+    # Если разных белков не нашлось, лучше показать хоть что-то, чем пусто.
+    if not offers:
+        offers = [(SHOP_LABELS[0], cube) for cube in light[:1]]
+    return offers
+
+
 def level_for(kcal_left: float | None) -> str:
     """Подсказать режим по остатку калорий, если он известен."""
     if kcal_left is None:
@@ -415,4 +464,4 @@ def level_for(kcal_left: float | None) -> str:
 
 
 __all__ = ["Cube", "GROUP_OF", "Item", "MIN_PROTEIN_SHARE", "REMEMBER",
-           "build", "level_for", "title_for"]
+           "SHOP_LABELS", "build", "level_for", "shop_offers", "title_for"]
