@@ -13,6 +13,8 @@ from datetime import date, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from sqlalchemy.exc import IntegrityError
+
 from models import Achievement, BodyMeasurement, DayStat, Meal, User, WorkoutLog
 from utils.game import (
     ACHIEVEMENT_BY_CODE,
@@ -91,8 +93,21 @@ async def _upsert_day(
     fresh = [code for code in codes if code not in known]
 
     if row is None:
+        # Гонка: приложение легко открыть дважды подряд или с двух устройств,
+        # и тогда обе половины успевают не найти строку и обе пытаются её
+        # создать. Вторая получала бы ошибку уникальности и пятисотку в
+        # ответ, поэтому вставку делаем идемпотентной.
         row = DayStat(user_id=user_id, day=day, xp=xp, quests_done=",".join(codes))
         session.add(row)
+        try:
+            await session.flush()
+        except IntegrityError:
+            await session.rollback()
+            row = (await session.execute(stmt)).scalar_one()
+            known = set(row.quests_done.split(",")) if row.quests_done else set()
+            fresh = [code for code in codes if code not in known]
+            row.xp = xp
+            row.quests_done = ",".join(codes)
     else:
         row.xp = xp
         row.quests_done = ",".join(codes)

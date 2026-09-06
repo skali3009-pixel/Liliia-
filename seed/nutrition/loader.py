@@ -131,6 +131,12 @@ async def seed_nutrition(session: AsyncSession) -> tuple[int, int, int]:
             session.add(DishComponent(dish_id=dish.id, **item))
 
     await session.commit()
+
+    # Справочник в памяти устарел — пусть перечитается при следующем обращении.
+    from services import catalogue
+
+    catalogue.reset()
+
     total_dishes = (len(DISHES) + len(GUIDE_DISHES) + len(FOURDAY_DISHES)
                     + len(STORE_DISHES))
     logger.info("Справочник питания: %d продуктов, %d заготовок, %d блюд",

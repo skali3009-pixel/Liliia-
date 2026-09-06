@@ -14,7 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Meal, User
-from utils.timeframe import day_bounds, to_local
+from utils.timeframe import day_bounds, matching_zones, to_local
 
 # Вечер, но не ночь: ещё есть время поесть и записать, а не только
 # отчитаться перед сном.
@@ -32,10 +32,22 @@ async def users_without_meals_today(
     """Кому сейчас (по их местному времени) пора напомнить про дневник."""
     moment = now_utc or datetime.now(timezone.utc)
 
+    # Сначала выясняем, в каких часовых поясах сейчас нужное время, и только
+    # потом читаем людей. Иначе каждую минуту читалась бы вся таблица.
+    zones = (await session.execute(
+        select(User.timezone).where(
+            User.onboarding_completed.is_(True), User.reminders_enabled.is_(True)
+        ).distinct()
+    )).scalars().all()
+    ready = matching_zones(moment, REMINDER_TIME, zones)
+    if not ready:
+        return []
+
     users = (
         await session.execute(
             select(User).where(
-                User.onboarding_completed.is_(True), User.reminders_enabled.is_(True)
+                User.onboarding_completed.is_(True), User.reminders_enabled.is_(True),
+                User.timezone.in_(ready),
             )
         )
     ).scalars().all()

@@ -15,7 +15,9 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import Dish, DishComponent, Meal, Prep, Product, User
+from models import Meal, User
+from services import catalogue
+from services.catalogue import CachedDish
 from services import method
 
 logger = logging.getLogger(__name__)
@@ -35,7 +37,7 @@ DIET_FIELD = {"vegan": "vegan", "vegetarian": "vegetarian", "gluten_free": "glut
 class Pick:
     """Готовый вариант: блюдо, пересчитанная порция и её КБЖУ."""
 
-    dish: Dish
+    dish: CachedDish
     scale: float
     kcal: float
     protein_g: float
@@ -80,13 +82,12 @@ def _allergen_words(raw: str | None) -> set[str]:
     return {word.strip(".!") for word in cleaned.split() if len(word) > 2}
 
 
-def _blocked(product: Product, words: set[str]) -> bool:
+def _blocked(haystack: str, words: set[str]) -> bool:
     """Продукт под запретом, если совпал с аллергией по названию или метке."""
-    haystack = f"{product.name} {product.aliases} {product.allergens}".lower()
     return any(word in haystack for word in words)
 
 
-def scale_for(dish: Dish, budget: float) -> float | None:
+def scale_for(dish: CachedDish, budget: float) -> float | None:
     """Коэффициент порции под бюджет приёма. None — блюдо не подходит."""
     if dish.kcal <= 0 or budget <= 0:
         return None
@@ -98,7 +99,7 @@ def scale_for(dish: Dish, budget: float) -> float | None:
     return round(scale, 2)
 
 
-def _scaled(dish: Dish, scale: float) -> Pick:
+def _scaled(dish: CachedDish, scale: float) -> Pick:
     return Pick(
         dish=dish, scale=scale,
         kcal=dish.kcal * scale, protein_g=dish.protein_g * scale,
@@ -117,52 +118,50 @@ async def _recent_codes(session: AsyncSession, user_id: int, days: int = REPEAT_
 
 
 async def candidates(session: AsyncSession, user: User, meal_type: str,
-                     *, no_cook: bool = False) -> list[Dish]:
+                     *, no_cook: bool = False) -> list[CachedDish]:
     """Блюда, которые этому человеку в принципе можно показывать.
+
+    Справочник берётся из памяти: он не меняется во время работы, и ходить
+    за ним в базу на каждое нажатие незачем.
 
     `no_cook` — режим «готовить негде»: остаются только комбо, которые
     собираются из купленного в магазине.
     """
-    query = select(Dish).where(Dish.meal_types.contains(meal_type))
+    dishes = await catalogue.for_meal(session, meal_type)
     if no_cook:
-        query = query.where(Dish.no_cook.is_(True))
-    dishes = (await session.execute(query)).scalars().all()
-    if not dishes:
-        return []
-
-    products = {p.code: p for p in (await session.execute(select(Product))).scalars()}
-    components = (await session.execute(
-        select(DishComponent).where(DishComponent.dish_id.in_([d.id for d in dishes]))
-    )).scalars().all()
-
-    by_dish: dict[int, list[DishComponent]] = {}
-    for item in components:
-        by_dish.setdefault(item.dish_id, []).append(item)
+        dishes = [d for d in dishes if d.no_cook]
 
     words = _allergen_words(user.allergies)
     diet = user.diet_type.value if user.diet_type else "regular"
     diet_field = DIET_FIELD.get(diet)
+    if not words and not diet_field:
+        return dishes
 
-    allowed: list[Dish] = []
+    allowed: list[CachedDish] = []
     for dish in dishes:
-        parts = by_dish.get(dish.id, [])
         ok = True
-        for item in parts:
-            product = products.get(item.product_code)
-            if product is None:
-                ok = False
-                break
+        for item in dish.components:
             if item.optional:
                 continue
-            if words and _blocked(product, words):
+            if words and _blocked(item.haystack, words):
                 ok = False
                 break
-            if diet_field and not getattr(product, diet_field):
+            if diet_field and not getattr(item, diet_field):
                 ok = False
                 break
         if ok:
             allowed.append(dish)
     return allowed
+
+
+async def prep_names(session: AsyncSession, dish) -> list[str]:
+    """Названия заготовок, из которых собирается блюдо."""
+    if not isinstance(dish, CachedDish):
+        cached = await catalogue.by_code(session, dish.code)
+        if cached is None:
+            return []
+        dish = cached
+    return list(dish.prep_titles)
 
 
 def rank(picks: list[Pick], *, budget: float, gap: str | None,
@@ -188,16 +187,6 @@ def rank(picks: list[Pick], *, budget: float, gap: str | None,
         return value
 
     return sorted(picks, key=score)
-
-
-async def prep_names(session: AsyncSession, dish: Dish) -> list[str]:
-    """Названия заготовок, из которых собирается блюдо."""
-    codes = [code for code in (dish.prep_codes or "").split(";") if code]
-    if not codes:
-        return []
-    rows = (await session.execute(select(Prep).where(Prep.code.in_(codes)))).scalars().all()
-    order = {code: index for index, code in enumerate(codes)}
-    return [prep.name for prep in sorted(rows, key=lambda p: order.get(p.code, 99))]
 
 
 def explain(pick: Pick, *, budget: float, gap: str | None) -> str:
@@ -256,30 +245,28 @@ async def pick_dishes(session: AsyncSession, user: User, *, meal_type: str,
     return [], closest
 
 
-async def components_of(session: AsyncSession, dish: Dish,
-                        scale: float = 1.0) -> list[dict]:
+async def components_of(session: AsyncSession, dish, scale: float = 1.0) -> list[dict]:
     """Состав блюда на одну порцию с учётом пересчёта."""
-    items = (await session.execute(
-        select(DishComponent).where(DishComponent.dish_id == dish.id)
-    )).scalars().all()
-    products = {p.code: p for p in (await session.execute(select(Product))).scalars()}
+    if not isinstance(dish, CachedDish):
+        # Тесты и старый код передают сюда объект из базы — берём его по коду.
+        cached = await catalogue.by_code(session, dish.code)
+        if cached is None:
+            return []
+        dish = cached
 
     out: list[dict] = []
-    for item in items:
-        product = products.get(item.product_code)
-        if product is None:
-            continue
+    for item in dish.components:
         grams = item.grams / (dish.portions or 1) * scale
-        if item.countable and product.gram_per_piece:
+        if item.countable and item.gram_per_piece:
             # Штуки округляем до целого: яйцо не бывает 1,4 штуки.
-            pieces = max(1, round(grams / product.gram_per_piece))
-            grams = pieces * product.gram_per_piece
+            pieces = max(1, round(grams / item.gram_per_piece))
+            grams = pieces * item.gram_per_piece
         out.append({
-            "name": product.name,
-            "grams": round(grams) if not product.is_seasoning else 0,
+            "name": item.name,
+            "grams": round(grams) if not item.is_seasoning else 0,
             "raw": item.raw_amount,
-            "seasoning": product.is_seasoning,
-            "role": product.role,
+            "seasoning": item.is_seasoning,
+            "role": item.role,
         })
     return out
 

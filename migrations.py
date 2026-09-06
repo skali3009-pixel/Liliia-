@@ -27,6 +27,17 @@ COLUMN_WIDENINGS: list[tuple[str, str, str]] = [
     ("nutrition_preps", "freezer_days", "VARCHAR(60)"),
 ]
 
+# Индексы под самые частые запросы: «что человек ел сегодня», «сколько выпил».
+# Одного индекса по user_id мало — база всё равно перебирает все записи
+# человека за всё время, чтобы отобрать сегодняшние.
+INDEXES: list[tuple[str, str, str]] = [
+    ("ix_meals_user_logged", "meals", "(user_id, logged_at)"),
+    ("ix_water_user_logged", "water_log", "(user_id, logged_at)"),
+    ("ix_checkins_user_logged", "checkins", "(user_id, logged_at)"),
+    ("ix_workout_log_user_done", "workout_log", "(user_id, completed_at)"),
+    ("ix_dish_components_dish", "nutrition_dish_components", "(dish_id)"),
+]
+
 COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
     ("nutrition_dishes", "prep_codes", "VARCHAR(200) NOT NULL DEFAULT ''"),
     ("nutrition_dishes", "estimated", "BOOLEAN NOT NULL DEFAULT FALSE"),
@@ -72,6 +83,21 @@ async def apply_column_additions(connection: AsyncConnection) -> list[str]:
         logger.info("Добавлена колонка %s.%s", table, column)
 
     applied += await _widen_columns(connection)
+    applied += await _create_indexes(connection)
+    return applied
+
+
+async def _create_indexes(connection: AsyncConnection) -> list[str]:
+    """Создать недостающие индексы. Повторный запуск ничего не делает."""
+    applied: list[str] = []
+    for name, table, columns in INDEXES:
+        existing = await connection.run_sync(_describe, table)
+        if existing is None:
+            continue
+        await connection.execute(
+            text(f"CREATE INDEX IF NOT EXISTS {name} ON {table} {columns}")
+        )
+        applied.append(name)
     return applied
 
 

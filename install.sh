@@ -179,6 +179,13 @@ fi
 BOT_USERNAME="$(curl -s --max-time 10 "https://api.telegram.org/bot$BOT_TOKEN/getMe" \
     | python3 -c "import json,sys; print(json.load(sys.stdin).get('result',{}).get('username',''))" 2>/dev/null || true)"
 
+# Резервные копии включаем сразу: бэкап, который надо не забыть включить,
+# обычно оказывается невключённым как раз тогда, когда он нужен.
+if [ -f "$APP_DIR/setup-backup.sh" ]; then
+    bash "$APP_DIR/setup-backup.sh" >/dev/null 2>&1 && \
+        ok "ежедневные резервные копии включены (каждую ночь в 04:30)"
+fi
+
 printf "\n\033[1;32m═══════════════════════════════════════════\033[0m\n"
 printf "\033[1;32m  ГОТОВО! Бот работает.\033[0m\n"
 printf "\033[1;32m═══════════════════════════════════════════\033[0m\n\n"
@@ -197,6 +204,10 @@ cat <<INFO
 
   Обновить бота после моих правок:
     cd $APP_DIR && git pull && sudo systemctl restart $SERVICE_NAME
+
+  Резервные копии (включены, каждую ночь в 04:30):
+    bash backup.sh                          — сделать копию прямо сейчас
+    bash restore.sh <файл>                  — восстановить из копии
 
   Добавить ключ Anthropic позже (включит распознавание еды по фото):
     nano $ENV_FILE          — вписать ключ в строку ANTHROPIC_API_KEY=

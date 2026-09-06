@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import BodyMeasurement, Meal, User, WaterLog, WorkoutLog
-from utils.timeframe import day_bounds, to_local
+from utils.timeframe import day_bounds, matching_zones, to_local
 
 # Воскресенье (0 — понедельник) и ранний вечер: неделя уже закончилась, но
 # человек ещё не спит и успевает что-то решить про следующую.
@@ -205,10 +205,21 @@ async def users_for_summary(
 ) -> list[User]:
     """Кому прямо сейчас (по их местному времени) пора показать неделю."""
     moment = now_utc or datetime.now(timezone.utc)
+    zones = (await session.execute(
+        select(User.timezone).where(
+            User.onboarding_completed.is_(True), User.reminders_enabled.is_(True)
+        ).distinct()
+    )).scalars().all()
+    ready = [zone for zone in matching_zones(moment, SUMMARY_TIME, zones)
+             if to_local(moment, zone).weekday() == SUMMARY_WEEKDAY]
+    if not ready:
+        return []
+
     users = (
         await session.execute(
             select(User).where(
-                User.onboarding_completed.is_(True), User.reminders_enabled.is_(True)
+                User.onboarding_completed.is_(True), User.reminders_enabled.is_(True),
+                User.timezone.in_(ready),
             )
         )
     ).scalars().all()

@@ -12,7 +12,18 @@ import config
 
 logger = logging.getLogger(__name__)
 
-engine = create_async_engine(config.DATABASE_URL, echo=False, future=True)
+# Настройки пула. По умолчанию SQLAlchemy держит 5 соединений и до 10
+# сверх того — этого мало, когда людей становится много, и запросы начинают
+# ждать очереди. pool_pre_ping спасает от «протухших» соединений: после
+# ночного простоя или перезапуска PostgreSQL первое обращение иначе падает
+# с ошибкой вместо ответа.
+_POOL = dict(pool_size=20, max_overflow=30, pool_timeout=30,
+             pool_recycle=1800, pool_pre_ping=True)
+# У SQLite (тесты, стенд) пула нет — настройки к нему неприменимы.
+_IS_SQLITE = config.DATABASE_URL.startswith("sqlite")
+
+engine = create_async_engine(config.DATABASE_URL, echo=False, future=True,
+                             **({} if _IS_SQLITE else _POOL))
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
 

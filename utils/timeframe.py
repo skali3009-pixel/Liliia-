@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import date, datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -54,6 +55,20 @@ def to_local(moment: datetime, timezone_name: str | None) -> datetime:
     if moment.tzinfo is None:
         moment = moment.replace(tzinfo=timezone.utc)
     return moment.astimezone(get_zone(timezone_name))
+
+
+def matching_zones(moment: datetime, target: time, zones: Iterable[str | None]) -> list[str]:
+    """Часовые пояса, в которых сейчас ровно `target` по местному времени.
+
+    Нужна планировщику: местное время зависит только от пояса, поэтому
+    достаточно один раз проверить список поясов, а не каждого человека.
+    """
+    ready = []
+    for zone in zones:
+        local = to_local(moment, zone)
+        if (local.hour, local.minute) == (target.hour, target.minute):
+            ready.append(zone)
+    return ready
 
 
 def day_bounds(
