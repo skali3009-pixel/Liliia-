@@ -2702,6 +2702,54 @@ function openProgram(code, itemCategory) {
     .catch((e) => toast(e.message));
 }
 
+/* --- Мой мир: места, которые растут ---------------------------------------- */
+let world = null;
+
+async function refreshWorld() {
+  world = await api('/api/world');
+  renderWorld(world);
+}
+
+function renderWorld(data) {
+  document.getElementById('world-title').textContent = data.title;
+  document.getElementById('world-sub').textContent = data.subtitle;
+  document.getElementById('world-count').textContent = `${data.open} из ${data.total}`;
+
+  const nextCard = document.getElementById('world-next-card');
+  if (data.next) {
+    document.getElementById('world-next-icon').textContent = data.next.icon;
+    document.getElementById('world-next-title').textContent =
+      data.next.open ? data.next.name : `${data.next.name} — закрыто`;
+    document.getElementById('world-next-hint').textContent = data.next.hint;
+    document.getElementById('world-next-bar').style.width =
+      `${Math.round(data.next.share * 100)}%`;
+    nextCard.hidden = false;
+  } else {
+    nextCard.hidden = true;
+  }
+
+  const box = document.getElementById('world-zones');
+  box.innerHTML = '';
+  for (const zone of data.zones) {
+    const row = document.createElement('div');
+    row.className = `zone${zone.open ? '' : ' locked'}`;
+    // Ступени рисуем полосками: сразу видно, что место растёт, а не просто есть.
+    const steps = Array.from({ length: zone.stages }, (_, index) =>
+      `<i class="zone-step${index < zone.stage ? ' on' : ''}"></i>`).join('');
+    row.innerHTML = `
+      <span class="zone-icon"></span>
+      <div class="zone-main">
+        <div class="zone-name"></div>
+        <p class="zone-story"></p>
+        <div class="zone-steps">${steps}</div>
+      </div>`;
+    row.querySelector('.zone-icon').textContent = zone.icon;
+    row.querySelector('.zone-name').textContent = zone.title;
+    row.querySelector('.zone-story').textContent = zone.hint;
+    box.appendChild(row);
+  }
+}
+
 function switchScreen(name) {
   for (const tab of document.querySelectorAll('.tab')) {
     tab.classList.toggle('active', tab.dataset.screen === name);
@@ -2719,6 +2767,7 @@ function switchScreen(name) {
     buildShopMode();
     buildBasket().catch(() => {});
   }
+  if (name === 'world') refreshWorld().catch((e) => toast(e.message));
   if (name === 'progress' && !progress) refreshProgress().catch((e) => toast(e.message));
   if (name === 'gym' && !gym) {
     buildPicker();

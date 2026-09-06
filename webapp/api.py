@@ -1090,6 +1090,16 @@ async def post_cube(request: web.Request) -> web.Response:
     })
 
 
+async def get_world(request: web.Request) -> web.Response:
+    """Мой мир: какие места открыты, как они выросли и что дальше."""
+    from services import world
+
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        return web.json_response(
+            await world.state(session, user, timezone_name=request["timezone"]))
+
+
 async def post_my_prep(request: web.Request) -> web.Response:
     """Отметить заготовку приготовленной или убрать её из холодильника."""
     body = await request.json() if request.can_read_body else {}
@@ -1268,3 +1278,4 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/workouts/pick", post_workout_pick)
     app.router.add_get("/api/preps", get_preps)
     app.router.add_post("/api/preps/mine", post_my_prep)
+    app.router.add_get("/api/world", get_world)

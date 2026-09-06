@@ -1145,3 +1145,25 @@ select.fact-input { text-align: left; width: 130px; }
 }
 .prep-row.have .prep-mark { border-color: var(--accent); color: var(--accent); }
 .prep-keep.soon { color: var(--warn); }
+
+
+/* --- Места мира ----------------------------------------------------------- */
+.zone-head { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+.zone-icon { font-size: 26px; }
+.zone-title { margin: 0; font-size: 17px; }
+.zone-hint { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+.zone {
+  display: flex; align-items: center; gap: 12px;
+  padding: 11px 0; border-bottom: 1px solid var(--stroke);
+}
+.zone:last-child { border-bottom: none; }
+/* Закрытое место видно, но приглушено: человек должен знать, что впереди. */
+.zone.locked { opacity: .45; }
+.zone-main { flex: 1; min-width: 0; }
+.zone-name { font-size: 15px; font-weight: 600; }
+.zone-story { margin: 2px 0 5px; color: var(--muted); font-size: 12px; }
+.zone-steps { display: flex; gap: 4px; }
+.zone-step { flex: 1; height: 4px; border-radius: 2px; background: var(--stroke); }
+.zone-step.on { background: var(--accent); }
+.zone-note { color: var(--muted); font-size: 12px; }

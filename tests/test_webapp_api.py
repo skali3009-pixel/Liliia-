@@ -862,3 +862,43 @@ def test_workout_pick_needs_a_signature():
                                   signed=False, json_body={"minutes": 30})
             assert response.status == 401
     run(scenario)
+
+
+# --- Мой мир через HTTP ----------------------------------------------------
+
+def test_the_world_answers_with_places_and_what_is_next():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            body = await (await call(client, "GET", "/api/world")).json()
+            assert body["total"] == 8
+            assert len(body["zones"]) == 8
+            assert body["title"] and body["subtitle"]
+            for zone in body["zones"]:
+                assert zone["hint"] and 0 <= zone["stage"] <= zone["stages"]
+    run(scenario)
+
+
+def test_the_world_grows_after_a_real_meal():
+    """Мир должен двигаться от того, что человек и так делает."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            # Открываем «Сегодня»: там закрывается задание и пишется итог дня.
+            await call(client, "GET", "/api/today")
+            for _ in range(3):
+                await call(client, "POST", "/api/meals", json_body={
+                    "name": "Овсянка", "weight_g": 250, "calories": 300,
+                    "protein_g": 12, "fat_g": 8, "carbs_g": 45, "fiber_g": 6})
+            await call(client, "GET", "/api/today")
+
+            body = await (await call(client, "GET", "/api/world")).json()
+            garden = next(z for z in body["zones"] if z["code"] == "garden")
+            assert garden["open"], "сад не открылся после записей еды"
+            assert garden["title"] == "Росток"
+    run(scenario)
+
+
+def test_the_world_needs_a_signature():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            assert (await call(client, "GET", "/api/world", signed=False)).status == 401
+    run(scenario)

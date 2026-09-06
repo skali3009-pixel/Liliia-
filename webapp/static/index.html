@@ -279,6 +279,26 @@
       </div>
     </section>
 
+    <!-- Ближайшее открытие — то, ради чего на эту вкладку возвращаются:
+         видно, что до следующего места осталось немного. -->
+    <section class="card" id="world-next-card" hidden>
+      <div class="eyebrow">Ближайшее открытие</div>
+      <div class="zone-head">
+        <span class="zone-icon" id="world-next-icon"></span>
+        <div>
+          <h2 class="zone-title" id="world-next-title"></h2>
+          <p class="zone-hint" id="world-next-hint"></p>
+        </div>
+      </div>
+      <div class="q-track"><i id="world-next-bar"></i></div>
+    </section>
+
+    <!-- Места мира. Каждое растёт ступенями, а не просто «открыто/закрыто». -->
+    <section class="card">
+      <div class="card-head"><h2>Места</h2><span id="world-count" class="muted"></span></div>
+      <div id="world-zones"></div>
+    </section>
+
     <section class="card discovery">
       <div class="eyebrow">Последнее открытие</div>
       <h2 class="discovery-title" id="discovery-title">Пока закрыто</h2>
