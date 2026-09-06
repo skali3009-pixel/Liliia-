@@ -4,7 +4,6 @@ Base.metadata содержал полную схему БД (users, meals, water
 workout_log, body_measurements, progress_photos, achievements)."""
 
 from models.achievement import Achievement
-from models.appstate import AppState
 from models.base import Base
 from models.body import BodyMeasurement, ProgressPhoto
 from models.checkin import Checkin
@@ -31,7 +30,6 @@ from models.workout import LevelEnum, LocationEnum, Workout, WorkoutLog, Workout
 
 __all__ = [
     "Base",
-    "AppState",
     "User",
     "GenderEnum",
     "ActivityLevelEnum",

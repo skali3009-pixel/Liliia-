@@ -51,13 +51,6 @@ async def init_models() -> None:
     if applied:
         logger.info("Схема БД обновлена: %s", ", ".join(applied))
 
-    # Кто пользовался ботом до того, как доступ стал платным, остаётся с
-    # ним бесплатно навсегда. Срабатывает один раз — в момент включения оплаты.
-    from services.subscriptions import grandfather_existing
-
-    async with async_session_maker() as session:
-        await grandfather_existing(session)
-
     # Заливка справочников не должна мешать боту запуститься. Если данные
     # почему-то не легли, лучше работать без части справочника, чем не
     # работать вовсе: человек и так может вести дневник и смотреть прогресс.

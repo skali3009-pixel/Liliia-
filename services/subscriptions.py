@@ -18,14 +18,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import config
-from models import (
-    AppState,
-    Payment,
-    Subscription,
-    SubscriptionSource,
-    SubscriptionStatus,
-    User,
-)
+from models import Payment, Subscription, SubscriptionSource, SubscriptionStatus
 
 logger = logging.getLogger(__name__)
 
@@ -33,10 +26,6 @@ logger = logging.getLogger(__name__)
 # не пустая, — а вечному доступу дата не нужна вовсе. Ставим заведомо далёкую
 # и одну и ту же: в выгрузке базы сразу видно, что это не настоящий срок.
 FOREVER = datetime(2099, 1, 1, tzinfo=timezone.utc)
-
-# Отметка в app_state: в какой момент доступ стал платным. Ставится один раз,
-# и по ней видно, кому бот достался бесплатно навсегда.
-PAYWALL_STARTED = "paywall_started_at"
 
 
 def now() -> datetime:
@@ -268,41 +257,6 @@ async def grant_lifetime(session: AsyncSession, user_ids: list[int]) -> int:
 
     await session.commit()
     return changed
-
-
-async def grandfather_existing(session: AsyncSession) -> int:
-    """В момент включения платного доступа оставить бота бесплатным тем,
-    кто уже им пользовался.
-
-    Человек пришёл, когда бот был бесплатным, и завёл здесь свой дневник.
-    Закрыть ему доступ одним обновлением — обмануть его задним числом.
-    Поэтому все, кто был в боте на момент включения оплаты, остаются с ним
-    навсегда; платит только тот, кто придёт после.
-
-    Срабатывает ровно один раз за всю жизнь бота: отметка о моменте
-    включения хранится в базе, а не в файле, и переживает переустановку
-    сервера вместе с резервной копией.
-    """
-    if not config.PAYWALL:
-        # Пока бот бесплатен для всех, делить людей не на что и границу
-        # проводить рано.
-        return 0
-
-    marker = await session.get(AppState, PAYWALL_STARTED)
-    if marker is not None:
-        return 0
-
-    user_ids = list((await session.execute(select(User.id))).scalars())
-    session.add(AppState(key=PAYWALL_STARTED, value=now().isoformat(timespec="seconds")))
-    granted = await grant_lifetime(session, user_ids)
-    await session.commit()
-
-    logger.info(
-        "Платный доступ включён. Бесплатно навсегда осталось у %d человек, "
-        "которые пользовались ботом раньше",
-        granted,
-    )
-    return granted
 
 
 async def stats(session: AsyncSession) -> dict:

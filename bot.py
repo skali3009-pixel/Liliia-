@@ -66,15 +66,14 @@ def warn_about_setup() -> None:
         )
     elif not config.ADMIN_IDS:
         logger.warning(
-            "ADMIN_IDS не задан. Из-за этого: платный доступ ВЫКЛЮЧЕН (бот "
-            "бесплатен для всех), отчёты о расходах и предупреждения о сбоях "
-            "отправлять некому. Узнать свой номер — команда /id боту, "
-            "вписать — bash set-admin.sh <номер>"
+            "Бот бесплатен для всех, и ADMIN_IDS не задан: отчёты о расходах "
+            "и предупреждения о сбоях отправлять некому. Узнать свой номер — "
+            "команда /id боту, вписать — bash set-admin.sh <номер>"
         )
     else:
         logger.info(
-            "Доступ открыт всем: PAYWALL=0. "
-            "Проверить состояние целиком — bash status.sh"
+            "Бот бесплатен для всех (PAYWALL=0). Включить оплату — "
+            "bash set-paywall.sh on. Состояние целиком — bash status.sh"
         )
 
     if config.PAYWALL and not config.LEGAL_OWNER:
