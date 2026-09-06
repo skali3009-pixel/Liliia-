@@ -113,3 +113,30 @@ def test_message_without_a_single_glass_does_not_scold():
 def test_message_shows_what_is_left():
     text = render(WaterNudge(user_id=1, drunk_ml=600, norm_ml=NORM))
     assert "600" in text and "1400" in text
+
+
+def test_someone_who_disappeared_stops_hearing_the_daily_reminder():
+    """Человеку, который бросил бота, «выпей воды» приходило каждый день.
+
+    Это не напоминание, а преследование. Пропал — ежедневное молчит, дальше
+    с ним разговаривает только services/comeback.py: два письма и тишина.
+    """
+    async def scenario():
+        async with db(created_at=MOMENT_UTC - timedelta(days=60)) as session:
+            drink(session, 200, at=MOMENT_UTC - timedelta(days=30))
+            await session.commit()
+
+            assert await users_behind_on_water(session, now_utc=MOMENT_UTC) == []
+    run(scenario)
+
+
+def test_someone_who_was_here_yesterday_still_hears_it():
+    """Граница проходит по любому следу, а не по одной только воде сегодня."""
+    async def scenario():
+        async with db(created_at=MOMENT_UTC - timedelta(days=60)) as session:
+            drink(session, 200, at=MOMENT_UTC - timedelta(days=1))
+            await session.commit()
+
+            nudges = await users_behind_on_water(session, now_utc=MOMENT_UTC)
+            assert [n.user_id for n in nudges] == [1]
+    run(scenario)

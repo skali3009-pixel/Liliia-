@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Meal, User
+from services.comeback import gone_quiet
 from utils.timeframe import day_bounds, matching_zones, to_local
 
 # Вечер, но не ночь: ещё есть время поесть и записать, а не только
@@ -52,6 +53,10 @@ async def users_without_meals_today(
         )
     ).scalars().all()
 
+    # Кто пропал совсем, ежедневных напоминаний не получает: ему пишет
+    # services/comeback.py — два раза и молча.
+    quiet = await gone_quiet(session, users, now_utc=moment)
+
     nudges: list[MealNudge] = []
     for user in users:
         local_now = to_local(moment, user.timezone)
@@ -66,7 +71,7 @@ async def users_without_meals_today(
                 .limit(1)
             )
         ).first()
-        if logged is None:
+        if logged is None and user.id not in quiet:
             nudges.append(MealNudge(user_id=user.id))
 
     return nudges

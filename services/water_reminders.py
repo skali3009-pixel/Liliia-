@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import User, WaterLog
+from services.comeback import gone_quiet
 from utils.timeframe import day_bounds, matching_zones, to_local
 
 # Середина дня: успеть допить до вечера ещё реально.
@@ -64,8 +65,14 @@ async def users_behind_on_water(
         )
     ).scalars().all()
 
+    # Кто пропал совсем, ежедневных напоминаний не получает: ему пишет
+    # services/comeback.py — два раза и молча.
+    quiet = await gone_quiet(session, users, now_utc=moment)
+
     nudges: list[WaterNudge] = []
     for user in users:
+        if user.id in quiet:
+            continue
         local_now = to_local(moment, user.timezone)
         if (local_now.hour, local_now.minute) != (REMINDER_TIME.hour, REMINDER_TIME.minute):
             continue

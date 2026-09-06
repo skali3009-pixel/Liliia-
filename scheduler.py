@@ -13,7 +13,7 @@ from db import get_session
 from keyboards.supplements import reminder_keyboard
 from services.meal_reminders import users_without_meals_today
 from services.reminders import collect_due_reminders
-from services import guard, metrics
+from services import comeback, guard, metrics
 from services import owner_reports as owner_reports_text
 from services import usage
 from services.selfupdate import run_update
@@ -107,6 +107,26 @@ async def send_water_nudges(bot: Bot) -> None:
             _already_sent.add(key)
         except Exception:
             logger.info("Не получилось напомнить про воду %s", nudge.user_id)
+
+
+async def send_comebacks(bot: Bot) -> None:
+    """Днём — тем, кто перестал заходить. Не чаще двух раз за отсутствие."""
+    try:
+        async with get_session() as session:
+            letters = await comeback.due(session)
+    except Exception:
+        logger.exception("Не удалось собрать письма вернувшимся")
+        return
+
+    for letter in letters:
+        key = (letter.user_id, "comeback")
+        if key in _already_sent:
+            continue
+        try:
+            await bot.send_message(letter.user_id, letter.text)
+            _already_sent.add(key)
+        except Exception:
+            logger.info("Не получилось позвать обратно %s", letter.user_id)
 
 
 async def send_weekly_summaries(bot: Bot) -> None:
@@ -234,6 +254,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler.add_job(send_meal_nudges, "cron", minute="*", args=[bot], id="meal_nudges")
     scheduler.add_job(send_water_nudges, "cron", minute="*", args=[bot], id="water_nudges")
     scheduler.add_job(send_weekly_summaries, "cron", minute="*", args=[bot], id="weekly")
+    # Письмо тем, кто пропал. Тоже по местному времени — раз в минуту.
+    scheduler.add_job(send_comebacks, "cron", minute="*", args=[bot], id="comeback")
     scheduler.add_job(clear_sent_marks, "cron", hour=0, minute=1, id="cleanup")
     # Раз в день утром: предупредить об окончании и закрыть просроченные.
     scheduler.add_job(check_subscriptions, "cron", hour=6, minute=0, args=[bot],

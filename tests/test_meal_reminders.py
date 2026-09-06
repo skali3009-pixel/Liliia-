@@ -2,7 +2,7 @@
 
 import asyncio
 import contextlib
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -22,6 +22,10 @@ async def db():
     async with maker() as session:
         yield session
     await engine.dispose()
+
+
+def run(scenario):
+    asyncio.run(scenario())
 
 
 def make_user(id_, **kwargs) -> User:
@@ -90,3 +94,35 @@ def test_switched_off_reminders_stop_the_nudge():
             await session.commit()
             assert await users_without_meals_today(session, now_utc=MOMENT_UTC) == []
     asyncio.run(scenario())
+
+
+def test_someone_who_disappeared_stops_hearing_the_daily_reminder():
+    """Тому, кто бросил бота, «сегодня нет ни одной записи» шло каждый вечер."""
+    async def scenario():
+        async with db() as session:
+            session.add(make_user(1, created_at=MOMENT_UTC - timedelta(days=90)))
+            session.add(Meal(
+                user_id=1, meal_type=MealTypeEnum.BREAKFAST, name="Овсянка",
+                weight_g=200, calories=250, protein_g=8, fat_g=5, carbs_g=40,
+                source=MealSourceEnum.TEXT, logged_at=MOMENT_UTC - timedelta(days=40),
+            ))
+            await session.commit()
+
+            assert await users_without_meals_today(session, now_utc=MOMENT_UTC) == []
+    run(scenario)
+
+
+def test_someone_who_ate_yesterday_still_hears_it():
+    async def scenario():
+        async with db() as session:
+            session.add(make_user(1, created_at=MOMENT_UTC - timedelta(days=90)))
+            session.add(Meal(
+                user_id=1, meal_type=MealTypeEnum.DINNER, name="Суп",
+                weight_g=300, calories=200, protein_g=8, fat_g=5, carbs_g=20,
+                source=MealSourceEnum.TEXT, logged_at=MOMENT_UTC - timedelta(days=1),
+            ))
+            await session.commit()
+
+            nudges = await users_without_meals_today(session, now_utc=MOMENT_UTC)
+            assert [n.user_id for n in nudges] == [1]
+    run(scenario)
