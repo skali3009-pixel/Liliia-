@@ -18,9 +18,25 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import config
-from models import Payment, Subscription, SubscriptionSource, SubscriptionStatus
+from models import (
+    AppState,
+    Payment,
+    Subscription,
+    SubscriptionSource,
+    SubscriptionStatus,
+    User,
+)
 
 logger = logging.getLogger(__name__)
+
+# Дата «никогда не кончится». Обычному сроку нужна конкретная дата — колонка
+# не пустая, — а вечному доступу дата не нужна вовсе. Ставим заведомо далёкую
+# и одну и ту же: в выгрузке базы сразу видно, что это не настоящий срок.
+FOREVER = datetime(2099, 1, 1, tzinfo=timezone.utc)
+
+# Отметка в app_state: в какой момент доступ стал платным. Ставится один раз,
+# и по ней видно, кому бот достался бесплатно навсегда.
+PAYWALL_STARTED = "paywall_started_at"
 
 
 def now() -> datetime:
@@ -44,6 +60,7 @@ class Access:
     days_left: int
     is_admin: bool = False
     is_recurring: bool = False
+    is_lifetime: bool = False
 
     @property
     def is_trial(self) -> bool:
@@ -57,6 +74,7 @@ class Access:
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
             "is_trial": self.is_trial,
             "is_recurring": self.is_recurring,
+            "is_lifetime": self.is_lifetime,
         }
 
 
@@ -112,6 +130,16 @@ async def check_access(session: AsyncSession, user_id: int) -> Access:
     subscription = await get_subscription(session, user_id)
     if subscription is None:
         return Access(False, SubscriptionStatus.EXPIRED, None, 0)
+
+    # Бесплатно навсегда — считать нечего: срок не идёт, платить не нужно.
+    if subscription.lifetime:
+        return Access(
+            allowed=True,
+            status=SubscriptionStatus.ACTIVE,
+            expires_at=None,
+            days_left=0,
+            is_lifetime=True,
+        )
 
     expires = _aware(subscription.expires_at)
     alive = expires is not None and expires > now()
@@ -179,6 +207,7 @@ async def expire_overdue(session: AsyncSession) -> list[int]:
     stmt = select(Subscription).where(
         Subscription.expires_at <= now(),
         Subscription.status != SubscriptionStatus.EXPIRED,
+        Subscription.lifetime.is_(False),
     )
     rows = list((await session.execute(stmt)).scalars())
     for subscription in rows:
@@ -199,6 +228,7 @@ async def expiring_soon(session: AsyncSession, *, days: int = 3) -> list[Subscri
         Subscription.warned_at.is_(None),
         # У кого списание автоматическое, напоминать не о чем.
         Subscription.is_recurring.is_(False),
+        Subscription.lifetime.is_(False),
     )
     return list((await session.execute(stmt)).scalars())
 
@@ -208,37 +238,71 @@ async def mark_warned(session: AsyncSession, subscription: Subscription) -> None
     await session.commit()
 
 
-async def grandfather_existing(session: AsyncSession, *, days: int = 30) -> int:
-    """Дать доступ тем, кто пользовался ботом до появления подписки.
-
-    Люди уже вели дневник — закрывать им бота одним обновлением нечестно.
-    Выполняется один раз: у кого запись о подписке уже есть, того не трогаем.
-    """
-    from models import User
-
-    stmt = (
-        select(User.id)
-        .outerjoin(Subscription, Subscription.user_id == User.id)
-        .where(User.onboarding_completed.is_(True), Subscription.id.is_(None))
-    )
-    user_ids = list((await session.execute(stmt)).scalars())
+async def grant_lifetime(session: AsyncSession, user_ids: list[int]) -> int:
+    """Открыть перечисленным людям доступ навсегда."""
     if not user_ids:
         return 0
 
-    expires = now() + timedelta(days=days)
+    existing = {
+        row.user_id: row
+        for row in (await session.execute(
+            select(Subscription).where(Subscription.user_id.in_(user_ids))
+        )).scalars()
+    }
+
+    changed = 0
     for user_id in user_ids:
-        session.add(
-            Subscription(
-                user_id=user_id,
-                status=SubscriptionStatus.ACTIVE,
-                source=SubscriptionSource.MANUAL,
-                expires_at=expires,
-                trial_used=True,
-            )
-        )
+        subscription = existing.get(user_id)
+        if subscription is None:
+            subscription = Subscription(user_id=user_id, trial_used=True)
+            session.add(subscription)
+        elif subscription.lifetime:
+            continue          # уже навсегда — второй раз не нужно
+
+        subscription.lifetime = True
+        subscription.status = SubscriptionStatus.ACTIVE
+        subscription.source = SubscriptionSource.MANUAL
+        subscription.expires_at = FOREVER
+        subscription.warned_at = None
+        changed += 1
+
     await session.commit()
-    logger.info("Доступ на %d дней выдан %d прежним пользователям", days, len(user_ids))
-    return len(user_ids)
+    return changed
+
+
+async def grandfather_existing(session: AsyncSession) -> int:
+    """В момент включения платного доступа оставить бота бесплатным тем,
+    кто уже им пользовался.
+
+    Человек пришёл, когда бот был бесплатным, и завёл здесь свой дневник.
+    Закрыть ему доступ одним обновлением — обмануть его задним числом.
+    Поэтому все, кто был в боте на момент включения оплаты, остаются с ним
+    навсегда; платит только тот, кто придёт после.
+
+    Срабатывает ровно один раз за всю жизнь бота: отметка о моменте
+    включения хранится в базе, а не в файле, и переживает переустановку
+    сервера вместе с резервной копией.
+    """
+    if not config.PAYWALL:
+        # Пока бот бесплатен для всех, делить людей не на что и границу
+        # проводить рано.
+        return 0
+
+    marker = await session.get(AppState, PAYWALL_STARTED)
+    if marker is not None:
+        return 0
+
+    user_ids = list((await session.execute(select(User.id))).scalars())
+    session.add(AppState(key=PAYWALL_STARTED, value=now().isoformat(timespec="seconds")))
+    granted = await grant_lifetime(session, user_ids)
+    await session.commit()
+
+    logger.info(
+        "Платный доступ включён. Бесплатно навсегда осталось у %d человек, "
+        "которые пользовались ботом раньше",
+        granted,
+    )
+    return granted
 
 
 async def stats(session: AsyncSession) -> dict:
@@ -265,13 +329,20 @@ async def stats(session: AsyncSession) -> dict:
 
     return {
         "total": await count(),
+        # Вечный доступ считаем отдельно: это не выручка, а обещание,
+        # данное тем, кто пришёл раньше оплаты.
         "active": await count(
-            Subscription.status == SubscriptionStatus.ACTIVE, Subscription.expires_at > now()
+            Subscription.status == SubscriptionStatus.ACTIVE,
+            Subscription.expires_at > now(),
+            Subscription.lifetime.is_(False),
         ),
+        "lifetime": await count(Subscription.lifetime.is_(True)),
         "trial": await count(
             Subscription.status == SubscriptionStatus.TRIAL, Subscription.expires_at > now()
         ),
-        "expired": await count(Subscription.expires_at <= now()),
+        "expired": await count(
+            Subscription.expires_at <= now(), Subscription.lifetime.is_(False)
+        ),
         "recurring": await count(Subscription.is_recurring.is_(True)),
         "payers": payers,
         "stars_30d": revenue,

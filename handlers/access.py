@@ -23,7 +23,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 from db import get_session
 from models import SubscriptionSource
-from services.subscriptions import Access, activate, check_access, stats
+from services.subscriptions import Access, activate, check_access, grant_lifetime, stats
 
 logger = logging.getLogger(__name__)
 router = Router(name="access")
@@ -33,6 +33,9 @@ PAYLOAD_PREFIX = "sub_month"
 
 # Период списания задаётся в секундах и у Telegram может быть только месячным.
 MONTH_SECONDS = 30 * 24 * 60 * 60
+
+# Как владелец может написать «без срока» в команде /grant.
+FOREVER_WORDS = {"навсегда", "вечно", "forever"}
 
 
 def paywall_text(access: Access) -> str:
@@ -75,6 +78,14 @@ async def show_subscription(message: Message) -> None:
 
     if not access.allowed:
         await send_paywall(message, access)
+        return
+
+    if access.is_lifetime:
+        await message.answer(
+            "Доступ у тебя бесплатный и бессрочный — ты пользовалась ботом "
+            "ещё до того, как он стал платным. Платить не нужно, ничего не "
+            "закончится."
+        )
         return
 
     left = access.days_left
@@ -191,12 +202,14 @@ async def admin_stats(message: Message) -> None:
         "📊 Подписки\n\n"
         f"Всего людей: {data['total']}\n"
         f"Платят сейчас: {data['active']}\n"
+        f"Бесплатно навсегда: {data['lifetime']}\n"
         f"На пробном: {data['trial']}\n"
         f"С автопродлением: {data['recurring']}\n"
         f"Закончилась: {data['expired']}\n\n"
         f"Платили хоть раз: {data['payers']}\n"
         f"Звёзд за 30 дней: {data['stars_30d']} ⭐\n\n"
-        "Выдать доступ вручную: /grant ID ДНЕЙ"
+        "Выдать доступ вручную: /grant ID ДНЕЙ\n"
+        "Открыть навсегда: /grant ID навсегда"
     )
 
 
@@ -207,23 +220,35 @@ async def grant_access(message: Message) -> None:
         return
 
     parts = (message.text or "").split()
-    if len(parts) != 3 or not parts[1].isdigit() or not parts[2].isdigit():
-        await message.answer("Формат: /grant ID ДНЕЙ\nНапример: /grant 123456789 30")
+    forever = len(parts) == 3 and parts[2].lower() in FOREVER_WORDS
+    if len(parts) != 3 or not parts[1].isdigit() or not (forever or parts[2].isdigit()):
+        await message.answer(
+            "Формат: /grant ID ДНЕЙ\n"
+            "Например: /grant 123456789 30\n"
+            "Или навсегда: /grant 123456789 навсегда"
+        )
         return
 
-    user_id, days = int(parts[1]), int(parts[2])
-    async with get_session() as session:
-        subscription = await activate(
-            session, user_id, days=days, source=SubscriptionSource.MANUAL
-        )
+    user_id = int(parts[1])
 
-    await message.answer(
-        f"Выдано {days} дней пользователю {user_id}.\n"
-        f"Доступ до {subscription.expires_at:%d.%m.%Y}."
-    )
-    try:
-        await message.bot.send_message(
-            user_id, f"🎁 Тебе открыли доступ на {days} дней. Заходи в приложение!"
+    if forever:
+        async with get_session() as session:
+            await grant_lifetime(session, [user_id])
+        await message.answer(f"Пользователю {user_id} открыт бесплатный доступ навсегда.")
+        note = "🎁 Тебе открыли бесплатный доступ навсегда. Заходи в приложение!"
+    else:
+        days = int(parts[2])
+        async with get_session() as session:
+            subscription = await activate(
+                session, user_id, days=days, source=SubscriptionSource.MANUAL
+            )
+        await message.answer(
+            f"Выдано {days} дней пользователю {user_id}.\n"
+            f"Доступ до {subscription.expires_at:%d.%m.%Y}."
         )
+        note = f"🎁 Тебе открыли доступ на {days} дней. Заходи в приложение!"
+
+    try:
+        await message.bot.send_message(user_id, note)
     except Exception:
         logger.info("Не получилось уведомить пользователя %s о выданном доступе", user_id)

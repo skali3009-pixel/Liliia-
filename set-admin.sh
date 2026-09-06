@@ -66,6 +66,12 @@ fi
 chmod 600 "$ENV_FILE"
 
 echo "Владельцы записаны: $IDS"
+if [ -z "$current" ]; then
+  echo
+  echo "Платный доступ включается прямо сейчас. Все, кто уже был в боте,"
+  echo "остаются в нём бесплатно навсегда — платит только тот, кто придёт после."
+  echo "Сколько таких людей, покажет: bash status.sh"
+fi
 systemctl restart "$SERVICE" 2>/dev/null || true
 sleep 5
 if systemctl is-active --quiet "$SERVICE" 2>/dev/null; then

@@ -38,6 +38,7 @@ def _access_mode() -> list[str]:
             "🔒 Платный доступ: ВКЛЮЧЁН",
             f"   Пробный период: {config.TRIAL_DAYS} дн., дальше {config.SUB_PRICE_STARS} ⭐ в месяц",
             f"   Владельцы: {', '.join(str(i) for i in sorted(config.ADMIN_IDS))}",
+            "   Кто был в боте до включения оплаты — остался бесплатно навсегда",
         ]
 
     reason = (
@@ -114,6 +115,7 @@ async def collect() -> str:
         "👥 Люди",
         f"   Заходили: {people}, дошли до конца анкеты: {onboarded}",
         f"   Сейчас на пробном: {trial_now}",
+        f"   Бесплатно навсегда (были в боте до включения оплаты): {data['lifetime']}",
         f"   С оплаченной подпиской: {data['active']}",
         f"   Доступ закончился: {data['expired']}",
         f"   Платежей всего: {paid_ever} (звёзд за 30 дней: {data['stars_30d']})",

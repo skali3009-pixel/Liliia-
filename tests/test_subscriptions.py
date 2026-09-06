@@ -15,11 +15,24 @@ from services.subscriptions import (
     ensure_trial,
     expire_overdue,
     expiring_soon,
+    grandfather_existing,
+    grant_lifetime,
     now,
     stats,
 )
 
 USER_ID = 501
+
+
+@contextlib.asynccontextmanager
+async def paywall(enabled: bool = True):
+    """Платный доступ включён/выключен на время проверки."""
+    before = config.PAYWALL
+    config.PAYWALL = enabled
+    try:
+        yield
+    finally:
+        config.PAYWALL = before
 
 
 @contextlib.asynccontextmanager
@@ -178,29 +191,96 @@ def test_days_left_is_never_negative(days, expected):
     run(scenario)
 
 
-def test_existing_users_keep_access_after_the_paywall_appears():
-    """Люди уже вели дневник — обновление не должно запирать их снаружи."""
+def test_existing_users_stay_free_forever_when_the_paywall_turns_on():
+    """Человек пришёл, когда бот был бесплатным. Закрывать ему доступ нельзя."""
     async def scenario():
-        async with db() as session:
-            from services.subscriptions import grandfather_existing
+        async with db() as session, paywall():
+            assert await grandfather_existing(session) == 1
 
-            assert await grandfather_existing(session, days=30) == 1
             access = await check_access(session, USER_ID)
-            assert access.allowed and access.days_left >= 29
+            assert access.allowed
+            assert access.is_lifetime
+            assert access.expires_at is None
 
-            # Повторный запуск ничего не выдаёт заново.
-            assert await grandfather_existing(session, days=30) == 0
+            # Граница проводится один раз: повторный запуск никого не трогает.
+            assert await grandfather_existing(session) == 0
     run(scenario)
 
 
-def test_grandfathering_skips_people_who_never_finished_onboarding():
+def test_grandfathering_covers_people_who_only_pressed_start():
+    """Анкету не дозаполнил — но бот-то уже был обещан бесплатным."""
     async def scenario():
-        async with db() as session:
-            from services.subscriptions import grandfather_existing
-
+        async with db() as session, paywall():
             session.add(User(id=777, onboarding_completed=False))
             await session.commit()
 
-            await grandfather_existing(session, days=30)
-            assert (await check_access(session, 777)).allowed is False
+            await grandfather_existing(session)
+            assert (await check_access(session, 777)).is_lifetime
+    run(scenario)
+
+
+def test_nothing_happens_while_the_bot_is_free_for_everyone():
+    """Пока оплаты нет, делить людей не на что — и границу ставить рано."""
+    async def scenario():
+        async with db() as session, paywall(False):
+            assert await grandfather_existing(session) == 0
+            assert (await check_access(session, USER_ID)).is_lifetime is False
+    run(scenario)
+
+
+def test_newcomers_after_the_paywall_pay_as_usual():
+    """Вечный доступ — только тем, кто был раньше. Остальные платят."""
+    async def scenario():
+        async with db() as session, paywall():
+            await grandfather_existing(session)
+
+            session.add(User(id=778, onboarding_completed=True))
+            await session.commit()
+            subscription = await ensure_trial(session, 778)
+            assert subscription.lifetime is False
+
+            subscription.expires_at = now() - timedelta(days=1)
+            await session.commit()
+            assert (await check_access(session, 778)).allowed is False
+    run(scenario)
+
+
+def test_lifetime_access_never_expires_and_never_nags():
+    """Ни «срок вышел», ни «скоро закончится» к вечному доступу не относятся."""
+    async def scenario():
+        async with db() as session:
+            await grant_lifetime(session, [USER_ID])
+
+            assert await expire_overdue(session) == []
+            assert await expiring_soon(session, days=3) == []
+            assert (await check_access(session, USER_ID)).allowed
+    run(scenario)
+
+
+def test_owner_can_open_lifetime_access_to_a_person_whose_time_ran_out():
+    async def scenario():
+        async with db() as session:
+            subscription = await ensure_trial(session, USER_ID)
+            subscription.expires_at = now() - timedelta(days=10)
+            subscription.status = SubscriptionStatus.EXPIRED
+            await session.commit()
+            assert (await check_access(session, USER_ID)).allowed is False
+
+            assert await grant_lifetime(session, [USER_ID]) == 1
+            assert (await check_access(session, USER_ID)).is_lifetime
+
+            # Второй раз выдавать нечего.
+            assert await grant_lifetime(session, [USER_ID]) == 0
+    run(scenario)
+
+
+def test_lifetime_people_are_counted_apart_from_payers():
+    """Вечный доступ — не выручка, в отчёте владельца он отдельной строкой."""
+    async def scenario():
+        async with db() as session:
+            await grant_lifetime(session, [USER_ID])
+            data = await stats(session)
+            assert data["lifetime"] == 1
+            assert data["active"] == 0
+            assert data["expired"] == 0
     run(scenario)

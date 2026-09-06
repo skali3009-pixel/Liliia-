@@ -54,6 +54,10 @@ class Subscription(Base):
     is_recurring: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Пробный период даётся один раз за всё время.
     trial_used: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    # Бесплатно навсегда: так помечены те, кто пользовался ботом ещё до того,
+    # как доступ стал платным. Отбирать у них бота задним числом нечестно,
+    # поэтому срок им не считается вовсе.
+    lifetime: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Когда предупреждали об окончании — чтобы не слать одно и то же дважды.
     warned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
