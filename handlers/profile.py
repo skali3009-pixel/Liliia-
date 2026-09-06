@@ -19,8 +19,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import BufferedInputFile, CallbackQuery, Message
 
 from db import get_session
-from keyboards.main_menu import (MENU_ADD_MEAL, MENU_PROFILE, MENU_PROGRESS, MENU_WATER,
-                                 MENU_WHAT_TO_EAT, MENU_WORKOUT)
+from keyboards.main_menu import (MENU_ADD_MEAL, MENU_PROFILE, MENU_PROGRESS, MENU_TURN,
+                                 MENU_WATER, MENU_WHAT_TO_EAT, MENU_WORKOUT)
 from keyboards.onboarding import activity_keyboard, diet_type_keyboard, goal_keyboard
 from keyboards.profile import (CB_BACK, CB_EDIT, CB_EXPORT, CB_REMINDERS,
                                edit_menu_keyboard, with_back)
@@ -56,7 +56,7 @@ CHOICE_FIELDS = {
 
 CANCEL_WORDS = {"отмена", "назад", "/cancel"}
 
-MENU_TEXTS = {MENU_ADD_MEAL, MENU_WATER, MENU_WORKOUT, MENU_PROGRESS,
+MENU_TEXTS = {MENU_TURN, MENU_ADD_MEAL, MENU_WATER, MENU_WORKOUT, MENU_PROGRESS,
               MENU_WHAT_TO_EAT, MENU_PROFILE}
 
 NOT_READY = "Профиль ещё не настроен. Напиши /start."

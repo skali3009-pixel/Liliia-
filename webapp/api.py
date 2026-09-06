@@ -22,9 +22,7 @@ from services.food_vision import FoodAnalysis, FoodRecognitionError
 from services import usage
 from services.gamification import awards_summary, sync_today
 from services import context
-from services.gamification import (days_away, remember_suggestion,
-                                   suggestions_today)
-from utils.cheetah import mood as cheetah_mood
+from services import turn as turn_service
 from services.meals import get_today_totals, list_today_meals, save_meal
 from services.menu import board as menu_board
 from services.moments import Moment, analyze_moment, facts as moment_facts
@@ -178,36 +176,6 @@ def _supplement_json(item) -> dict:
     }
 
 
-def _day_context(user: User, tz: str, *, totals, water, meals, state, game,
-                 suggested, days_since_measure=None, preps=()):  # noqa: PLR0913
-    """Собрать срез дня. Ничего не требует: чего нет, того нет."""
-    return context.DayContext(
-        hour=context.hour_in(tz),
-        calories=totals.calories, calories_target=user.daily_calories or None,
-        protein_g=totals.protein_g, protein_target=user.daily_protein_g or None,
-        fiber_g=totals.fiber_g, fiber_target=user.daily_fiber_g or None,
-        water_ml=water, water_target=user.daily_water_ml or None,
-        meals_logged=meals,
-        workouts_today=game.get("workouts_today", 0),
-        days_since_measure=days_since_measure,
-        energy=state.energy, stress=state.stress,
-        checkin_done=not state.is_empty,
-        streak=game.get("streak", 0),
-        quests_left=game.get("quests_total", 0) - game.get("quests_done", 0),
-        preps_expiring=tuple(preps),
-        already_suggested=tuple(suggested),
-    )
-
-
-async def _next_action(session, user: User, tz: str, **parts):
-    """Одно действие для карточки «Твой ход» — и отметка, что его показали."""
-    shown = await suggestions_today(session, user.id, timezone_name=tz)
-    action = context.next_action(_day_context(user, tz, suggested=shown, **parts))
-    if action is not None:
-        await remember_suggestion(session, user.id, action.code, timezone_name=tz)
-    return action
-
-
 async def get_today(request: web.Request) -> web.Response:
     """Всё, что нужно главному экрану, одним запросом."""
     user_id, tz = request["user_id"], request["timezone"]
@@ -236,9 +204,9 @@ async def get_today(request: web.Request) -> web.Response:
         parts = dict(totals=totals, water=water, meals=len(meals), state=state,
                      game=game, days_since_measure=game.get("days_since_measure"),
                      preps=await expiring_names(session, user_id, timezone_name=tz))
-        action = await _next_action(session, user, tz, **parts)
+        action = await turn_service.next_action(session, user, tz, **parts)
         main_codes = context.main_quest_codes(
-            _day_context(user, tz, suggested=(), **parts), game["quests"])
+            turn_service.day_context(user, tz, suggested=(), **parts), game["quests"])
         for quest in game["quests"]:
             quest["main"] = quest["code"] in main_codes
 
@@ -249,18 +217,10 @@ async def get_today(request: web.Request) -> web.Response:
         if found:
             game["surprise"] = found
 
-        # Гепард не советует — он реагирует. Считается по тем же данным.
-        cheetah = cheetah_mood(
-            hour=context.hour_in(tz),
-            energy=state.energy, stress=state.stress,
-            water_share=(water / user.daily_water_ml) if user.daily_water_ml else 1.0,
-            workouts_today=game.get("workouts_today", 0),
-            streak=game.get("streak", 0),
-            days_away=await days_away(session, user_id, timezone_name=tz),
-            new_awards=len(game.get("new_awards") or []),
-            quests_done=game.get("quests_done", 0),
-            quests_total=game.get("quests_total", 0),
-        )
+        # Гепард не советует — он реагирует. Считается там же, где для чата:
+        # одно правило на оба места.
+        cheetah = await turn_service.cheetah_for(
+            session, user, tz, game=game, state=state, water=water)
 
         return web.json_response(
             {

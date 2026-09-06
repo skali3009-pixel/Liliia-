@@ -37,6 +37,7 @@ from services.food_vision import (
 from services import alerts
 from services.checkins import save_checkin, today_state
 from services.gamification import sync_today
+from services import turn as turn_service
 from services.meals import get_today_totals, list_today_meals, save_meal
 from services.moments import Moment, analyze_moment
 from services.transcription import TranscriptionError, VoiceNotConfigured, transcribe
@@ -559,21 +560,30 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
         # и узнать об этом приятнее сразу, а не при следующем входе в приложение.
         # Отдельное имя — переменная `state` в этой функции уже занята FSM.
         day_state = await today_state(session, user.id, timezone_name=user.timezone)
+        water_ml = await today_total_ml(session, user.id, timezone_name=user.timezone)
         game = await sync_today(
             session,
             user,
             meals_count=len(await list_today_meals(session, user.id, timezone_name=user.timezone)),
             calories=totals.calories,
             fiber_g=totals.fiber_g,
-            water_ml=await today_total_ml(session, user.id, timezone_name=user.timezone),
+            water_ml=water_ml,
             timezone_name=user.timezone,
             stress_marked=day_state.stress is not None,
         )
+        # Гепард отзывается и в чате — тем же правилом, что и в приложении.
+        # Совет здесь не даём: он живёт под кнопкой «Мой ход», а показанный
+        # без спроса тратит дневной лимит повторов на подсказку, которую
+        # человек сейчас не просил.
+        cheetah = await turn_service.cheetah_for(
+            session, user, user.timezone or DEFAULT_TIMEZONE,
+            game=game, state=day_state, water=water_ml)
 
     await state.clear()
     await callback.message.edit_reply_markup(reply_markup=None)
     await callback.message.answer(
-        _render_day_summary(analysis, MEAL_TYPE_RU[meal_type], totals, norms, game),
+        _render_day_summary(analysis, MEAL_TYPE_RU[meal_type], totals, norms, game,
+                            cheetah=cheetah),
         reply_markup=main_menu_keyboard(),
     )
     await callback.answer("Сохранено ✅")
@@ -600,7 +610,8 @@ def _render_game_lines(game: dict) -> list[str]:
     return lines
 
 
-def _render_day_summary(analysis, meal_type_label, totals, norms, game=None) -> str:
+def _render_day_summary(analysis, meal_type_label, totals, norms, game=None,
+                        *, cheetah=None) -> str:
     calories_norm, protein_norm, fat_norm, carbs_norm, fiber_norm = norms
     lines = [f"✅ Записал: {analysis.name} ({meal_type_label})", ""]
 
@@ -618,6 +629,8 @@ def _render_day_summary(analysis, meal_type_label, totals, norms, game=None) -> 
         f"🥦 Клетчатка {_num(totals.fiber_g)} / {fiber_norm or '—'} г",
     ]
     lines += _render_game_lines(game)
+    if cheetah is not None:
+        lines += ["", f"{cheetah.emoji} {cheetah.line}"]
     return "\n".join(lines)
 
 
