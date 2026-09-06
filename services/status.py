@@ -99,6 +99,13 @@ async def collect() -> str:
             )
         )).scalar_one())
 
+    from services import usage as usage_service
+    from utils.disk import usage as disk_usage
+
+    async with async_session_maker() as session:
+        spend = await usage_service.spent_today(session)
+    disk = disk_usage()
+
     lines = [
         f"Версия: {_git_version()}",
         "",
@@ -110,6 +117,16 @@ async def collect() -> str:
         f"   С оплаченной подпиской: {data['active']}",
         f"   Доступ закончился: {data['expired']}",
         f"   Платежей всего: {paid_ever} (звёзд за 30 дней: {data['stars_30d']})",
+        "",
+        "💰 Расход на модель сегодня",
+        f"   Потрачено: {spend.total_usd:.2f} $ из {config.DAILY_COST_LIMIT_USD:.0f} $ "
+        f"({spend.calls} запросов)",
+        f"   Осталось до потолка: {spend.left_usd:.2f} $",
+        f"   Модель для фото: {config.VISION_MODEL}",
+        "",
+        "💾 Диск",
+        f"   Занято {disk.percent}% — {disk.used_gb} из {disk.total_gb} ГБ, "
+        f"свободно {disk.free_gb} ГБ",
         "",
         *_art_lines(),
         "",

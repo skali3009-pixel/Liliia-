@@ -170,7 +170,7 @@ def nutrition(components: list[dict], products: dict[str, Product]) -> dict[str,
 
 async def build_dish(user: User, *, meal_type: str, budget: float,
                      products: list[Product], gap: str | None = None,
-                     avoid: list[str] | None = None) -> dict:
+                     avoid: list[str] | None = None, on_usage=None) -> dict:
     """Собрать одно блюдо. Бросает FoodRecognitionError, если не вышло."""
     diet = user.diet_type.value if user.diet_type else "regular"
     from services.dish_picker import _allergen_words
@@ -188,9 +188,12 @@ async def build_dish(user: User, *, meal_type: str, budget: float,
     for attempt in range(MAX_ATTEMPTS):
         try:
             response = await get_client().messages.create(
-                model=config.VISION_MODEL,
+                # Здесь важнее рассуждение, а вызовов на порядок меньше, чем
+                # распознаваний фото, — поэтому модель посильнее.
+                model=config.BUILD_MODEL,
                 max_tokens=MAX_TOKENS,
-                system=SYSTEM_PROMPT,
+                system=[{"type": "text", "text": SYSTEM_PROMPT,
+                         "cache_control": {"type": "ephemeral"}}],
                 tools=[BUILD_TOOL],
                 tool_choice={"type": "tool", "name": "build_dish"},
                 messages=[{"role": "user", "content": request}],
@@ -200,6 +203,9 @@ async def build_dish(user: User, *, meal_type: str, budget: float,
         except anthropic.APIError as error:
             logger.warning("Сборка блюда: ошибка запроса — %s", error)
             raise FoodRecognitionError("Сервис подбора сейчас недоступен") from None
+
+        if on_usage is not None:
+            on_usage(getattr(response, "usage", None))
 
         raw = _parse(response)
         if raw is None:

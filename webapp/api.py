@@ -62,6 +62,8 @@ from services.water import add_water, today_total_ml, undo_last
 from utils.body import (build_insights, build_silhouette, goal_silhouette,
                         warp_factors, zones)
 from utils.daily_line import daily_line
+from utils.disk import usage as disk_usage
+from utils import images
 from utils.macros import GAP_LABELS, dominant_gap, remaining
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, scale_nutrition
@@ -528,8 +530,20 @@ async def post_photo(request: web.Request) -> web.Response:
     if not content:
         return web.json_response({"error": "Пустой файл"}, status=400)
 
+    # Место на диске кончается раньше всего именно из-за фотографий, а вместе
+    # с местом встаёт и запись дневника. Поэтому фото отключаются первыми.
+    disk = disk_usage()
+    if disk.full:
+        logger.warning("Диск заполнен на %s%% — приём фото остановлен", disk.percent)
+        return web.json_response(
+            {"error": "На сервере кончается место — фото пока не принимаются"}, status=507
+        )
+
+    # Снимок с телефона весит 3–5 МБ, а для сравнения «до/после» на экране
+    # хватает 1600 пикселей по длинной стороне — это в разы меньше.
+    shrunk = images.for_progress(bytes(content))
     async with get_session() as session:
-        photo = await save_photo(session, user_id=request["user_id"], content=bytes(content))
+        photo = await save_photo(session, user_id=request["user_id"], content=shrunk)
     return web.json_response({"id": photo.id})
 
 

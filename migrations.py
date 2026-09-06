@@ -36,6 +36,7 @@ INDEXES: list[tuple[str, str, str]] = [
     ("ix_checkins_user_logged", "checkins", "(user_id, logged_at)"),
     ("ix_workout_log_user_done", "workout_log", "(user_id, completed_at)"),
     ("ix_dish_components_dish", "nutrition_dish_components", "(dish_id)"),
+    ("ix_api_usage_day_kind", "api_usage", "(day, kind)"),
 ]
 
 COLUMN_ADDITIONS: list[tuple[str, str, str]] = [

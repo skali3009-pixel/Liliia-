@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections import OrderedDict
 from datetime import datetime, timezone
 
 from aiogram import F, Router
@@ -11,6 +12,7 @@ from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 
+import config
 from db import get_session
 from keyboards.food import (
     CB_CANCEL,
@@ -38,6 +40,8 @@ from services.meals import get_today_totals, list_today_meals, save_meal
 from services.moments import Moment, analyze_moment
 from services.transcription import TranscriptionError, VoiceNotConfigured, transcribe
 from services.water import today_total_ml
+from services import usage
+from utils.disk import usage as disk_usage
 from states.food import FoodStates
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.parsing import parse_float
@@ -148,6 +152,52 @@ async def start_adding_food(message: Message, state: FSMContext) -> None:
     )
 
 
+# Одно и то же фото люди пересылают чаще, чем кажется: не расслышал бот с
+# первого раза, отправила подруге и себе, вернулась к старому сообщению.
+# Второй раз платить за него незачем. Память живёт до перезапуска бота —
+# отдельная таблица ради этого не нужна.
+_recent_photos: OrderedDict[str, FoodAnalysis] = OrderedDict()
+_RECENT_LIMIT = 500
+
+
+def _remember_photo(key: str, analysis: FoodAnalysis) -> None:
+    _recent_photos[key] = analysis
+    _recent_photos.move_to_end(key)
+    while len(_recent_photos) > _RECENT_LIMIT:
+        _recent_photos.popitem(last=False)
+
+
+async def _photo_allowed(message: Message, user_id: int) -> bool:
+    """Можно ли сейчас распознавать фото: диск, дневной бюджет, лимит человека."""
+    disk = disk_usage()
+    if disk.full:
+        await message.answer(
+            "Сейчас не могу принять фото — на сервере кончается место. "
+            "Запиши блюдо словами, это работает и считается так же точно."
+        )
+        logger.warning("Диск заполнен на %s%% — приём фото остановлен", disk.percent)
+        return False
+
+    async with get_session() as session:
+        if await usage.over_budget(session):
+            await message.answer(
+                "Распознавание фото сегодня недоступно — исчерпан дневной лимит "
+                "на обработку. Опиши блюдо словами: посчитаю так же точно."
+            )
+            return False
+
+        left = await usage.photo_limit_left(session, user_id)
+
+    if left <= 0:
+        await message.answer(
+            f"На сегодня распознавание фото исчерпано — это "
+            f"{config.PHOTO_LIMIT_PER_DAY} снимков в сутки. Записывай словами: "
+            "«тарелка борща и два куска хлеба» — я посчитаю."
+        )
+        return False
+    return True
+
+
 @router.message(StateFilter(None, FoodStates), F.photo)
 async def handle_food_photo(message: Message, state: FSMContext) -> None:
     """Фото вне сценариев (или на любом шаге добавления еды) — это еда.
@@ -163,14 +213,25 @@ async def handle_food_photo(message: Message, state: FSMContext) -> None:
         await message.answer("Фото слишком большое. Пришли его как фото (не файлом).")
         return
 
+    known = _recent_photos.get(photo.file_unique_id)
+    if known is not None:
+        # То же самое фото уже разбирали — показываем результат без запроса.
+        _recent_photos.move_to_end(photo.file_unique_id)
+        await _show_card(message, state, known, photo_file_id=photo.file_id)
+        return
+
+    if not await _photo_allowed(message, message.from_user.id):
+        return
+
     status = await message.answer("🔍 Распознаю блюдо…")
     await message.bot.send_chat_action(message.chat.id, "typing")
 
+    spent: list = []
     try:
         buffer = await message.bot.download(photo.file_id)
         if buffer is None:
             raise FoodRecognitionError("Не удалось скачать фото из Telegram")
-        analysis = await analyze_photo(buffer.read())
+        analysis = await analyze_photo(buffer.read(), on_usage=spent.append)
     except FoodRecognitionError as e:  # включая «нет ключа» и «не видно еды»
         await status.edit_text(str(e))
         return
@@ -179,8 +240,25 @@ async def handle_food_photo(message: Message, state: FSMContext) -> None:
         await status.edit_text(GENERIC_ERROR)
         return
 
+    finally:
+        await _record_spend(message.from_user.id, "photo", spent)
+
+    _remember_photo(photo.file_unique_id, analysis)
     await status.delete()
     await _show_card(message, state, analysis, photo_file_id=photo.file_id)
+
+
+async def _record_spend(user_id: int, kind: str, spent: list) -> None:
+    """Записать расход. Ошибка учёта не должна мешать человеку есть."""
+    if not spent:
+        return
+    try:
+        async with get_session() as session:
+            for item in spent:
+                await usage.record(session, user_id=user_id, kind=kind,
+                                   model=config.VISION_MODEL, usage=item)
+    except Exception:  # noqa: BLE001
+        logger.exception("Не записался расход на распознавание")
 
 
 @router.message(StateFilter(None, FoodStates), F.voice)
@@ -374,6 +452,7 @@ async def apply_correct_dish(message: Message, state: FSMContext) -> None:
     status = await message.answer("🔍 Пересчитываю…")
     await message.bot.send_chat_action(message.chat.id, "typing")
 
+    spent: list = []
     try:
         if photo_file_id:
             # Фото анализируем заново с подсказкой пользователя: название берём
@@ -381,9 +460,9 @@ async def apply_correct_dish(message: Message, state: FSMContext) -> None:
             buffer = await message.bot.download(photo_file_id)
             if buffer is None:
                 raise FoodRecognitionError("Не удалось скачать фото из Telegram")
-            analysis = await analyze_photo(buffer.read(), hint=hint)
+            analysis = await analyze_photo(buffer.read(), hint=hint, on_usage=spent.append)
         else:
-            analysis = await analyze_text(hint)
+            analysis = await analyze_text(hint, on_usage=spent.append)
     except FoodRecognitionError as e:  # включая «нет ключа» и «не видно еды»
         await status.edit_text(str(e))
         return
@@ -391,6 +470,8 @@ async def apply_correct_dish(message: Message, state: FSMContext) -> None:
         logger.exception("Ошибка пересчёта блюда по уточнению пользователя")
         await status.edit_text(GENERIC_ERROR)
         return
+    finally:
+        await _record_spend(message.from_user.id, "photo" if photo_file_id else "text", spent)
 
     await status.delete()
     await state.set_state(FoodStates.confirming)

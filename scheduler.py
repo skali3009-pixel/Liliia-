@@ -163,6 +163,43 @@ async def check_subscriptions(bot: Bot) -> None:
         logger.exception("Проверка подписок не удалась")
 
 
+
+async def report_costs(bot: Bot) -> None:
+    """Утренний отчёт владельцу: сколько вчера потратили и как с диском.
+
+    Расход на модель — единственная статья, которая может вырасти внезапно.
+    Владелец должен видеть её каждый день, а не в конце месяца в счёте.
+    """
+    if not config.ADMIN_IDS:
+        return
+
+    from datetime import date, timedelta
+
+    from services import usage as usage_service
+    from utils.disk import render_warning
+    from utils.disk import usage as disk_usage
+
+    async with get_session() as session:
+        yesterday = await usage_service.spent_today(session, date.today() - timedelta(days=1))
+        await usage_service.cleanup(session)
+
+    lines = [usage_service.render_report(yesterday)]
+    if yesterday.total_usd >= config.DAILY_COST_LIMIT_USD:
+        lines.append("\n⚠️ Дневной потолок вчера был исчерпан — распознавание фото "
+                     "приостанавливалось.")
+
+    disk = disk_usage()
+    if disk.warning:
+        lines.append("\n" + render_warning(disk))
+
+    text = "\n".join(lines)
+    for admin in config.ADMIN_IDS:
+        try:
+            await bot.send_message(admin, text)
+        except Exception:  # noqa: BLE001 — владелец мог заблокировать бота
+            logger.warning("Не удалось отправить отчёт о расходах владельцу %s", admin)
+
+
 def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(send_due_reminders, "cron", minute="*", args=[bot], id="supplements")
@@ -173,6 +210,9 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     # Раз в день утром: предупредить об окончании и закрыть просроченные.
     scheduler.add_job(check_subscriptions, "cron", hour=6, minute=0, args=[bot],
                       id="subscriptions")
+    # Отчёт о расходах — раньше, чем начинается день: чтобы владелец успел
+    # среагировать до наплыва.
+    scheduler.add_job(report_costs, "cron", hour=5, minute=30, args=[bot], id="costs")
 
     if config.AUTO_UPDATE:
         # Раз в полчаса — не чаще: обновление перезапускает бота, и делать

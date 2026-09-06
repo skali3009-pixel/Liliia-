@@ -312,9 +312,17 @@ class _Block:
         self.input = payload
 
 
+class _Usage:
+    input_tokens = 1200
+    output_tokens = 200
+    cache_creation_input_tokens = 0
+    cache_read_input_tokens = 0
+
+
 class _Response:
     def __init__(self, payload):
         self.content = [_Block(payload)]
+        self.usage = _Usage()
 
 
 class _FakeClient:

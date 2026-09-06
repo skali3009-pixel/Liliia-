@@ -15,6 +15,7 @@ from typing import Any
 import anthropic
 
 import config
+from utils import images
 
 logger = logging.getLogger(__name__)
 
@@ -193,7 +194,7 @@ def _build_analysis(payload: dict[str, Any]) -> FoodAnalysis:
     )
 
 
-async def _analyze(content: list[dict[str, Any]]) -> FoodAnalysis:
+async def _analyze(content: list[dict[str, Any]], on_usage=None) -> FoodAnalysis:
     try:
         response = await _request(content)
     except anthropic.AuthenticationError:
@@ -233,14 +234,23 @@ async def _analyze(content: list[dict[str, Any]]) -> FoodAnalysis:
         )
 
     # SDK отдаёт input уже разобранным в dict — строковый разбор не нужен.
-    return _build_analysis(dict(tool_use.input))
+    analysis = _build_analysis(dict(tool_use.input))
+    if on_usage is not None:
+        on_usage(getattr(response, "usage", None))
+    return analysis
 
 
 async def _request(content: list[dict[str, Any]]):
     return await get_client().messages.create(
         model=config.VISION_MODEL,
         max_tokens=MAX_TOKENS,
-        system=SYSTEM_PROMPT,
+        # Инструкция и схема инструмента одинаковы в каждом запросе — просим
+        # закэшировать их. Чтение из кэша стоит в десять раз дешевле обычного
+        # входа. Если инструкция окажется короче минимального размера кэша,
+        # ничего не сломается: кэш просто не создастся, и это видно в учёте
+        # расходов по нулевым cache_read_tokens.
+        system=[{"type": "text", "text": SYSTEM_PROMPT,
+                 "cache_control": {"type": "ephemeral"}}],
         tools=[FOOD_ANALYSIS_TOOL],
         # tool_choice="auto" + явная инструкция в системном промпте: принудительный
         # выбор инструмента несовместим с thinking, который у современных моделей
@@ -255,8 +265,16 @@ async def analyze_photo(
     *,
     hint: str | None = None,
     media_type: str = "image/jpeg",
+    on_usage=None,
 ) -> FoodAnalysis:
-    """Распознать блюдо по фото. `hint` — уточнение пользователя («это не борщ, а солянка»)."""
+    """Распознать блюдо по фото. `hint` — уточнение пользователя («это не борщ, а солянка»).
+
+    `on_usage` вызывается с расходом токенов: считать деньги должен тот, кто
+    знает, чей это запрос.
+    """
+    # Уменьшаем кадр до отправки: токены картинки — это ширина × высота / 750,
+    # и снимок с телефона стоит втрое дороже, ничего не добавляя к точности.
+    image_bytes = images.for_food(image_bytes)
     encoded = base64.standard_b64encode(image_bytes).decode("utf-8")
 
     text = "Что это за блюдо, сколько в нём КБЖУ и клетчатки?"
@@ -274,11 +292,12 @@ async def analyze_photo(
                 "source": {"type": "base64", "media_type": media_type, "data": encoded},
             },
             {"type": "text", "text": text},
-        ]
+        ],
+        on_usage,
     )
 
 
-async def analyze_text(description: str) -> FoodAnalysis:
+async def analyze_text(description: str, *, on_usage=None) -> FoodAnalysis:
     """Распознать блюдо по текстовому описанию («тарелка борща и два куска хлеба»)."""
     return await _analyze(
         [
@@ -290,5 +309,6 @@ async def analyze_text(description: str) -> FoodAnalysis:
                     f"Описание: {description}"
                 ),
             }
-        ]
+        ],
+        on_usage,
     )

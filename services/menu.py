@@ -15,7 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import MealTypeEnum, Product, User
-from services import dish_picker, method
+import config
+from services import dish_picker, method, usage
 from services.dish_builder import build_dish
 from services.food_vision import FoodRecognitionError
 from services.meals import get_today_totals
@@ -179,11 +180,13 @@ async def _built_offers(session: AsyncSession, user: User, *, meal_type: str,
     products = list((await session.execute(select(Product))).scalars())
     offers: list[Offer] = []
     seen = list(avoid)
+    spent: list = []
 
     for _ in range(count):
         try:
             built = await build_dish(user, meal_type=meal_type, budget=budget,
-                                     products=products, gap=gap, avoid=seen)
+                                     products=products, gap=gap, avoid=seen,
+                                     on_usage=spent.append)
         except FoodRecognitionError as error:
             logger.info("Сборка блюда не удалась: %s", error)
             break
@@ -202,6 +205,14 @@ async def _built_offers(session: AsyncSession, user: User, *, meal_type: str,
                         for c in built["components"]],
         ))
         seen.append(built["name"])
+
+    # Расход считаем после цикла, одним заходом: он не должен мешать выдаче.
+    for item in spent:
+        try:
+            await usage.record(session, user_id=user.id, kind="build",
+                               model=config.BUILD_MODEL, usage=item)
+        except Exception:  # noqa: BLE001 — учёт не повод не показать блюдо
+            logger.exception("Не записался расход на сборку блюда")
     return offers
 
 
