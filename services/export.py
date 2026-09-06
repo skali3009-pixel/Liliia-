@@ -23,8 +23,8 @@ from datetime import date, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import (BodyMeasurement, Checkin, Meal, ProgressPhoto, Supplement, SupplementLog,
-                    User, WaterLog, Workout, WorkoutLog)
+from models import (BodyMeasurement, Checkin, Meal, ProgressPhoto, StepLog, Supplement,
+                    SupplementLog, User, WaterLog, Workout, WorkoutLog)
 from services.profile import ACTIVITY_RU, DIET_RU, GENDER_RU, GOAL_RU
 from services.progress import photos_dir
 from utils.meal_time import MEAL_TYPE_RU
@@ -60,6 +60,7 @@ README = """Выгрузка из AURA
 Вода.csv — каждая отметка о воде.
 Вес и замеры.csv — взвешивания и объёмы.
 Тренировки.csv — что выполнено и сколько на это ушло.
+Шаги.csv — сколько шагов за каждый день.
 Самочувствие.csv — энергия, фокус, настроение, стресс, сон.
 Добавки.csv — список приёма и расписание.
 Приём добавок.csv — когда приняла и когда пропустила.
@@ -171,6 +172,7 @@ def profile_rows(user: User) -> list[list]:
         ["Углеводы, г", user.daily_carbs_g],
         ["Клетчатка, г", user.daily_fiber_g],
         ["Вода, мл", user.daily_water_ml],
+        ["Шаги, цель", user.daily_steps or ""],
         ["Напоминания", "включены" if user.reminders_enabled else "выключены"],
     ]
 
@@ -194,6 +196,9 @@ async def _tables(session: AsyncSession, user: User,
     checkins = (await session.execute(
         select(Checkin).where(Checkin.user_id == uid)
         .order_by(Checkin.logged_at))).scalars().all()
+    steps = (await session.execute(
+        select(StepLog).where(StepLog.user_id == uid)
+        .order_by(StepLog.day))).scalars().all()
     supplements = (await session.execute(
         select(Supplement).where(Supplement.user_id == uid)
         .order_by(Supplement.created_at))).scalars().all()
@@ -224,6 +229,9 @@ async def _tables(session: AsyncSession, user: User,
             ["Дата", "Время", "Упражнение", "Подходы", "Повторы", "Минуты", "Ккал"],
             [[*_moment(log.completed_at, tz), workout.name, log.sets_done, log.reps_done,
               log.duration_minutes, log.calories_burned] for log, workout in workouts]),
+        "Шаги": (
+            ["Дата", "Шаги"],
+            [[entry.day.strftime("%d.%m.%Y"), entry.steps] for entry in steps]),
         "Самочувствие": (
             ["Дата", "Время", "Энергия", "Фокус", "Настроение", "Стресс", "Сон, ч", "Заметка"],
             [[*_moment(c.logged_at, tz), c.energy, c.focus, c.mood or "", c.stress or "",

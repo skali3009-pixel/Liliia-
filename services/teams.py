@@ -138,12 +138,18 @@ async def leave(session: AsyncSession, user_id: int) -> bool:
     await session.execute(delete(TeamMember).where(TeamMember.user_id == user_id))
     await session.flush()
 
-    left = int((await session.execute(
-        select(func.count(TeamMember.id)).where(TeamMember.team_id == team.id)
-    )).scalar_one())
-    if left == 0:
+    left = (await session.execute(
+        select(TeamMember.user_id).where(TeamMember.team_id == team.id)
+        .order_by(TeamMember.joined_at)
+    )).scalars().all()
+
+    if not left:
         # Пустая команда никому не пригодится, а её код продолжал бы работать.
         await session.execute(delete(Team).where(Team.id == team.id))
+    elif team.owner_id == user_id:
+        # Ушёл создатель — команда осталась бы без хозяина, и переименовать
+        # её не смог бы уже никто. Передаём тому, кто вступил раньше всех.
+        team.owner_id = int(left[0])
     await session.commit()
     return True
 

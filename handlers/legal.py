@@ -20,6 +20,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 from db import get_session
 from models import User
+from services import deletion
 from services.legal import LEGAL_VERSION, document_url, links_ready
 
 logger = logging.getLogger(__name__)
@@ -164,11 +165,9 @@ async def cancel_delete(callback: CallbackQuery) -> None:
 @router.callback_query(F.data == CB_DELETE_YES)
 async def do_delete(callback: CallbackQuery) -> None:
     async with get_session() as session:
-        user = await session.get(User, callback.from_user.id)
-        if user is not None:
-            # Связанные записи удаляются каскадом вместе с пользователем.
-            await session.delete(user)
-            await session.commit()
+        # Почти всё уходит каскадом, но не всё: обратная дружба и команда
+        # каскадом не описываются и пережили бы удаление.
+        await deletion.purge(session, callback.from_user.id)
 
     await callback.message.edit_text(
         "Готово. Все данные удалены, согласие отозвано.\n\n"

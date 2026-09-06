@@ -98,8 +98,8 @@ def build(tmp_path, extra=None):
 def test_archive_holds_every_kind_of_record(tmp_path):
     export, archive = build(tmp_path)
     assert export.filename == "AURA-2026-03-10.zip"
-    for name in ("Профиль", "Еда", "Вода", "Вес и замеры", "Тренировки", "Самочувствие",
-                 "Добавки", "Приём добавок"):
+    for name in ("Профиль", "Еда", "Вода", "Вес и замеры", "Тренировки", "Шаги",
+                 "Самочувствие", "Добавки", "Приём добавок"):
         assert f"{name}.csv" in archive.namelist(), name
     assert "Что внутри.txt" in archive.namelist()
 
@@ -308,3 +308,30 @@ def test_a_stranger_without_a_profile_gets_an_answer_not_a_crash(tmp_path):
 
     message = asyncio.run(scenario())
     assert message.said == ["Профиль ещё не настроен. Напиши /start."]
+
+
+def test_the_export_carries_the_steps_too(tmp_path):
+    """Шаги появились позже выгрузки — и в неё не попадали."""
+    async def add_steps(session, user, _tmp):
+        from services import steps as step_service
+
+        await step_service.record(session, user.id, 9200, day=date(2026, 3, 9))
+
+    _, archive = build(tmp_path, extra=add_steps)
+    assert "Шаги.csv" in archive.namelist()
+    # И в описании архива: файл без объяснения человек просто не откроет.
+    assert "Шаги.csv" in archive.read("Что внутри.txt").decode("utf-8")
+
+    header, row = sheet(archive, "Шаги")
+    assert header == ["Дата", "Шаги"]
+    assert row == ["09.03.2026", "9200"]
+
+
+def test_the_export_says_what_the_step_goal_is(tmp_path):
+    async def set_goal(session, user, _tmp):
+        user.daily_steps = 9000
+        await session.commit()
+
+    _, archive = build(tmp_path, extra=set_goal)
+    rows = sheet(archive, "Профиль")
+    assert ["Шаги, цель", "9000"] in rows
