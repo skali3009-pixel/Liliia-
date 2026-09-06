@@ -39,3 +39,13 @@ if systemctl is-enabled --quiet nutrition-bot-backup.timer 2>/dev/null; then
 else
   echo "  расписание: выключено (sudo bash setup-backup.sh)"
 fi
+
+# --- Сторож ----------------------------------------------------------------
+echo
+echo "Сторож (сообщает о падении):"
+if systemctl is-enabled --quiet nutrition-bot-watchdog.timer 2>/dev/null; then
+  echo "  включён, проверка каждые 5 минут"
+  echo "  проверить доставку: bash watchdog.sh --test"
+else
+  echo "  выключен — включи: sudo bash setup-watchdog.sh"
+fi

@@ -64,9 +64,16 @@ def warn_about_setup() -> None:
             "Доступ платный: пробный период %d дн., далее %d ⭐ в месяц",
             config.TRIAL_DAYS, config.SUB_PRICE_STARS,
         )
+    elif not config.ADMIN_IDS:
+        logger.warning(
+            "ADMIN_IDS не задан. Из-за этого: платный доступ ВЫКЛЮЧЕН (бот "
+            "бесплатен для всех), отчёты о расходах и предупреждения о сбоях "
+            "отправлять некому. Узнать свой номер — команда /id боту, "
+            "вписать — bash set-admin.sh <номер>"
+        )
     else:
         logger.info(
-            "Доступ открыт всем: ADMIN_IDS не задан либо PAYWALL=0. "
+            "Доступ открыт всем: PAYWALL=0. "
             "Проверить состояние целиком — bash status.sh"
         )
 

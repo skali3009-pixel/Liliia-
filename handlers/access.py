@@ -156,6 +156,28 @@ async def payment_received(message: Message) -> None:
     )
 
 
+@router.message(Command("id"))
+async def show_my_id(message: Message) -> None:
+    """Свой номер в Телеграме — чтобы вписать его в ADMIN_IDS.
+
+    Команда доступна всем: номер и так виден любому, кому человек пишет,
+    а владельцу иначе пришлось бы ставить постороннего бота ради одной цифры.
+    """
+    me = message.from_user.id
+    known = me in config.ADMIN_IDS
+    lines = [f"Твой номер в Телеграме: `{me}`"]
+    if known:
+        lines.append("\nТы вписан(а) в ADMIN_IDS — отчёты и предупреждения приходят сюда.")
+    else:
+        lines.append(
+            "\nВ ADMIN_IDS тебя нет. Если это твой бот, впиши номер на сервере:\n"
+            "`bash set-admin.sh " + str(me) + "`\n\n"
+            "Пока список пуст, платный доступ выключен, а отчёты о расходах "
+            "и предупреждения уходить некуда."
+        )
+    await message.answer("\n".join(lines), parse_mode="Markdown")
+
+
 @router.message(Command("admin"))
 async def admin_stats(message: Message) -> None:
     """Сводка для владельца: сколько людей и звёзд."""

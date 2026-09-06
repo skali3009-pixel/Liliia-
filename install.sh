@@ -132,9 +132,29 @@ else
 fi
 
 umask 077
+# Владелец: без него платный доступ не включается, а отчёты о расходах и
+# предупреждения о сбоях отправлять некому. Спрашиваем сразу — потом об этом
+# вспоминают, только когда что-то уже случилось.
+ADMIN_IDS="$(read_env_value ADMIN_IDS)"
+if [ -z "$ADMIN_IDS" ]; then
+    echo
+    echo "  Твой номер в Телеграме (только цифры). Он нужен, чтобы:"
+    echo "    • тебе приходили отчёты о расходах и предупреждения о сбоях;"
+    echo "    • работал платный доступ — без владельца бот бесплатен для всех."
+    echo "  Не знаешь номер — нажми Enter, узнаешь позже командой /id у бота"
+    echo "  и впишешь через: bash set-admin.sh <номер>"
+    ask ADMIN_IDS
+fi
+case "$ADMIN_IDS" in
+    "" ) echo "  Пропущено — впишешь позже: bash set-admin.sh <номер>";;
+    *[!0-9,]* ) echo "  Не похоже на номер, пропускаю: $ADMIN_IDS"; ADMIN_IDS="";;
+    * ) ok "владелец записан: $ADMIN_IDS";;
+esac
+
 cat > "$ENV_FILE" <<ENV
 BOT_TOKEN=$BOT_TOKEN
 ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY
+ADMIN_IDS=$ADMIN_IDS
 DATABASE_URL=postgresql+asyncpg://$DB_USER:$DB_PASSWORD@localhost:5432/$DB_NAME
 ENV
 chmod 600 "$ENV_FILE"
@@ -186,6 +206,12 @@ if [ -f "$APP_DIR/setup-backup.sh" ]; then
         ok "ежедневные резервные копии включены (каждую ночь в 04:30)"
 fi
 
+# Сторож — по той же причине. Упавший бот не может пожаловаться сам.
+if [ -f "$APP_DIR/setup-watchdog.sh" ]; then
+    bash "$APP_DIR/setup-watchdog.sh" >/dev/null 2>&1 && \
+        ok "сторож включён: сообщит владельцу, если бот перестанет отвечать"
+fi
+
 printf "\n\033[1;32m═══════════════════════════════════════════\033[0m\n"
 printf "\033[1;32m  ГОТОВО! Бот работает.\033[0m\n"
 printf "\033[1;32m═══════════════════════════════════════════\033[0m\n\n"
@@ -205,9 +231,15 @@ cat <<INFO
   Обновить бота после моих правок:
     cd $APP_DIR && git pull && sudo systemctl restart $SERVICE_NAME
 
+  Владелец бота (отчёты, предупреждения, платный доступ):
+    bash set-admin.sh <номер>                — узнать номер: команда /id боту
+
   Резервные копии (включены, каждую ночь в 04:30):
     bash backup.sh                          — сделать копию прямо сейчас
     bash restore.sh <файл>                  — восстановить из копии
+
+  Сторож (включён, проверка каждые 5 минут):
+    bash watchdog.sh --test                 — проверить, что тревога доходит
 
   Добавить ключ Anthropic позже (включит распознавание еды по фото):
     nano $ENV_FILE          — вписать ключ в строку ANTHROPIC_API_KEY=
