@@ -257,27 +257,95 @@ function renderGame(game) {
   document.getElementById('quest-count').textContent =
     `${game.quests_done} из ${game.quests_total}`;
 
+  // Три главных задания видно сразу, остальные — под кнопкой. Семь строк
+  // подряд человек не читает, он их пролистывает.
   const box = document.getElementById('quests');
+  const rest = document.getElementById('quests-more');
+  const toggle = document.getElementById('quests-toggle');
   box.innerHTML = '';
+  rest.innerHTML = '';
+
   for (const quest of game.quests) {
-    const row = document.createElement('div');
-    row.className = `quest${quest.done ? ' done' : ''}`;
-    row.innerHTML = `
-      <span class="q-icon"></span>
-      <div class="q-main">
-        <div class="q-title"></div>
-        <div class="q-line">
-          <div class="q-track"><i></i></div>
-          <span class="q-hint"></span>
-        </div>
+    const target = quest.main === false ? rest : box;
+    target.appendChild(questRow(quest));
+  }
+
+  const hidden = rest.children.length;
+  toggle.hidden = hidden === 0;
+  toggle.textContent = rest.hidden ? `Ещё задания (${hidden})` : 'Свернуть';
+  toggle.onclick = () => {
+    rest.hidden = !rest.hidden;
+    toggle.textContent = rest.hidden ? `Ещё задания (${hidden})` : 'Свернуть';
+  };
+}
+
+function questRow(quest) {
+  const row = document.createElement('div');
+  row.className = `quest${quest.done ? ' done' : ''}`;
+  row.innerHTML = `
+    <span class="q-icon"></span>
+    <div class="q-main">
+      <div class="q-title"></div>
+      <div class="q-line">
+        <div class="q-track"><i></i></div>
+        <span class="q-hint"></span>
       </div>
-      <span class="q-xp"></span>`;
-    row.querySelector('.q-icon').textContent = quest.done ? '✓' : quest.icon;
-    row.querySelector('.q-title').textContent = quest.title;
-    row.querySelector('.q-track i').style.width = `${Math.round(quest.share * 100)}%`;
-    row.querySelector('.q-hint').textContent = quest.hint;
-    row.querySelector('.q-xp').textContent = `+${quest.xp}`;
-    box.appendChild(row);
+    </div>
+    <span class="q-xp"></span>`;
+  row.querySelector('.q-icon').textContent = quest.done ? '✓' : quest.icon;
+  row.querySelector('.q-title').textContent = quest.title;
+  row.querySelector('.q-track i').style.width = `${Math.round(quest.share * 100)}%`;
+  row.querySelector('.q-hint').textContent = quest.hint;
+  row.querySelector('.q-xp').textContent = `+${quest.xp}`;
+  return row;
+}
+
+/* --- «Твой ход»: одно действие, которое сейчас полезнее всего ------------- */
+function renderTurn(action) {
+  const card = document.getElementById('turn');
+  if (!action) {
+    // Нечего предложить — карточки нет. Выдуманный совет хуже тишины.
+    card.hidden = true;
+    return;
+  }
+
+  document.getElementById('turn-text').textContent = action.text;
+  const cta = document.getElementById('turn-cta');
+  cta.textContent = action.cta;
+  cta.disabled = false;
+  cta.onclick = () => doTurn(action, cta);
+  card.hidden = false;
+}
+
+async function doTurn(action, button) {
+  // Каждое действие ведёт туда, где оно делается, а вода добавляется на месте:
+  // ради стакана воды уводить человека на другой экран незачем.
+  if (action.target === 'water') {
+    button.disabled = true;
+    try {
+      await api('/api/water', {
+        method: 'POST',
+        body: JSON.stringify({ amount_ml: action.amount || 250 }),
+      });
+      await refresh();          // карточка пересчитается сразу
+    } catch (error) {
+      button.disabled = false;
+      toast(error.message);
+    }
+    return;
+  }
+
+  const screens = { cube: 'cube', workout: 'gym', progress: 'progress' };
+  if (screens[action.target]) {
+    switchScreen(screens[action.target]);
+    return;
+  }
+  if (action.target === 'meal') {
+    document.getElementById('moment-open').click();
+    return;
+  }
+  if (action.target === 'checkin') {
+    document.querySelector('.state-grid button')?.click();
   }
 }
 
@@ -2251,6 +2319,7 @@ async function closeProfile() {
 async function refresh() {
   state = await api('/api/today');
   renderToday(state);
+  renderTurn(state.next_action);
   renderGame(state.game);
   renderAwards(state.game?.awards);
   renderPills(state.supplements);

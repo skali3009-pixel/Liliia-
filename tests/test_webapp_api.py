@@ -15,6 +15,7 @@ import config
 import db as db_module
 from models import (Base, DietTypeEnum, GenderEnum, GoalEnum, MealSourceEnum, MealTypeEnum,
                     SubscriptionSource, User)
+from services import context
 from services.subscriptions import activate
 from services.food_vision import FoodAnalysis
 from services.meals import save_meal
@@ -750,4 +751,77 @@ def test_cube_needs_a_signature_like_everything_else():
             response = await call(client, "POST", "/api/cube", signed=False,
                                   json_body={"level": "normal"})
             assert response.status == 401
+    run(scenario)
+
+
+# --- «Твой ход» через настоящий HTTP ---------------------------------------
+
+def test_today_comes_with_one_next_action():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            body = await (await call(client, "GET", "/api/today")).json()
+            assert "next_action" in body
+            action = body["next_action"]
+            if action is not None:
+                assert action["cta"] and action["text"] and action["target"]
+    run(scenario)
+
+
+def test_the_advice_history_survives_a_reload():
+    """Память о показанном лежит в базе, а не в памяти процесса."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            body = await (await call(client, "GET", "/api/today")).json()
+            if body["next_action"] is None:
+                return
+            code = body["next_action"]["code"]
+
+            from services.gamification import suggestions_today
+
+            async with maker_holder["maker"]() as session:
+                assert code in await suggestions_today(
+                    session, USER_ID, timezone_name="Europe/Moscow")
+    run(scenario)
+
+
+def test_exactly_three_quests_are_marked_main():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            quests = (await (await call(client, "GET", "/api/today")).json())["game"]["quests"]
+            assert quests
+            assert sum(1 for q in quests if q.get("main")) == 3
+            # Остальные не пропадают — они просто не главные.
+            assert sum(1 for q in quests if not q.get("main")) == len(quests) - 3
+    run(scenario)
+
+
+def test_acting_on_the_advice_changes_it():
+    """Карточка обязана пересчитаться сразу после действия, а не завтра."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            first = (await (await call(client, "GET", "/api/today")).json())["next_action"]
+            if first is None or first["code"] != "water":
+                return          # в этот час советуют не воду — проверять нечего
+
+            await call(client, "POST", "/api/water", json_body={"amount_ml": 2000})
+            after = (await (await call(client, "GET", "/api/today")).json())["next_action"]
+            assert after is None or after["code"] != "water"
+    run(scenario)
+
+
+def test_reopening_the_screen_does_not_burn_the_advice():
+    """Обновление экрана — не показ нового совета.
+
+    Иначе человек, который просто трижды открыл приложение, исчерпал бы
+    подсказку, не сделав ничего.
+    """
+    async def scenario():
+        async with webapp_client() as (client, _):
+            first = (await (await call(client, "GET", "/api/today")).json())["next_action"]
+            if first is None:
+                return
+            for _ in range(4):
+                again = (await (await call(client, "GET", "/api/today")).json())["next_action"]
+                assert again is not None, "совет пропал от простых обновлений"
+                assert again["code"] == first["code"], "совет менялся сам по себе"
     run(scenario)

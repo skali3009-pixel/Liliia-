@@ -182,6 +182,9 @@ async def sync_today(
     """Пересчитать игровое состояние на сегодня и сохранить его."""
     today = today_in(timezone_name)
 
+    workouts_today = await _workouts_today(session, user.id, timezone_name)
+    days_since_measure = await _days_since_measure(session, user.id, timezone_name)
+
     quests = build_quests(
         meals_count=meals_count,
         calories=calories,
@@ -190,8 +193,8 @@ async def sync_today(
         water_norm_ml=user.daily_water_ml or 0,
         fiber_g=fiber_g,
         fiber_norm_g=user.daily_fiber_g or 0,
-        workouts_today=await _workouts_today(session, user.id, timezone_name),
-        days_since_measure=await _days_since_measure(session, user.id, timezone_name),
+        workouts_today=workouts_today,
+        days_since_measure=days_since_measure,
         stress_marked=stress_marked,
     )
 
@@ -224,6 +227,10 @@ async def sync_today(
         "quests": [quest.to_dict() for quest in quests],
         "quests_done": len(done_codes),
         "quests_total": len(quests),
+        # Нужны карточке «Твой ход»: тренировку не предлагают тому, кто уже
+        # тренировался, а замер — тому, кто взвесился вчера.
+        "workouts_today": workouts_today,
+        "days_since_measure": days_since_measure,
         "just_completed": fresh_quests,
         "new_awards": fresh_awards,
         "awards": [
@@ -237,6 +244,45 @@ async def sync_today(
             for item in ACHIEVEMENTS
         ],
     }
+
+
+async def remember_suggestion(
+    session: AsyncSession, user_id: int, code: str, *,
+    timezone_name: str = DEFAULT_TIMEZONE, keep: int = 12,
+) -> None:
+    """Запомнить, что этот совет сегодня уже показывали.
+
+    Без памяти карточка «Твой ход» весь день повторяла бы одно и то же, и
+    человек перестал бы её читать — а вместе с ней и всё остальное.
+    """
+    day = today_in(timezone_name)
+    row = (await session.execute(
+        select(DayStat).where(DayStat.user_id == user_id, DayStat.day == day)
+    )).scalar_one_or_none()
+    if row is None:
+        return
+
+    shown = [part for part in (row.suggested or "").split(",") if part]
+    # Обновление экрана — не показ нового совета. Иначе человек, трижды
+    # открывший приложение, исчерпал бы совет, ничего не сделав.
+    if shown and shown[-1] == code:
+        return
+
+    shown.append(code)
+    row.suggested = ",".join(shown[-keep:])
+    await session.commit()
+
+
+async def suggestions_today(
+    session: AsyncSession, user_id: int, *, timezone_name: str = DEFAULT_TIMEZONE
+) -> tuple[str, ...]:
+    day = today_in(timezone_name)
+    row = (await session.execute(
+        select(DayStat).where(DayStat.user_id == user_id, DayStat.day == day)
+    )).scalar_one_or_none()
+    if row is None or not row.suggested:
+        return ()
+    return tuple(part for part in row.suggested.split(",") if part)
 
 
 async def awards_summary(session: AsyncSession, user_id: int) -> list[dict]:

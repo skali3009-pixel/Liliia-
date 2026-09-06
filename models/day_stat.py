@@ -28,3 +28,7 @@ class DayStat(Base):
     xp: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     # Коды выполненных заданий через запятую — читаемо и не требует JSON-типа.
     quests_done: Mapped[str] = mapped_column(String(255), default="", nullable=False)
+    # Что уже предлагали сегодня в карточке «Твой ход», через запятую.
+    # Без этого один и тот же совет показывался бы весь день, и человек
+    # перестал бы читать карточку вообще — вместе со всеми остальными советами.
+    suggested: Mapped[str] = mapped_column(String(255), default="", nullable=False)

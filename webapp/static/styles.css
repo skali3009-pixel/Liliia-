@@ -1100,3 +1100,19 @@ select.fact-input { text-align: left; width: 130px; }
 }
 .basket-item.on { border-color: var(--accent); background: rgba(124, 92, 255, .18); color: var(--fg); }
 .basket-count { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+
+
+/* --- «Твой ход»: одно действие -------------------------------------------- */
+.turn {
+  margin: 0 18px 14px; padding: 16px 18px; border-radius: 20px;
+  border: 1px solid rgba(196, 181, 253, .28);
+  background: linear-gradient(135deg, rgba(139, 92, 246, .20), rgba(91, 108, 255, .12));
+}
+.turn-head {
+  display: flex; align-items: center; gap: 7px; margin-bottom: 8px;
+  color: var(--lilac); font-size: 12px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .08em;
+}
+.turn-mark { font-size: 15px; }
+.turn-text { margin: 0 0 14px; font-size: 16px; line-height: 1.35; }
+.turn .btn { margin: 0; }

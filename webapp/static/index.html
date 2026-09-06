@@ -75,6 +75,16 @@
       </div>
     </section>
 
+    <!-- «Твой ход»: одно действие, которое сейчас полезнее всего. Стоит сразу
+         под шапкой — до цифр, потому что отвечает на следующий за ними
+         вопрос. Пусто, когда предлагать нечего: тишина лучше выдуманного
+         совета. -->
+    <section class="turn" id="turn" hidden>
+      <div class="turn-head"><span class="turn-mark">🐆</span> Твой ход</div>
+      <p class="turn-text" id="turn-text"></p>
+      <button class="btn" id="turn-cta"></button>
+    </section>
+
     <!-- Кольцо стоит первым после шапки: «сколько осталось» — то, ради чего
          приложение открывают, и оно должно попадать на первый экран. -->
     <section class="ring-card">
@@ -183,6 +193,10 @@
     <section class="card">
       <div class="card-head"><h2>Задания дня</h2><span id="quest-count" class="muted"></span></div>
       <div id="quests"></div>
+      <!-- Остальные задания под кнопкой: показывать сразу семь строк значит
+           не показать ни одной. -->
+      <div id="quests-more" hidden></div>
+      <button class="link-btn" id="quests-toggle" hidden>Ещё задания</button>
     </section>
 
     <section class="card">
