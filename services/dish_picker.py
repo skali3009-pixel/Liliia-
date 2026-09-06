@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import Dish, DishComponent, Meal, Product, User
+from models import Dish, DishComponent, Meal, Prep, Product, User
 from services import method
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,7 @@ class Pick:
     weight_g: float
     reason: str = ""
     components: list[tuple[str, float, str]] = field(default_factory=list)
+    preps: list[str] = field(default_factory=list)
 
     @property
     def author(self) -> bool:
@@ -65,6 +66,7 @@ class Pick:
             "fiber_g": round(self.fiber_g, 1),
             "weight_g": round(self.weight_g),
             "reason": self.reason,
+            "preps": self.preps,
         }
 
 
@@ -170,15 +172,30 @@ def rank(picks: list[Pick], *, budget: float, gap: str | None,
             value -= 0.05
         if pick.dish.name.strip().lower() in recent:
             value += 0.5
-        # Долгая готовка вечером — так себе предложение.
+        # Долгая готовка вечером — так себе предложение, а собранное из
+        # заготовок наоборот: это её главный способ экономить время.
         value += min(pick.dish.minutes, 60) / 600
+        if pick.preps:
+            value -= 0.08
         return value
 
     return sorted(picks, key=score)
 
 
+async def prep_names(session: AsyncSession, dish: Dish) -> list[str]:
+    """Названия заготовок, из которых собирается блюдо."""
+    codes = [code for code in (dish.prep_codes or "").split(";") if code]
+    if not codes:
+        return []
+    rows = (await session.execute(select(Prep).where(Prep.code.in_(codes)))).scalars().all()
+    order = {code: index for index, code in enumerate(codes)}
+    return [prep.name for prep in sorted(rows, key=lambda p: order.get(p.code, 99))]
+
+
 def explain(pick: Pick, *, budget: float, gap: str | None) -> str:
     """Одна фраза, чем вариант хорош именно сейчас."""
+    if pick.preps and pick.dish.minutes <= 12:
+        return f"Почти всё готово — собрать за {pick.dish.minutes} минут"
     if gap == "protein_g" and pick.protein_g >= 25:
         return f"Закроет недобор белка — {pick.protein_g:.0f} г"
     if gap == "fiber_g" and pick.fiber_g >= 7:
@@ -212,6 +229,9 @@ async def pick_dishes(session: AsyncSession, user: User, *, meal_type: str,
             continue
         fitted.append(_scaled(dish, scale))
 
+    for pick in fitted:
+        pick.preps = await prep_names(session, pick.dish)
+
     ranked = rank(fitted, budget=budget, gap=gap, recent=recent)[:limit]
     for pick in ranked:
         pick.reason = explain(pick, budget=budget, gap=gap)
@@ -221,6 +241,7 @@ async def pick_dishes(session: AsyncSession, user: User, *, meal_type: str,
 
     closest = sorted(near, key=lambda p: abs(p.kcal - budget))[:limit]
     for pick in closest:
+        pick.preps = await prep_names(session, pick.dish)
         over = pick.kcal - budget
         pick.reason = (f"На {abs(over):.0f} ккал {'больше' if over > 0 else 'меньше'} "
                        f"бюджета приёма")
@@ -256,4 +277,5 @@ async def components_of(session: AsyncSession, dish: Dish,
 
 
 __all__ = ["BUDGET_TOLERANCE", "Pick", "REPEAT_DAYS", "SCALE_MAX", "SCALE_MIN",
-           "candidates", "components_of", "explain", "pick_dishes", "rank", "scale_for"]
+           "candidates", "components_of", "explain", "pick_dishes", "prep_names",
+           "rank", "scale_for"]

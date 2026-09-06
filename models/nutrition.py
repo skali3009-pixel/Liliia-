@@ -48,6 +48,59 @@ class Product(Base):
     role: Mapped[str] = mapped_column(String(20), default="прочее", nullable=False)
 
 
+class Prep(Base):
+    """Заготовка: готовим один раз — едим несколько дней.
+
+    Главное здесь не рецепт, а сроки хранения: без них система заготовок
+    превращается в «наготовила и выбросила».
+    """
+
+    __tablename__ = "nutrition_preps"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(60), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    instructions: Mapped[str] = mapped_column(Text, default="", nullable=False)
+    source: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    minutes: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
+
+    # Сколько порций выходит из партии. Не везде указано — тогда None, и
+    # показываем КБЖУ на 100 г, а не выдумываем порцию.
+    portions: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fridge_days: Mapped[str] = mapped_column(String(20), default="", nullable=False)
+    freezer_days: Mapped[str] = mapped_column(String(30), default="", nullable=False)
+    # Что из этой заготовки собирают — её же идеи, короткой строкой.
+    ideas: Mapped[str] = mapped_column(String(300), default="", nullable=False)
+
+    # На 100 г готовой заготовки.
+    kcal: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    protein_g: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    fat_g: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    carbs_g: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    fiber_g: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    batch_g: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+
+    components: Mapped[list["PrepComponent"]] = relationship(
+        back_populates="prep", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class PrepComponent(Base):
+    """Продукт в заготовке: граммы на всю партию."""
+
+    __tablename__ = "nutrition_prep_components"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    prep_id: Mapped[int] = mapped_column(
+        ForeignKey("nutrition_preps.id", ondelete="CASCADE"), index=True, nullable=False
+    )
+    product_code: Mapped[str] = mapped_column(String(60), index=True, nullable=False)
+    grams: Mapped[float] = mapped_column(Float, default=0, nullable=False)
+    raw_amount: Mapped[str] = mapped_column(String(60), default="", nullable=False)
+
+    prep: Mapped["Prep"] = relationship(back_populates="components")
+
+
 class Dish(Base):
     """Блюдо: состав, способ приготовления и посчитанное КБЖУ на порцию."""
 
@@ -68,6 +121,8 @@ class Dish(Base):
     # Рецепт из меню Анастасии — в интерфейсе помечается значком.
     author: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     source: Mapped[str] = mapped_column(String(120), default="", nullable=False)
+    # Коды заготовок через «;»: что из этого блюда уже стоит готовым в холодильнике.
+    prep_codes: Mapped[str] = mapped_column(String(200), default="", nullable=False)
 
     kcal: Mapped[float] = mapped_column(Float, default=0, nullable=False)
     protein_g: Mapped[float] = mapped_column(Float, default=0, nullable=False)
@@ -101,4 +156,4 @@ class DishComponent(Base):
     dish: Mapped["Dish"] = relationship(back_populates="components")
 
 
-__all__ = ["Dish", "DishComponent", "Product"]
+__all__ = ["Dish", "DishComponent", "Prep", "PrepComponent", "Product"]

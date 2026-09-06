@@ -1720,6 +1720,14 @@ function renderOffers(data) {
       ` · ⏱ ${item.minutes} мин`;
     row.querySelector('.sug-why').textContent = item.reason;
 
+    // Что из блюда уже стоит готовым — это её принцип экономии времени.
+    if (item.preps?.length) {
+      const ready = document.createElement('div');
+      ready.className = 'sug-ready';
+      ready.textContent = `🥘 Из заготовок: ${item.preps.join(', ')}`;
+      row.querySelector('.sug-why').after(ready);
+    }
+
     row.querySelector('.sug-recipe').onclick = () => openRecipe(index);
     row.querySelector('.sug-eat').onclick = () => eatOffer(item, row);
     box.appendChild(row);
@@ -1759,11 +1767,86 @@ function openRecipe(index) {
     parts.appendChild(li);
   }
 
-  document.getElementById('recipe-steps').textContent = item.instructions || '';
+  document.getElementById('recipe-steps').textContent =
+    (item.instructions || '') + (item.notes ? `\n\n${item.notes}` : '');
+  const ready = item.preps?.length ? `🥘 Из заготовок: ${item.preps.join(', ')}\n` : '';
   document.getElementById('recipe-source').textContent =
-    item.author && item.source ? `${AUTHOR_MARK} ${item.source}` : '';
+    ready + (item.author && item.source ? `${AUTHOR_MARK} ${item.source}` : '');
   document.getElementById('recipe-eat').onclick = () => eatOffer(item, null);
   document.getElementById('recipe-sheet').hidden = false;
+}
+
+/* --- Заготовки: приготовил один раз — ешь несколько дней --- */
+let preps = null;
+
+async function togglePreps() {
+  const box = document.getElementById('preps-list');
+  const button = document.getElementById('preps-toggle');
+  if (!box.hidden) {
+    box.hidden = true;
+    button.textContent = 'показать';
+    return;
+  }
+
+  button.textContent = 'загружаю…';
+  try {
+    if (!preps) preps = (await api('/api/preps')).preps;
+    renderPreps(preps);
+    box.hidden = false;
+    button.textContent = 'скрыть';
+  } catch (e) {
+    toast(e.message);
+    button.textContent = 'показать';
+  }
+}
+
+function renderPreps(items) {
+  const box = document.getElementById('preps-list');
+  box.innerHTML = '';
+  items.forEach((prep, index) => {
+    const row = document.createElement('button');
+    row.className = 'prep-row';
+    row.innerHTML = `
+      <span class="prep-name"></span>
+      <span class="prep-keep"></span>`;
+    row.querySelector('.prep-name').textContent = prep.name;
+    // Срок хранения — то, ради чего этот список открывают.
+    row.querySelector('.prep-keep').textContent = prep.fridge || '';
+    row.onclick = () => openPrep(index);
+    box.appendChild(row);
+  });
+}
+
+function openPrep(index) {
+  const prep = preps?.[index];
+  if (!prep) return;
+
+  document.getElementById('prep-title').textContent = prep.name;
+  const per = prep.per100;
+  document.getElementById('prep-macros').textContent =
+    `В 100 г — ${per.calories} ккал · Б ${per.protein_g} · Ж ${per.fat_g} · ` +
+    `У ${per.carbs_g} г` + (prep.portions ? ` · выход ${prep.portions} порций` : '');
+
+  const storage = [];
+  if (prep.fridge) storage.push(`❄️ в холодильнике ${prep.fridge}`);
+  if (prep.freezer) storage.push(`🧊 в морозилке ${prep.freezer}`);
+  storage.push(`⏱ готовить ${prep.minutes} мин`);
+  document.getElementById('prep-storage').textContent = storage.join(' · ');
+
+  const parts = document.getElementById('prep-parts');
+  parts.innerHTML = '';
+  for (const part of prep.components) {
+    const li = document.createElement('li');
+    li.textContent = part.grams
+      ? `${part.name} — ${part.grams} г`
+      : `${part.name} — ${part.raw || 'по вкусу'}`;
+    parts.appendChild(li);
+  }
+
+  document.getElementById('prep-steps').textContent = prep.instructions;
+  document.getElementById('prep-ideas').textContent =
+    prep.ideas ? `Что собрать: ${prep.ideas}` : '';
+  document.getElementById('prep-sheet').hidden = false;
 }
 
 /* --- Быстрая отметка состояния прямо с плитки --- */
@@ -2263,6 +2346,10 @@ async function init() {
 
   document.getElementById('finish-workout').onclick = finishWorkout;
   document.getElementById('suggest-btn').onclick = () => loadMenu(mealType);
+  document.getElementById('preps-toggle').onclick = togglePreps;
+  document.getElementById('prep-close').onclick = () => {
+    document.getElementById('prep-sheet').hidden = true;
+  };
   document.getElementById('recipe-close').onclick = () => {
     document.getElementById('recipe-sheet').hidden = true;
   };

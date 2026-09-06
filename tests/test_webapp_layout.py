@@ -64,6 +64,15 @@ def _visible_text(source: str) -> str:
     return re.sub(r"//[^\n]*", "", without_block)
 
 
+def test_preps_section_is_wired():
+    """Заготовки со сроками хранения — отдельный блок и своя шторка."""
+    for element_id in ("preps-toggle", "preps-list", "prep-sheet", "prep-close",
+                       "prep-title", "prep-macros", "prep-storage", "prep-parts",
+                       "prep-steps", "prep-ideas"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+
+
 def test_only_author_dishes_carry_a_mark():
     """Блюда сверх меню не помечаются ничем — так решила владелица бота."""
     assert "AUTHOR_MARK" in APP_JS

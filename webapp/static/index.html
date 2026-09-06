@@ -235,6 +235,16 @@
       <button id="suggest-btn" class="btn">Подобрать блюдо</button>
       <div id="suggestions"></div>
     </section>
+
+    <!-- Заготовки: её главный принцип — приготовить один раз и собирать
+         разное всю неделю. Сроки хранения здесь важнее рецептов. -->
+    <section class="card">
+      <div class="card-head"><h2>🥘 Заготовки</h2>
+        <button class="link-btn" id="preps-toggle">показать</button></div>
+      <p class="hint" id="preps-hint">Готовим один раз — собираем несколько дней.
+        Здесь видно, сколько что хранится.</p>
+      <div id="preps-list" hidden></div>
+    </section>
   </main>
 
 
@@ -565,6 +575,23 @@
     <p class="recipe-steps" id="recipe-steps"></p>
     <p class="hint" id="recipe-source"></p>
     <button class="btn" id="recipe-eat">Съела это</button>
+  </div>
+</div>
+
+<!-- Карточка заготовки: состав на партию, сроки хранения и что из неё собрать. -->
+<div id="prep-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="prep-title">Заготовка</h2>
+      <button class="icon-btn" id="prep-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="recipe-macros" id="prep-macros"></div>
+    <div class="prep-storage" id="prep-storage"></div>
+    <div class="eyebrow ruled">Состав партии</div>
+    <ul class="recipe-parts" id="prep-parts"></ul>
+    <div class="eyebrow ruled">Как приготовить</div>
+    <p class="recipe-steps" id="prep-steps"></p>
+    <p class="hint" id="prep-ideas"></p>
   </div>
 </div>
 

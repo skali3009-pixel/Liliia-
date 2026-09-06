@@ -1006,3 +1006,19 @@ select.fact-input { text-align: left; width: 130px; }
 }
 .recipe-parts { margin: 4px 0 0; padding-left: 18px; font-size: 14px; line-height: 1.7; }
 .recipe-steps { font-size: 14px; line-height: 1.55; margin: 4px 0 0; }
+
+/* --- Заготовки --- */
+.prep-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  width: 100%; padding: 12px 0; cursor: pointer; text-align: left;
+  border: none; border-bottom: 1px solid var(--void); background: none;
+  color: var(--fg); font-family: inherit; font-size: 14px;
+}
+.prep-row:last-child { border-bottom: none; }
+.prep-row:active { opacity: .7; }
+.prep-name { font-weight: 500; }
+/* Срок хранения — то, ради чего этот список открывают. */
+.prep-keep { flex: 0 0 auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+.prep-storage { margin-top: 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+.sug-ready { margin-top: 6px; font-size: 12px; color: var(--lilac); }

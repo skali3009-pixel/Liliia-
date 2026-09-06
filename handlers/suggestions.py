@@ -11,12 +11,13 @@ import logging
 from datetime import datetime
 
 from aiogram import F, Router
+from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from db import get_session
 from keyboards.main_menu import MENU_WHAT_TO_EAT
-from models import MealSourceEnum, User
+from models import MealSourceEnum, Prep, User
 from services.food_vision import FoodAnalysis
 from services.meals import get_today_totals, save_meal
 from services.menu import MEAL_RU, Offer, board
@@ -64,6 +65,8 @@ def offer_text(offer: Offer) -> str:
     ]
     if offer.fiber_g:
         lines.append(f"🥦 Клетчатка {round(offer.fiber_g)} г")
+    if offer.preps:
+        lines.append(f"🥘 Из заготовок: {', '.join(offer.preps)}")
     if offer.reason:
         lines.append(f"\n💬 {offer.reason}")
     return "\n".join(lines)
@@ -79,6 +82,10 @@ def recipe_text(offer: Offer) -> str:
             lines.append(f"• {part['name']} — {part['grams']} г")
     if offer.instructions:
         lines += ["", offer.instructions]
+    if offer.notes:
+        lines += ["", offer.notes]
+    if offer.preps:
+        lines += ["", f"🥘 Из заготовок: {', '.join(offer.preps)}"]
     if offer.author and offer.source:
         lines += ["", f"{AUTHOR_MARK} {offer.source}"]
     return "\n".join(lines)
@@ -128,6 +135,29 @@ async def what_to_eat(message: Message) -> None:
             await status.delete()
         except Exception:  # noqa: BLE001 — сообщение могли удалить руками
             pass
+
+
+@router.message(Command("preps"))
+async def show_preps(message: Message) -> None:
+    """Список заготовок со сроками хранения — прямо в чате."""
+    from sqlalchemy import select
+
+    async with get_session() as session:
+        preps = (await session.execute(select(Prep).order_by(Prep.name))).scalars().all()
+
+    if not preps:
+        await message.answer("Справочник заготовок ещё не загружен.")
+        return
+
+    lines = ["🥘 Заготовки: приготовил один раз — ешь несколько дней\n"]
+    for prep in preps:
+        keep = " · ".join(filter(None, [
+            f"❄️ {prep.fridge_days}" if prep.fridge_days else "",
+            f"🧊 {prep.freezer_days}" if prep.freezer_days else "",
+        ]))
+        lines.append(f"• {prep.name}\n  {round(prep.kcal)} ккал в 100 г"
+                     + (f" · {keep}" if keep else ""))
+    await message.answer("\n".join(lines))
 
 
 @router.callback_query(F.data.startswith(CB_MEAL))

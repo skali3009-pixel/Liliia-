@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from sqlalchemy import select
@@ -51,6 +51,8 @@ class Offer:
     scale: float = 1.0
     instructions: str = ""
     components: list[dict] | None = None
+    preps: list[str] = field(default_factory=list)
+    notes: str = ""
     approximate: bool = False
 
     def to_dict(self) -> dict:
@@ -70,6 +72,8 @@ class Offer:
             "scale": round(self.scale, 2),
             "instructions": self.instructions,
             "components": self.components or [],
+            "preps": self.preps,
+            "notes": self.notes,
             "approximate": self.approximate,
         }
 
@@ -152,6 +156,7 @@ def _from_pick(pick: dish_picker.Pick) -> Offer:
         fiber_g=pick.fiber_g, weight_g=pick.weight_g, minutes=pick.dish.minutes,
         reason=pick.reason, author=pick.dish.author, source=pick.dish.source,
         scale=pick.scale, instructions=pick.dish.instructions,
+        preps=pick.preps, notes=pick.dish.notes,
     )
 
 

@@ -14,8 +14,10 @@ import logging
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import Dish, DishComponent, Product
+from models import Dish, DishComponent, Prep, PrepComponent, Product
 from seed.nutrition.dishes import DISHES
+from seed.nutrition.dishes_guide import GUIDE_DISHES
+from seed.nutrition.preps import PREPS
 from seed.nutrition.products import PRODUCTS
 
 logger = logging.getLogger(__name__)
@@ -44,8 +46,49 @@ def nutrition_of(components: list[dict], products: dict[str, Product],
     return {key: round(value / portions, 1) for key, value in totals.items()}
 
 
-async def seed_nutrition(session: AsyncSession) -> tuple[int, int]:
-    """Залить продукты и блюда. Возвращает (продуктов, блюд) записанных."""
+async def _seed_preps(session: AsyncSession, products: dict[str, Product]) -> int:
+    """Залить заготовки. КБЖУ считаем на 100 г готовой партии.
+
+    На 100 г, а не на порцию: выход в порциях она указала не везде, и
+    придумывать его мы не станем.
+    """
+    existing = {p.code: p for p in (await session.execute(select(Prep))).scalars()}
+
+    for data in PREPS:
+        components = data["components"]
+        totals = nutrition_of(components, products, 1.0)
+        batch = totals["weight_g"] or 1.0
+        values = {k: v for k, v in data.items() if k != "components"}
+        values.update({
+            "batch_g": round(batch, 1),
+            "kcal": round(totals["kcal"] / batch * 100, 1),
+            "protein_g": round(totals["protein_g"] / batch * 100, 1),
+            "fat_g": round(totals["fat_g"] / batch * 100, 1),
+            "carbs_g": round(totals["carbs_g"] / batch * 100, 1),
+            "fiber_g": round(totals["fiber_g"] / batch * 100, 1),
+        })
+
+        prep = existing.get(data["code"])
+        if prep is None:
+            prep = Prep(**values)
+            session.add(prep)
+            await session.flush()
+        else:
+            for field, value in values.items():
+                setattr(prep, field, value)
+            for old in list(prep.components):
+                await session.delete(old)
+            await session.flush()
+
+        for item in components:
+            session.add(PrepComponent(prep_id=prep.id, **item))
+
+    await session.commit()
+    return len(PREPS)
+
+
+async def seed_nutrition(session: AsyncSession) -> tuple[int, int, int]:
+    """Залить справочник. Возвращает (продуктов, заготовок, блюд)."""
     existing = {p.code: p for p in (await session.execute(select(Product))).scalars()}
 
     for data in PRODUCTS:
@@ -60,9 +103,11 @@ async def seed_nutrition(session: AsyncSession) -> tuple[int, int]:
     await session.commit()
 
     products = {p.code: p for p in (await session.execute(select(Product))).scalars()}
+    await _seed_preps(session, products)
+
     dishes = {d.code: d for d in (await session.execute(select(Dish))).scalars()}
 
-    for data in DISHES:
+    for data in DISHES + GUIDE_DISHES:
         components = data["components"]
         values = {k: v for k, v in data.items() if k != "components"}
         values.update(nutrition_of(components, products, data["portions"]))
@@ -84,8 +129,10 @@ async def seed_nutrition(session: AsyncSession) -> tuple[int, int]:
             session.add(DishComponent(dish_id=dish.id, **item))
 
     await session.commit()
-    logger.info("Справочник питания: %d продуктов, %d блюд", len(PRODUCTS), len(DISHES))
-    return len(PRODUCTS), len(DISHES)
+    total_dishes = len(DISHES) + len(GUIDE_DISHES)
+    logger.info("Справочник питания: %d продуктов, %d заготовок, %d блюд",
+                len(PRODUCTS), len(PREPS), total_dishes)
+    return len(PRODUCTS), len(PREPS), total_dishes
 
 
 __all__ = ["nutrition_of", "seed_nutrition"]

@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from models import (ActivityLevelEnum, Base, Dish, DietTypeEnum, GenderEnum, GoalEnum,
                     Product, User)
 from seed.nutrition.dishes import DISHES
+from seed.nutrition.dishes_guide import GUIDE_DISHES
 from seed.nutrition.loader import nutrition_of, seed_nutrition
 from seed.nutrition.products import BY_CODE, PRODUCTS
 from services import dish_picker, method
@@ -63,7 +64,7 @@ def test_seeding_twice_does_not_duplicate():
         async with db() as (session, _):
             await seed_nutrition(session)
             dishes = (await session.execute(select(Dish))).scalars().all()
-            assert len(dishes) == len(DISHES)
+            assert len(dishes) == len(DISHES) + len(GUIDE_DISHES)
     run(scenario)
 
 
@@ -450,4 +451,88 @@ def test_a_vegan_gets_a_built_dish_when_her_menu_has_none(monkeypatch):
             # Блюдо сверх меню не помечается автором — так решила владелица.
             assert built.author is False and built.source == ""
             assert built.calories > 0
+    run(scenario)
+
+
+# --- заготовки ------------------------------------------------------------
+
+def test_every_prep_is_built_from_known_products():
+    from seed.nutrition.preps import PREPS
+
+    unknown = {c["product_code"] for p in PREPS for c in p["components"]} - set(BY_CODE)
+    assert not unknown
+
+
+def test_dishes_reference_only_existing_preps():
+    """Опечатка в коде заготовки не должна молча превращаться в пустоту."""
+    from seed.nutrition.dishes_guide import GUIDE_DISHES
+    from seed.nutrition.preps import BY_CODE as PREP_CODES
+
+    used = {code for d in GUIDE_DISHES for code in d["prep_codes"].split(";") if code}
+    assert used and not used - set(PREP_CODES)
+
+
+def test_preps_keep_their_storage_times():
+    """Сроки хранения — самое практичное, что есть в её материалах."""
+    async def scenario():
+        async with db() as (session, _):
+            from models import Prep
+
+            preps = (await session.execute(select(Prep))).scalars().all()
+            assert len(preps) >= 16
+            assert all(p.fridge_days for p in preps), "у каждой заготовки есть срок"
+            turkey = next(p for p in preps if p.code == "turkey_marinated")
+            assert turkey.fridge_days == "3–4 дня"
+            assert turkey.freezer_days == "до 2 месяцев"
+            assert turkey.portions == 4.5
+    run(scenario)
+
+
+def test_cooked_grain_counts_as_cooked_not_dry():
+    """100 г отваренной гречки — это ~100 ккал, а не 308 как у сухой."""
+    async def scenario():
+        async with db() as (session, _):
+            from models import Prep
+
+            buckwheat = (await session.execute(
+                select(Prep).where(Prep.code == "buckwheat_cooked"))).scalar_one()
+            assert 90 <= buckwheat.kcal <= 120
+            assert buckwheat.batch_g == pytest.approx(750, abs=1)
+    run(scenario)
+
+
+def test_a_dish_made_of_preps_says_so_and_is_quick():
+    async def scenario():
+        async with db() as (session, user):
+            dish = (await session.execute(
+                select(Dish).where(Dish.code == "g_puttanesca_plate"))).scalar_one()
+            names = await dish_picker.prep_names(session, dish)
+            assert names == ["Курица путанеска", "Отваренная гречка",
+                             "Запечённая цветная капуста"]
+            assert dish.minutes <= 15, "если всё готово, остаётся только разогреть"
+    run(scenario)
+
+
+def test_ready_dishes_are_lifted_in_the_offer_list():
+    """При прочих равных собранное из заготовок идёт выше — это её принцип."""
+    async def scenario():
+        async with db() as (session, user):
+            fitted, _ = await dish_picker.pick_dishes(
+                session, user, meal_type="lunch", budget=560, limit=5)
+            assert any(p.preps for p in fitted), "заготовки должны попадать в выдачу"
+            with_preps = [i for i, p in enumerate(fitted) if p.preps]
+            without = [i for i, p in enumerate(fitted) if not p.preps]
+            if with_preps and without:
+                assert min(with_preps) < max(without)
+    run(scenario)
+
+
+def test_the_guide_menu_reached_the_catalogue():
+    async def scenario():
+        async with db() as (session, _):
+            names = {d.name for d in (await session.execute(select(Dish))).scalars()}
+            for name in ("Фриттата с овощами и сыром", "Шакшука с хлебом",
+                         "Тыквенный суп-пюре с курицей и хлебом",
+                         "Крок-мадам с паштетом из скумбрии"):
+                assert name in names, name
     run(scenario)

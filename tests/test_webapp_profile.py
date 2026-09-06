@@ -204,3 +204,29 @@ def test_menu_needs_a_signature():
             response = await call(client, "GET", "/api/menu", signed=False)
             assert response.status == 401
     run(scenario)
+
+
+def test_preps_endpoint_gives_storage_times_and_composition():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "GET", "/api/preps")
+            assert response.status == 200
+            preps = (await response.json())["preps"]
+            assert len(preps) >= 16
+            soup = next(p for p in preps if p["code"] == "pumpkin_soup")
+            assert soup["portions"] == 5.5
+            assert soup["fridge"] == "3 дня"
+            assert soup["freezer"] == "до 3 месяцев"
+            assert soup["per100"]["calories"] > 0
+            assert soup["components"], "состав партии нужен, чтобы это приготовить"
+            assert soup["ideas"]
+    run(scenario)
+
+
+def test_menu_offers_say_what_is_already_cooked():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            data = await (await call(client, "GET", "/api/menu?meal=lunch&build=0")).json()
+            assert any(offer["preps"] for offer in data["offers"]), \
+                "блюда из заготовок должны попадать в подбор"
+    run(scenario)

@@ -7,7 +7,7 @@ from models.achievement import Achievement
 from models.base import Base
 from models.body import BodyMeasurement, ProgressPhoto
 from models.checkin import Checkin
-from models.nutrition import Dish, DishComponent, Product
+from models.nutrition import Dish, DishComponent, Prep, PrepComponent, Product
 from models.day_stat import DayStat
 from models.meal import Meal, MealSourceEnum, MealTypeEnum
 from models.user import (
@@ -58,4 +58,6 @@ __all__ = [
     "Dish",
     "DishComponent",
     "Product",
+    "Prep",
+    "PrepComponent",
 ]

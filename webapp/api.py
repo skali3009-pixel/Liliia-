@@ -10,8 +10,8 @@ from aiohttp import web
 
 import config
 from db import get_session
-from models import (Meal, MealSourceEnum, ProgressPhoto, ScheduleTypeEnum, Supplement, User,
-                    WorkoutTypeEnum)
+from models import (Meal, MealSourceEnum, Prep, PrepComponent, Product, ProgressPhoto,
+                    ScheduleTypeEnum, Supplement, User, WorkoutTypeEnum)
 from services.checkins import save_checkin, today_state
 from services.favorites import frequent_meals
 from services.food_vision import FoodAnalysis, FoodRecognitionError
@@ -955,6 +955,54 @@ async def get_menu(request: web.Request) -> web.Response:
     return web.json_response(result.to_dict())
 
 
+
+async def get_preps(request: web.Request) -> web.Response:
+    """Заготовки: что приготовить один раз и сколько это хранится.
+
+    Сроки хранения — самая практичная часть её системы: без них заготовки
+    превращаются в «наготовила и выбросила».
+    """
+    from sqlalchemy import select as sa_select
+
+    async with get_session() as session:
+        preps = (await session.execute(sa_select(Prep).order_by(Prep.name))).scalars().all()
+        products = {p.code: p.name for p in
+                    (await session.execute(sa_select(Product))).scalars()}
+        components = (await session.execute(sa_select(PrepComponent))).scalars().all()
+
+    by_prep: dict[int, list[dict]] = {}
+    for item in components:
+        by_prep.setdefault(item.prep_id, []).append({
+            "name": products.get(item.product_code, item.product_code),
+            "grams": round(item.grams),
+            "raw": item.raw_amount,
+        })
+
+    return web.json_response({"preps": [
+        {
+            "code": prep.code,
+            "name": prep.name,
+            "portions": prep.portions,
+            "minutes": prep.minutes,
+            "fridge": prep.fridge_days,
+            "freezer": prep.freezer_days,
+            "ideas": prep.ideas,
+            "instructions": prep.instructions,
+            "source": prep.source,
+            "batch_g": round(prep.batch_g),
+            "per100": {
+                "calories": round(prep.kcal),
+                "protein_g": round(prep.protein_g, 1),
+                "fat_g": round(prep.fat_g, 1),
+                "carbs_g": round(prep.carbs_g, 1),
+                "fiber_g": round(prep.fiber_g, 1),
+            },
+            "components": by_prep.get(prep.id, []),
+        }
+        for prep in preps
+    ]})
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -980,3 +1028,4 @@ def add_routes(app: web.Application) -> None:
     app.router.add_patch("/api/profile", patch_profile)
     app.router.add_post("/api/export", post_export)
     app.router.add_get("/api/menu", get_menu)
+    app.router.add_get("/api/preps", get_preps)
