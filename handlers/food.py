@@ -542,9 +542,10 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
             session,
             user_id=user.id,
             analysis=analysis,
+            # Снимок нужен был только на время распознавания: в дневнике от
+            # него не остаётся следа, но по нему видно, откуда взялась запись.
             source=MealSourceEnum.PHOTO if photo_file_id else MealSourceEnum.TEXT,
             meal_type=meal_type,
-            photo_file_id=photo_file_id,
         )
         totals = await get_today_totals(session, user.id, timezone_name=user.timezone)
         norms = (

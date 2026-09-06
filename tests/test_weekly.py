@@ -13,8 +13,8 @@ from models.workout import LevelEnum, LocationEnum, WorkoutTypeEnum
 from services.weekly import (SUMMARY_TIME, SUMMARY_WEEKDAY, WINDOW_DAYS, WeeklySummary,
                              build_summary, render, users_for_summary)
 
-# Воскресенье, 19:00 в Москве (UTC+3).
-SUNDAY_UTC = datetime(2026, 9, 6, 16, 0, tzinfo=timezone.utc)
+# Воскресенье, 20:00 в Москве (UTC+3).
+SUNDAY_UTC = datetime(2026, 9, 6, 17, 0, tzinfo=timezone.utc)
 SUNDAY_LOCAL = date(2026, 9, 6)
 
 
@@ -219,18 +219,18 @@ def test_no_summary_at_any_other_moment(shift):
 
 
 def test_each_timezone_gets_its_own_sunday_evening():
-    """19:00 — местные: во Владивостоке это другой момент по UTC."""
+    """Вечер — местный: во Владивостоке это другой момент по UTC."""
     async def scenario():
         async with db(timezone="Asia/Vladivostok") as (session, _):
             assert await users_for_summary(session, now_utc=SUNDAY_UTC) == []
-            vladivostok = datetime(2026, 9, 6, 9, 0, tzinfo=timezone.utc)
+            vladivostok = datetime(2026, 9, 6, 10, 0, tzinfo=timezone.utc)
             assert [u.id for u in await users_for_summary(session, now_utc=vladivostok)] == [1]
     run(scenario)
 
 
 def test_schedule_is_sunday_evening():
     assert SUMMARY_WEEKDAY == 6
-    assert (SUMMARY_TIME.hour, SUMMARY_TIME.minute) == (19, 0)
+    assert (SUMMARY_TIME.hour, SUMMARY_TIME.minute) == (20, 0)
 
 
 def test_switched_off_reminders_stop_the_weekly_summary():
@@ -238,3 +238,27 @@ def test_switched_off_reminders_stop_the_weekly_summary():
         async with db(reminders_enabled=False) as (session, _):
             assert await users_for_summary(session, now_utc=SUNDAY_UTC) == []
     run(scenario)
+
+
+def test_the_weekly_note_explains_itself():
+    """«Что за отчёт?» — вопрос живого человека. Письмо обязано отвечать."""
+    from services.weekly import WeeklySummary, render
+
+    full = render(WeeklySummary(user_id=1, days_logged=5, avg_calories=1500,
+                                norm_calories=1600, weight_from=61.0, weight_to=60.6,
+                                workouts=2, water_days=3))
+    empty = render(WeeklySummary(user_id=1, days_logged=0, avg_calories=0,
+                                 norm_calories=1600, weight_from=None, weight_to=None,
+                                 workouts=1, water_days=0))
+    for text in (full, empty):
+        assert "итоги недели" in text.lower()
+        assert "выключи" in text, "письмо, которое нельзя выключить, — спам"
+        assert "_" not in text, "разметка уйдёт как есть: сообщение шлётся без неё"
+
+
+def test_the_week_is_summed_up_when_it_is_actually_over():
+    """В семь вечера человек ещё не ужинал — итоги были бы неполными."""
+    from services.weekly import SUMMARY_TIME, SUMMARY_WEEKDAY
+
+    assert SUMMARY_WEEKDAY == 6, "итоги недели — в воскресенье"
+    assert SUMMARY_TIME.hour >= 20

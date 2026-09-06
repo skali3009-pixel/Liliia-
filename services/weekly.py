@@ -21,10 +21,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from models import BodyMeasurement, Meal, User, WaterLog, WorkoutLog
 from utils.timeframe import day_bounds, matching_zones, to_local
 
-# Воскресенье (0 — понедельник) и ранний вечер: неделя уже закончилась, но
-# человек ещё не спит и успевает что-то решить про следующую.
+# Воскресенье (0 — понедельник), вечер. В семь неделя ещё идёт: человек не
+# ужинал, и «итоги» получаются на один приём пищи неполными. В восемь день
+# по сути закрыт, а человек ещё не спит и успевает подумать о следующей.
 SUMMARY_WEEKDAY = 6
-SUMMARY_TIME = time(19, 0)
+SUMMARY_TIME = time(20, 0)
 
 # Окно итогов: сегодня и шесть предыдущих дней.
 WINDOW_DAYS = 7
@@ -162,7 +163,8 @@ def render(summary: WeeklySummary, *, goal: str | None = None) -> str:
             "🗓 Итоги недели\n\n"
             "На этой неделе в дневнике пусто. Так бывает — неделя может быть "
             "просто не про подсчёты.\n\n"
-            "Начать заново можно с одного приёма пищи, прямо сегодня."
+            "Начать заново можно с одного приёма пищи, прямо сегодня.\n\n"
+            + FOOTER
         )
 
     lines = [
@@ -184,8 +186,14 @@ def render(summary: WeeklySummary, *, goal: str | None = None) -> str:
     if summary.water_days:
         lines.append(f"💧 Вода отмечена: {summary.water_days} дн.")
 
-    lines += ["", _closing(summary)]
+    lines += ["", _closing(summary), "", FOOTER]
     return "\n".join(lines)
+
+
+# Человек не подписывался на рассылку и не обязан догадываться, что это.
+# Письмо, которое не объясняет себя и не даёт себя выключить, — спам.
+FOOTER = ("Это итоги недели — приходят по воскресеньям вечером. "
+          "Не нужны: выключи «Мягкие напоминания» в профиле.")
 
 
 def _closing(summary: WeeklySummary) -> str:
