@@ -67,6 +67,7 @@ class Pick:
             "weight_g": round(self.weight_g),
             "reason": self.reason,
             "preps": self.preps,
+            "estimated": self.dish.estimated,
         }
 
 

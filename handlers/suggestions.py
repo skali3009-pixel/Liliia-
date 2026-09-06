@@ -82,7 +82,10 @@ def recipe_text(offer: Offer) -> str:
             lines.append(f"• {part['name']} — {part['grams']} г")
     if offer.instructions:
         lines += ["", offer.instructions]
-    if offer.notes:
+    if offer.estimated:
+        lines += ["", "⚖️ Порции подобраны по обычным размерам её рецептов — "
+                      "в источнике граммы не указаны."]
+    elif offer.notes:
         lines += ["", offer.notes]
     if offer.preps:
         lines += ["", f"🥘 Из заготовок: {', '.join(offer.preps)}"]

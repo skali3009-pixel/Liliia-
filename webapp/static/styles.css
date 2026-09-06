@@ -1022,3 +1022,6 @@ select.fact-input { text-align: left; width: 130px; }
 
 .prep-storage { margin-top: 10px; font-size: 13px; color: var(--muted); line-height: 1.5; }
 .sug-ready { margin-top: 6px; font-size: 12px; color: var(--lilac); }
+/* Подписи под рецептом: каждая своей строкой, иначе сливаются в абзац. */
+.recipe-note { margin-top: 6px; }
+.recipe-note:first-child { margin-top: 0; }

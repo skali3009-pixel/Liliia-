@@ -54,6 +54,8 @@ class Offer:
     preps: list[str] = field(default_factory=list)
     notes: str = ""
     approximate: bool = False
+    # Порции подобраны нами, а не взяты из источника.
+    estimated: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -74,6 +76,7 @@ class Offer:
             "components": self.components or [],
             "preps": self.preps,
             "notes": self.notes,
+            "estimated": self.estimated,
             "approximate": self.approximate,
         }
 
@@ -156,7 +159,7 @@ def _from_pick(pick: dish_picker.Pick) -> Offer:
         fiber_g=pick.fiber_g, weight_g=pick.weight_g, minutes=pick.dish.minutes,
         reason=pick.reason, author=pick.dish.author, source=pick.dish.source,
         scale=pick.scale, instructions=pick.dish.instructions,
-        preps=pick.preps, notes=pick.dish.notes,
+        preps=pick.preps, notes=pick.dish.notes, estimated=pick.dish.estimated,
     )
 
 

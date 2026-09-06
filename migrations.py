@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 # (таблица, колонка, определение) — порядок соответствует истории изменений.
 COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
     ("nutrition_dishes", "prep_codes", "VARCHAR(200) NOT NULL DEFAULT ''"),
+    ("nutrition_dishes", "estimated", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("users", "timezone", "VARCHAR(64) NOT NULL DEFAULT 'Europe/Moscow'"),
     ("progress_photos", "file_name", "VARCHAR(255)"),
     ("workouts", "program_code", "VARCHAR(50)"),

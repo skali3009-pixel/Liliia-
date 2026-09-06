@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from models import (ActivityLevelEnum, Base, Dish, DietTypeEnum, GenderEnum, GoalEnum,
                     Product, User)
 from seed.nutrition.dishes import DISHES
+from seed.nutrition.dishes_4days import FOURDAY_DISHES
 from seed.nutrition.dishes_guide import GUIDE_DISHES
 from seed.nutrition.loader import nutrition_of, seed_nutrition
 from seed.nutrition.products import BY_CODE, PRODUCTS
@@ -64,7 +65,7 @@ def test_seeding_twice_does_not_duplicate():
         async with db() as (session, _):
             await seed_nutrition(session)
             dishes = (await session.execute(select(Dish))).scalars().all()
-            assert len(dishes) == len(DISHES) + len(GUIDE_DISHES)
+            assert len(dishes) == len(DISHES) + len(GUIDE_DISHES) + len(FOURDAY_DISHES)
     run(scenario)
 
 
@@ -465,10 +466,10 @@ def test_every_prep_is_built_from_known_products():
 
 def test_dishes_reference_only_existing_preps():
     """Опечатка в коде заготовки не должна молча превращаться в пустоту."""
-    from seed.nutrition.dishes_guide import GUIDE_DISHES
     from seed.nutrition.preps import BY_CODE as PREP_CODES
 
-    used = {code for d in GUIDE_DISHES for code in d["prep_codes"].split(";") if code}
+    used = {code for d in GUIDE_DISHES + FOURDAY_DISHES
+            for code in d["prep_codes"].split(";") if code}
     assert used and not used - set(PREP_CODES)
 
 
@@ -535,4 +536,67 @@ def test_the_guide_menu_reached_the_catalogue():
                          "Тыквенный суп-пюре с курицей и хлебом",
                          "Крок-мадам с паштетом из скумбрии"):
                 assert name in names, name
+    run(scenario)
+
+
+# --- меню на 4 дня: порции подобраны, и это видно ------------------------
+
+def test_the_four_day_menu_is_marked_as_estimated():
+    """Выдавать подобранные порции за авторские нельзя."""
+    async def scenario():
+        async with db() as (session, _):
+            dishes = (await session.execute(
+                select(Dish).where(Dish.estimated.is_(True)))).scalars().all()
+            assert len(dishes) == len(FOURDAY_DISHES)
+            for dish in dishes:
+                assert dish.author, "это её меню, просто без граммов"
+                assert "4 дня" in dish.source
+                assert "подобраны" in dish.notes
+    run(scenario)
+
+
+def test_only_the_four_day_menu_is_estimated():
+    """У рецептов с граммами пометки быть не должно."""
+    async def scenario():
+        async with db() as (session, _):
+            for dish in (await session.execute(select(Dish))).scalars():
+                if dish.code.startswith("f_"):
+                    continue
+                assert not dish.estimated, dish.name
+    run(scenario)
+
+
+def test_estimated_dishes_use_her_own_portion_sizes():
+    """Курица 150 г и крупа 55–70 г — это её медианы, а не круглые числа."""
+    async def scenario():
+        async with db() as (session, _):
+            bowl = (await session.execute(
+                select(Dish).where(Dish.code == "f_chicken_bowl"))).scalar_one()
+            parts = {p["name"]: p["grams"] for p in
+                     await dish_picker.components_of(session, bowl)}
+            assert parts["Куриное филе"] == 150
+            assert parts["Булгур (сухой)"] == 55
+            assert parts["Йогурт натуральный"] == 30
+    run(scenario)
+
+
+def test_the_soup_keeps_the_amounts_she_actually_gave():
+    """Фасоль, сыр и картофель она указала в закупке — их не подбираем."""
+    async def scenario():
+        async with db() as (session, _):
+            soup = (await session.execute(
+                select(Dish).where(Dish.code == "f_meatball_soup"))).scalar_one()
+            assert soup.portions == 3
+            grams = {c.product_code: c.grams for c in soup.components}
+            assert grams["beans_white"] == 240      # 1 банка
+            assert grams["cheese_hard"] == 60       # чеддер 60 г
+            assert grams["potato"] == 450           # 400–500 г
+    run(scenario)
+
+
+def test_estimated_flag_reaches_the_screen():
+    async def scenario():
+        async with db() as (session, user):
+            result = await board(session, user, meal_type="dinner", allow_build=False)
+            assert all("estimated" in offer.to_dict() for offer in result.offers)
     run(scenario)

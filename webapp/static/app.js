@@ -1767,11 +1767,27 @@ function openRecipe(index) {
     parts.appendChild(li);
   }
 
+  // Заметку про подобранные порции показываем отдельной строкой ниже, чтобы
+  // она не терялась в шагах приготовления.
   document.getElementById('recipe-steps').textContent =
-    (item.instructions || '') + (item.notes ? `\n\n${item.notes}` : '');
-  const ready = item.preps?.length ? `🥘 Из заготовок: ${item.preps.join(', ')}\n` : '';
-  document.getElementById('recipe-source').textContent =
-    ready + (item.author && item.source ? `${AUTHOR_MARK} ${item.source}` : '');
+    (item.instructions || '') + (item.notes && !item.estimated ? `\n\n${item.notes}` : '');
+  // Три разные вещи — заготовки, подобранные порции и источник — должны
+  // читаться как три строки, а не как один серый абзац.
+  const footer = document.getElementById('recipe-source');
+  footer.innerHTML = '';
+  const lines = [];
+  if (item.preps?.length) lines.push(`🥘 Из заготовок: ${item.preps.join(', ')}`);
+  if (item.estimated) {
+    lines.push('⚖️ Порции подобраны по обычным размерам её рецептов — ' +
+               'в источнике граммы не указаны.');
+  }
+  if (item.author && item.source) lines.push(`${AUTHOR_MARK} ${item.source}`);
+  for (const line of lines) {
+    const row = document.createElement('div');
+    row.className = 'recipe-note';
+    row.textContent = line;
+    footer.appendChild(row);
+  }
   document.getElementById('recipe-eat').onclick = () => eatOffer(item, null);
   document.getElementById('recipe-sheet').hidden = false;
 }

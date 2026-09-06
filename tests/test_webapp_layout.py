@@ -73,6 +73,12 @@ def test_preps_section_is_wired():
         assert f"'{element_id}'" in APP_JS, element_id
 
 
+def test_estimated_portions_are_disclosed():
+    """Подобранные граммы нельзя показывать как авторские."""
+    assert "item.estimated" in APP_JS
+    assert "Порции подобраны" in APP_JS
+
+
 def test_only_author_dishes_carry_a_mark():
     """Блюда сверх меню не помечаются ничем — так решила владелица бота."""
     assert "AUTHOR_MARK" in APP_JS
