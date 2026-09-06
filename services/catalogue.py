@@ -74,13 +74,24 @@ class CachedDish:
 
 _dishes: tuple[CachedDish, ...] | None = None
 _by_code: dict[str, CachedDish] = {}
+_products: dict[str, Product] | None = None
 
 
 def reset() -> None:
     """Забыть кэш: справочник перезалили, значит данные устарели."""
-    global _dishes
+    global _dishes, _products
     _dishes = None
+    _products = None
     _by_code.clear()
+
+
+async def products(session: AsyncSession) -> dict[str, Product]:
+    """Все продукты по коду. Нужны быстрому подбору на каждое нажатие."""
+    global _products
+    if _products is None:
+        _products = {p.code: p for p in
+                     (await session.execute(select(Product))).scalars()}
+    return _products
 
 
 async def load(session: AsyncSession) -> tuple[CachedDish, ...]:

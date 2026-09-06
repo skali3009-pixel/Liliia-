@@ -973,6 +973,73 @@ async def get_menu(request: web.Request) -> web.Response:
 
 
 
+async def post_cube(request: web.Request) -> web.Response:
+    """Кубик: что купить и съесть прямо сейчас.
+
+    Диету и аллергии не спрашиваем — они уже есть в анкете. На экране
+    остаётся только то, чего заранее знать нельзя: насколько человек голоден
+    и чего ему хочется.
+    """
+    from services import catalogue, cube
+
+    body = await request.json() if request.can_read_body else {}
+    level = str(body.get("level") or "").strip()
+    craving = str(body.get("craving") or "random").strip()
+    no_spoon = bool(body.get("no_spoon"))
+    recent = [tuple(item) for item in body.get("recent") or []][: cube.REMEMBER]
+
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        products = await catalogue.products(session)
+
+        if not level:
+            # Человек в магазине не знает свой остаток — подставим сами.
+            totals = await get_today_totals(
+                session, user.id, timezone_name=request["timezone"])
+            left = (user.daily_calories or 0) - totals.get("calories", 0)
+            level = cube.level_for(left if left > 0 else None)
+
+        diet = user.diet_type.value if user.diet_type else "regular"
+        allergies = {part.strip().lower() for part in (user.allergies or "").split(",")
+                     if part.strip()}
+
+        cubes = cube.build(
+            products, level=level, craving=craving, no_spoon=no_spoon,
+            exclude=allergies,
+            vegan=diet == "vegan", vegetarian=diet in {"vegan", "vegetarian"},
+            gluten_free=diet == "gluten_free",
+            recent=recent, limit=3,
+        )
+
+    return web.json_response({
+        "level": level,
+        "levels": [{"code": code, "label": data[0]} for code, data in cube.LEVELS.items()],
+        "cubes": [_cube_to_dict(item, products) for item in cubes],
+    })
+
+
+def _cube_to_dict(item, products: dict) -> dict:
+    low, high = item.kcal_range
+    protein_low, protein_high = item.protein_range
+    return {
+        "title": item.title,
+        "items": [{
+            "code": part.code,
+            "name": part.name,
+            "measure": part.measure,
+            "grams": part.grams,
+            "swaps": [products[code].name for code in item.swaps.get(part.code, ())
+                      if code in products],
+        } for part in item.items],
+        "kcal_low": low, "kcal_high": high,
+        "protein_low": protein_low, "protein_high": protein_high,
+        "kcal": round(item.kcal), "protein_g": round(item.protein_g, 1),
+        "fat_g": round(item.fat_g, 1), "carbs_g": round(item.carbs_g, 1),
+        "weight_g": round(sum(part.grams for part in item.items)),
+        "signature": list(item.signature),
+    }
+
+
 async def get_preps(request: web.Request) -> web.Response:
     """Заготовки: что приготовить один раз и сколько это хранится.
 
@@ -1045,4 +1112,5 @@ def add_routes(app: web.Application) -> None:
     app.router.add_patch("/api/profile", patch_profile)
     app.router.add_post("/api/export", post_export)
     app.router.add_get("/api/menu", get_menu)
+    app.router.add_post("/api/cube", post_cube)
     app.router.add_get("/api/preps", get_preps)

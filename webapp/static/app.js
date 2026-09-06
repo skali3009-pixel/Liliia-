@@ -2259,11 +2259,152 @@ async function refresh() {
   celebrate(state.game);
 }
 
+
+/* --- Кубик: что съесть прямо сейчас ------------------------------------- */
+// Настроения. Порядок не случайный: сначала то, что просят чаще.
+const CRAVINGS = [
+  ['random', '🎲 Всё равно'], ['sweet', '🍫 Сладкого'], ['salty', '🧂 Солёного'],
+  ['drink', '🥤 Выпить'], ['crunchy', '🥕 Похрустеть'], ['filling', '🍗 Сытного'],
+  ['protein', '💪 Побольше белка'], ['fresh', '🥬 Свежего'], ['comfort', '🫶 Приятного'],
+];
+
+// Что уже показывали: одно и то же подряд выглядит как поломка.
+const cubeState = { level: '', craving: 'random', recent: [], ready: false };
+
+function buildCubeControls() {
+  const levels = [
+    ['light', '🟢', 'Просто пожевать'],
+    ['normal', '🟡', 'Нормально голодна'],
+    ['hungry', '🔴', 'Сейчас съем кассира'],
+    ['meal', '🟣', 'Нужен почти обед'],
+  ];
+  const box = document.getElementById('cube-levels');
+  box.innerHTML = '';
+  for (const [code, dot, label] of levels) {
+    const button = document.createElement('button');
+    button.className = 'cube-level';
+    button.dataset.level = code;
+    button.innerHTML = `<span>${dot}</span><span>${label}</span>`;
+    button.onclick = () => {
+      cubeState.level = cubeState.level === code ? '' : code;
+      cubeState.recent = [];
+      markCubeLevel();
+    };
+    box.appendChild(button);
+  }
+
+  const chips = document.getElementById('cube-cravings');
+  chips.innerHTML = '';
+  for (const [code, label] of CRAVINGS) {
+    const chip = document.createElement('button');
+    chip.className = 'chip-btn' + (code === 'random' ? ' active' : '');
+    chip.dataset.craving = code;
+    chip.textContent = label;
+    chip.onclick = () => {
+      cubeState.craving = code;
+      cubeState.recent = [];
+      for (const other of chips.children) {
+        other.classList.toggle('active', other === chip);
+      }
+    };
+    chips.appendChild(chip);
+  }
+
+  document.getElementById('cube-go').onclick = () => rollCube();
+  cubeState.ready = true;
+}
+
+function markCubeLevel() {
+  for (const button of document.querySelectorAll('.cube-level')) {
+    button.classList.toggle('on', button.dataset.level === cubeState.level);
+  }
+}
+
+async function rollCube() {
+  const results = document.getElementById('cube-results');
+  results.innerHTML = '<div class="card cube-empty">Собираю…</div>';
+  try {
+    const data = await api('/api/cube', {
+      method: 'POST',
+      body: JSON.stringify({
+        level: cubeState.level,
+        craving: cubeState.craving,
+        no_spoon: document.getElementById('cube-nospoon').checked,
+        recent: cubeState.recent,
+      }),
+    });
+    // Режим мог подставиться сам по остатку калорий — покажем, какой вышел.
+    if (!cubeState.level) { cubeState.level = data.level; markCubeLevel(); }
+    renderCubes(data.cubes);
+  } catch (error) {
+    results.innerHTML = '';
+    toast(error.message);
+  }
+}
+
+function renderCubes(cubes) {
+  const results = document.getElementById('cube-results');
+  results.innerHTML = '';
+  if (!cubes || !cubes.length) {
+    results.innerHTML = '<div class="card cube-empty">Под эти условия ничего не '
+      + 'собралось. Попробуй другое настроение или выключи «без ложки».</div>';
+    return;
+  }
+
+  for (const item of cubes) {
+    cubeState.recent.push(item.signature);
+    const card = document.createElement('article');
+    card.className = 'card cube-card';
+
+    const parts = item.items.map((part) => {
+      const swap = part.swaps.length
+        ? `<span class="cube-swap">нет — возьми ${part.swaps.join(', ')}</span>` : '';
+      return `<li>${part.name} — <span class="cube-measure">${part.measure}</span>${swap}</li>`;
+    }).join('');
+
+    card.innerHTML = `
+      <p class="cube-name">🧊 ${item.title}</p>
+      <ul class="cube-items">${parts}</ul>
+      <p class="cube-macros">≈ ${item.kcal_low}–${item.kcal_high} ккал ·
+        ≈ ${item.protein_low}–${item.protein_high} г белка</p>
+      <div class="cube-actions">
+        <button class="btn ghost" data-roll="1">🎲 Другой</button>
+        <button class="btn" data-eat="1">Съел</button>
+      </div>`;
+
+    card.querySelector('[data-roll]').onclick = () => rollCube();
+    card.querySelector('[data-eat]').onclick = () => eatCube(item, card);
+    results.appendChild(card);
+  }
+  // Помним только последние наборы: иначе через день предлагать станет нечего.
+  cubeState.recent = cubeState.recent.slice(-10);
+}
+
+async function eatCube(item, card) {
+  const button = card.querySelector('[data-eat]');
+  button.disabled = true;
+  try {
+    await api('/api/meals', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: item.items.map((part) => part.name).join(' + ').slice(0, 60),
+        weight_g: item.weight_g, calories: item.kcal,
+        protein_g: item.protein_g, fat_g: item.fat_g, carbs_g: item.carbs_g,
+      }),
+    });
+    toast('Записала в дневник');
+    await refresh();
+  } catch (error) {
+    button.disabled = false;
+    toast(error.message);
+  }
+}
+
 function switchScreen(name) {
   for (const tab of document.querySelectorAll('.tab')) {
     tab.classList.toggle('active', tab.dataset.screen === name);
   }
-  for (const screen of ['today', 'world', 'gym', 'progress']) {
+  for (const screen of ['today', 'world', 'gym', 'cube', 'progress']) {
     document.getElementById(`screen-${screen}`).hidden = screen !== name;
   }
   // Кнопка ввода живёт на «Сегодня»: на других экранах она бы закрывала списки.
@@ -2271,6 +2412,7 @@ function switchScreen(name) {
   window.scrollTo(0, 0);
   moveArt();
 
+  if (name === 'cube' && !cubeState.ready) buildCubeControls();
   if (name === 'progress' && !progress) refreshProgress().catch((e) => toast(e.message));
   if (name === 'gym' && !gym) refreshWorkouts().catch((e) => toast(e.message));
 }

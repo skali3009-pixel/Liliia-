@@ -21,6 +21,7 @@ from seed.nutrition.dishes_guide import GUIDE_DISHES
 from seed.nutrition.dishes_store import STORE_DISHES
 from seed.nutrition.preps import PREPS
 from seed.nutrition.products import PRODUCTS
+from seed.nutrition.products_store import STORE_PRODUCTS, STORE_TAGS
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ async def seed_nutrition(session: AsyncSession) -> tuple[int, int, int]:
     """Залить справочник. Возвращает (продуктов, заготовок, блюд)."""
     existing = {p.code: p for p in (await session.execute(select(Product))).scalars()}
 
-    for data in PRODUCTS:
+    for data in PRODUCTS + STORE_PRODUCTS:
         product = existing.get(data["code"])
         if product is None:
             product = Product(**data)
@@ -102,6 +103,13 @@ async def seed_nutrition(session: AsyncSession) -> tuple[int, int, int]:
         else:
             for field, value in data.items():
                 setattr(product, field, value)
+
+    # Признаки для продуктов из её справочника проставляем отдельно: сам
+    # справочник про её меню, а «нужна ли ложка» — вопрос быстрого подбора.
+    for code, tags in STORE_TAGS.items():
+        product = existing.get(code)
+        if product is not None:
+            product.tags = ";".join(tags)
     await session.commit()
 
     products = {p.code: p for p in (await session.execute(select(Product))).scalars()}

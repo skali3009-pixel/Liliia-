@@ -47,6 +47,13 @@ class Product(Base):
     # Роль в тарелке: белок / крупа / овощи / фрукты / жир / молочное / прочее.
     role: Mapped[str] = mapped_column(String(20), default="прочее", nullable=False)
 
+    # Признаки для быстрого подбора («Кубик») через «;»: spoon, no_spoon,
+    # portable, budget, drink, sweet, salty, crunchy, ready.
+    # Здесь лежит только то, чего не видно из остальных полей: молочное,
+    # ореховое и вегетарианское выводятся из аллергенов и флагов диеты,
+    # а «нужна ли ложка» — ниоткуда не выводится.
+    tags: Mapped[str] = mapped_column(String(200), default="", nullable=False)
+
 
 class Prep(Base):
     """Заготовка: готовим один раз — едим несколько дней.

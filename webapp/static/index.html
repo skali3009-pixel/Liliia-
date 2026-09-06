@@ -424,6 +424,37 @@
     </div>
   </div>
 
+
+  <!-- Кубик: что съесть прямо сейчас, если готовить негде. Человек в
+       магазине не знает свой остаток калорий — он знает, насколько голоден
+       и чего хочется. Спрашиваем именно это. -->
+  <main id="screen-cube" class="screen" hidden>
+    <section class="cube-hero">
+      <div class="eyebrow">Операция Кубик</div>
+      <h1 class="cube-title-big">Что съесть прямо сейчас</h1>
+      <p class="cube-sub">Купить и съесть без приборов — в машине, на работе, на бегу.</p>
+    </section>
+
+    <section class="card">
+      <h2 class="cube-q">Насколько голодна?</h2>
+      <div class="cube-levels" id="cube-levels"></div>
+
+      <h2 class="cube-q">Чего хочется?</h2>
+      <div class="chips" id="cube-cravings"></div>
+
+      <label class="cube-switch">
+        <input type="checkbox" id="cube-nospoon" checked>
+        <span>Без ложки и вилки</span>
+      </label>
+      <p class="hint">Когда включено, показываем только то, что едят руками
+        или пьют. Ложечное не предлагаем вовсе.</p>
+
+      <button id="cube-go" class="btn">🎲 Собрать кубик</button>
+    </section>
+
+    <div id="cube-results"></div>
+  </main>
+
   <nav class="tabs">
     <button class="tab active" data-screen="today">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/>
@@ -433,6 +464,9 @@
         <path d="M12 3v18M5 9h14"/></svg>Мой мир</button>
     <button class="tab" data-screen="gym">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6M8 7v10M16 7v10M20 9v6M8 12h8"/></svg>Спорт</button>
+    <button class="tab" data-screen="cube">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/>
+        <path d="M12 3v18M4 7.5l8 4.5 8-4.5"/></svg>Кубик</button>
     <button class="tab" data-screen="progress">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l5-5 4 3 7-8"/>
         <path d="M4 20h16"/></svg>Прогресс</button>
