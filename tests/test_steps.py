@@ -93,17 +93,26 @@ def test_entering_steps_twice_corrects_the_day_instead_of_doubling_it():
 def test_the_state_gathers_the_day_the_week_and_the_best():
     async def scenario():
         async with db() as session:
+            # 6 сентября 2026 — воскресенье: неделя началась 31 августа.
             for shift, steps in ((0, 9000), (1, 12000), (2, 4000), (9, 30000)):
                 await walk(session, 1, TODAY - timedelta(days=shift), steps)
 
             user = await session.get(User, 1)
             user.daily_steps = 8000
-            state = await step_service.state(session, user)
-            # Неделя — последние семь дней, старое в неё не попадает.
+            state = await step_service.state(session, user, today=TODAY)
+            # Неделя календарная: то, что было до понедельника, в неё не идёт.
             assert state.week == 9000 + 12000 + 4000
             assert state.best == 30000
             assert state.total == 55000
     run(scenario)
+
+
+def test_the_week_starts_on_monday_not_seven_days_back():
+    """Скользящую неделю нечем закрыть: у каждого своя, итог объявить нельзя."""
+    monday = date(2026, 9, 7)
+    assert step_service.week_bounds(monday) == (monday, date(2026, 9, 13))
+    assert step_service.week_bounds(TODAY) == (date(2026, 8, 31), TODAY)
+    assert step_service.last_week_bounds(monday) == (date(2026, 8, 31), TODAY)
 
 
 # --- Серия -----------------------------------------------------------------
@@ -423,7 +432,7 @@ def test_the_chat_answer_shows_the_same_numbers_as_the_ring():
             await take_number(message, FakeState())
             text = message.said[0]
             assert "из 8000" in text and "Норма пройдена" in text
-            assert "За неделю" in text
+            assert "На этой неделе" in text
     run(scenario)
 
 

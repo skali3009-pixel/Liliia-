@@ -52,8 +52,22 @@ MAX_DAILY = 60000
 # лишнее не считается, а до потолка проще дойти ногами.
 RANKED_CAP = 30000
 
-# За сколько дней считается недельный счёт.
+# Неделя календарная, с понедельника по воскресенье, а не скользящие семь
+# дней. Соревнование без общей границы закрыть нечем: у каждого своя «неделя»,
+# и объявить итог в понедельник было бы враньём.
 WEEK_DAYS = 7
+
+
+def week_bounds(day: date) -> tuple[date, date]:
+    """Понедельник и воскресенье той недели, в которой этот день."""
+    start = day - timedelta(days=day.weekday())
+    return start, start + timedelta(days=6)
+
+
+def last_week_bounds(day: date) -> tuple[date, date]:
+    """Границы предыдущей недели — той, итог которой объявляют."""
+    start, _ = week_bounds(day)
+    return start - timedelta(days=WEEK_DAYS), start - timedelta(days=1)
 
 
 def goal_for(user: User) -> int:
@@ -198,11 +212,13 @@ async def totals(session: AsyncSession, user_id: int) -> tuple[int, int, int]:
 
 
 async def state(session: AsyncSession, user: User, *,
-                timezone_name: str = DEFAULT_TIMEZONE) -> Steps:
+                timezone_name: str = DEFAULT_TIMEZONE,
+                today: date | None = None) -> Steps:
     """Всё про шаги человека одним ответом."""
-    today = today_in(timezone_name)
+    today = today or today_in(timezone_name)
     goal = goal_for(user)
-    by_day = await history(session, user.id, days=WEEK_DAYS,
+    start, _ = week_bounds(today)
+    by_day = await history(session, user.id, days=(today - start).days + 1,
                            timezone_name=timezone_name, today=today)
     total, best, _ = await totals(session, user.id)
 
@@ -241,7 +257,8 @@ def _first_name(user: User) -> str:
 
 async def week_rows(session: AsyncSession, user_ids, *, me: int | None = None,
                     timezone_name: str = DEFAULT_TIMEZONE,
-                    today: date | None = None) -> list[Row]:
+                    today: date | None = None,
+                    period: tuple[date, date] | None = None) -> list[Row]:
     """Недельная таблица по списку людей, от большего к меньшему.
 
     Каждый день учитывается не больше, чем RANKED_CAP: приписка выше потолка
@@ -251,8 +268,7 @@ async def week_rows(session: AsyncSession, user_ids, *, me: int | None = None,
     if not ids:
         return []
 
-    end = today or today_in(timezone_name)
-    start = end - timedelta(days=WEEK_DAYS - 1)
+    start, end = period or week_bounds(today or today_in(timezone_name))
 
     rows = (await session.execute(
         select(StepLog.user_id, StepLog.day, StepLog.steps).where(
@@ -286,14 +302,14 @@ async def week_rows(session: AsyncSession, user_ids, *, me: int | None = None,
 async def global_top(session: AsyncSession, *, limit: int = 20,
                      me: int | None = None,
                      timezone_name: str = DEFAULT_TIMEZONE,
-                     today: date | None = None) -> list[Row]:
+                     today: date | None = None,
+                     period: tuple[date, date] | None = None) -> list[Row]:
     """Таблица по всему приложению за неделю.
 
     Берём только тех, кто на этой неделе что-то записал: список из сотни
     нулей никого не вдохновляет.
     """
-    end = today or today_in(timezone_name)
-    start = end - timedelta(days=WEEK_DAYS - 1)
+    start, end = period or week_bounds(today or today_in(timezone_name))
 
     ids = (await session.execute(
         select(StepLog.user_id).where(StepLog.day >= start, StepLog.day <= end,
@@ -302,7 +318,8 @@ async def global_top(session: AsyncSession, *, limit: int = 20,
     if me is not None and me not in ids:
         ids = list(ids) + [me]
 
-    rows = await week_rows(session, ids, me=me, timezone_name=timezone_name, today=end)
+    rows = await week_rows(session, ids, me=me, timezone_name=timezone_name,
+                           period=(start, end))
     return rows[:limit]
 
 
@@ -316,5 +333,6 @@ def place_of(rows: list[Row], user_id: int) -> int | None:
 
 __all__ = ["DEFAULT_GOAL", "GOAL_BY_ACTIVITY", "GOAL_CHOICES", "MAX_DAILY", "MAX_GOAL",
            "MIN_GOAL", "RANKED_CAP", "WEEK_DAYS", "Row", "Steps", "clean_goal",
-           "clean_steps", "global_top", "goal_for", "history", "on_day", "place_of",
-           "record", "state", "streak", "totals", "week_rows"]
+           "clean_steps", "global_top", "goal_for", "history", "last_week_bounds",
+           "on_day", "place_of", "record", "state", "streak", "totals",
+           "week_bounds", "week_rows"]

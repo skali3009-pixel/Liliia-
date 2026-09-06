@@ -1523,6 +1523,13 @@ async def get_steps_board(request: web.Request) -> web.Response:
         team = await teams.board(session, user_id, timezone_name=tz)
         top = await step_service.global_top(session, me=user_id, timezone_name=tz)
 
+        # Прошлая неделя: без неё понедельник обнуляет всё, чего человек
+        # добился, и возвращаться в таблицу становится незачем.
+        last_period = step_service.last_week_bounds(today_in(tz))
+        last_rows = await step_service.global_top(session, me=user_id, limit=10 ** 6,
+                                                  timezone_name=tz, period=last_period)
+        mine = next((row for row in last_rows if row.user_id == user_id), None)
+
     invite = ""
     if team is not None and config.BOT_USERNAME:
         invite = f"https://t.me/{config.BOT_USERNAME}?start=team_{team.code}"
@@ -1531,6 +1538,11 @@ async def get_steps_board(request: web.Request) -> web.Response:
         "team": dict(team.to_dict(), invite=invite) if team else None,
         "top": [row.to_dict() for row in top],
         "place": step_service.place_of(top, user_id),
+        "last": {
+            "steps": mine.steps if mine else 0,
+            "days": mine.days if mine else 0,
+            "place": step_service.place_of(last_rows, user_id),
+        },
         "cap": step_service.RANKED_CAP,
         "max_members": teams.MAX_MEMBERS,
     })

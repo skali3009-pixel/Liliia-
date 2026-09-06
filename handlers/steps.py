@@ -59,7 +59,7 @@ def render(walk: step_service.Steps, game: dict | None = None) -> str:
         # и два одинаковых «🔥 дней подряд» в одном сообщении путают.
         days = plural(walk.streak, "день", "дня", "дней")
         lines.append(f"🔥 {walk.streak} {days} подряд с нормой шагов")
-    lines.append(f"За неделю {walk.week}")
+    lines.append(f"На этой неделе {walk.week}")
     lines += turn_service.game_lines(game or {})
     return "\n".join(lines)
 

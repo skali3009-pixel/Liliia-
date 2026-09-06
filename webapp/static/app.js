@@ -306,7 +306,7 @@ function renderSteps(steps) {
       ? `Осталось ${steps.left}`
       : 'Сегодня ещё не отмечено';
   document.getElementById('steps-week').textContent =
-    `За неделю ${steps.week}` + (steps.best ? ` · лучший день ${steps.best}` : '');
+    `На этой неделе ${steps.week}` + (steps.best ? ` · лучший день ${steps.best}` : '');
   document.getElementById('steps-streak').textContent =
     steps.streak ? `🔥 ${steps.streak} ${plural(steps.streak, 'день', 'дня', 'дней')} с нормой` : '';
 }
@@ -2570,6 +2570,14 @@ function renderTop(data) {
   (data.top || []).forEach((row, index) => rows.appendChild(boardRow(row, index + 1)));
   document.getElementById('top-place').textContent =
     data.place ? `ты ${data.place}-я` : '';
+
+  // Прошлая неделя: иначе понедельник обнуляет всё, чего человек добился.
+  const last = data.last || {};
+  document.getElementById('top-last').textContent = last.steps
+    ? `Прошлая неделя: ${last.steps} шагов`
+      + (last.place ? `, ${last.place}-е место` : '')
+      + (last.days ? ` · норма ${last.days} дн.` : '')
+    : '';
   document.getElementById('top-hint').textContent =
     `В зачёт идёт не больше ${data.cap} шагов за день: приписывать бессмысленно, `
     + 'а до потолка проще дойти ногами.';
