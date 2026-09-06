@@ -22,6 +22,13 @@ logger = logging.getLogger(__name__)
 # Расширение уже созданных колонок: (таблица, колонка, новый тип).
 # SQLite длину строк не проверяет, а PostgreSQL проверяет — значение, которое
 # спокойно легло в тесте, на сервере роняет заливку справочника.
+# Разовые уборки данных: (таблица, что делаем, зачем).
+# Выполняются при каждом запуске, но повторный проход ничего не меняет.
+CLEANUPS: list[tuple[str, str]] = [
+    ("meals",
+     "UPDATE meals SET photo_file_id = NULL WHERE photo_file_id IS NOT NULL"),
+]
+
 COLUMN_WIDENINGS: list[tuple[str, str, str]] = [
     ("nutrition_preps", "fridge_days", "VARCHAR(60)"),
     ("nutrition_preps", "freezer_days", "VARCHAR(60)"),
@@ -85,6 +92,21 @@ async def apply_column_additions(connection: AsyncConnection) -> list[str]:
 
     applied += await _widen_columns(connection)
     applied += await _create_indexes(connection)
+    applied += await _run_cleanups(connection)
+    return applied
+
+
+async def _run_cleanups(connection: AsyncConnection) -> list[str]:
+    """Разовые уборки данных. Повторный запуск ничего не делает."""
+    applied: list[str] = []
+    for table, statement in CLEANUPS:
+        existing = await connection.run_sync(_describe, table)
+        if existing is None:
+            continue
+        result = await connection.execute(text(statement))
+        if result.rowcount:
+            applied.append(f"{table}: очищено {result.rowcount}")
+            logger.info("Уборка в %s: затронуто строк %s", table, result.rowcount)
     return applied
 
 

@@ -31,7 +31,6 @@ async def save_meal(
     analysis: FoodAnalysis,
     source: MealSourceEnum,
     meal_type: MealTypeEnum,
-    photo_file_id: str | None = None,
     logged_at: datetime | None = None,
 ) -> Meal:
     """Сохранить распознанный приём пищи.
@@ -55,7 +54,6 @@ async def save_meal(
         carbs_g=analysis.carbs_g,
         fiber_g=analysis.fiber_g,
         source=source,
-        photo_file_id=photo_file_id,
         **({"logged_at": logged_at} if logged_at else {}),
     )
     session.add(meal)

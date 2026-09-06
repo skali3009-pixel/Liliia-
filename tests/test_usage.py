@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import inspect
 import io
 from datetime import date, timedelta
 
@@ -343,3 +344,36 @@ def test_photo_memory_does_not_grow_without_limit():
     # Вытесняются самые старые.
     assert food._recent_photos.get("key-0") is None
     assert food._recent_photos.get(f"key-{food._RECENT_LIMIT + 49}") is analysis
+
+
+# --- фото еды не хранится -------------------------------------------------
+
+def test_a_food_photo_leaves_no_trace_in_the_database():
+    """Снимок еды нужен на время распознавания и не должен переживать его.
+
+    Раньше в записи оставалась ссылка на файл в Телеграме: её никто не читал,
+    но по ней можно было скачать чужой обед спустя год.
+    """
+    from models import Meal
+
+    assert not hasattr(Meal, "photo_file_id"), "ссылки на фото в записи быть не должно"
+
+    import inspect
+
+    from services.meals import save_meal
+
+    assert "photo_file_id" not in inspect.signature(save_meal).parameters
+
+
+def test_only_progress_photos_are_written_to_disk():
+    """На диск попадает только то, что человек загрузил осознанно."""
+    import services.progress as progress
+
+    source = inspect.getsource(progress.save_photo)
+    assert "write_bytes" in source
+
+    import services.food_vision as vision
+
+    text = inspect.getsource(vision)
+    for forbidden in ("write_bytes", "open(", "photos_dir"):
+        assert forbidden not in text, f"распознавание не должно трогать диск: {forbidden}"

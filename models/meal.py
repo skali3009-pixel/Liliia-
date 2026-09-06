@@ -55,7 +55,10 @@ class Meal(Base):
     source: Mapped[MealSourceEnum] = mapped_column(
         Enum(MealSourceEnum, name="meal_source_enum"), default=MealSourceEnum.TEXT, nullable=False
     )
-    photo_file_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Ссылки на фото здесь нет намеренно. Снимок еды нужен ровно на время
+    # распознавания: скачали из Телеграма, получили КБЖУ, забыли. Хранить
+    # ссылку — значит уметь скачать чужой обед спустя год, ничего за это
+    # не получая: в дневнике, выгрузке и приложении фото не показывается.
 
     logged_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
