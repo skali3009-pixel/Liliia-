@@ -1524,6 +1524,43 @@ async function uploadPhoto(file) {
 }
 
 
+/* --- «Что-то не так» ---------------------------------------------------- */
+// Падения бот ловит сам. Но «непонятно, куда нажимать» в логах выглядит
+// безупречно — про это можно узнать только от человека.
+
+function wireProblem() {
+  const field = document.getElementById('prof-problem');
+  const button = document.getElementById('prof-problem-send');
+  const hint = document.getElementById('prof-problem-hint');
+  if (!field || !button) return;
+
+  button.onclick = async () => {
+    const text = field.value.trim();
+    if (!text) {
+      field.focus();
+      return;
+    }
+    button.disabled = true;
+    try {
+      await api('/api/feedback', {
+        method: 'POST',
+        body: JSON.stringify({
+          text,
+          screen: document.querySelector('.tab.active')?.dataset.screen || '',
+        }),
+      });
+      field.value = '';
+      hint.textContent = 'Передала. Спасибо — это правда помогает. 🐆';
+      haptic('medium');
+    } catch (error) {
+      hint.textContent = error.message;
+    } finally {
+      button.disabled = false;
+    }
+  };
+}
+
+
 /* --- Тренировки -------------------------------------------------------- */
 
 let gym = null;
@@ -2394,6 +2431,7 @@ async function requestExport() {
 
 async function openProfile() {
   document.getElementById('profile-sheet').hidden = false;
+  wireProblem();
   try {
     profileData = await api('/api/profile');
     renderProfile(profileData);

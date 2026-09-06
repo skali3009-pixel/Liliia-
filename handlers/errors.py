@@ -14,7 +14,9 @@ import logging
 
 from aiogram import Bot
 from aiogram.types import ErrorEvent
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from handlers.feedback import CB_TELL
 from services import crashes
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,18 @@ USER_TEXT = (
     "Я уже сообщил об этом хозяйке бота. Твои записи целы, ничего не "
     "потерялось. Попробуй ещё раз через минуту."
 )
+
+
+def _tell_button():
+    """Что человек делал перед поломкой, знает только он сам.
+
+    Сообщение о поломке говорит, что сломалось, но не что человек пытался
+    сделать. Кнопка здесь стоит потому, что это и есть тот единственный
+    момент, когда рассказать и легко, и есть о чём.
+    """
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✍️ Рассказать, что я делала", callback_data=CB_TELL)
+    return builder.as_markup()
 
 
 def _person(update) -> tuple[int | None, object, object]:
@@ -54,7 +68,7 @@ async def on_error(event: ErrorEvent, bot: Bot | None = None) -> bool:
             logger.info("Не удалось закрыть индикатор кнопки")
     if holder is not None:
         try:
-            await holder.answer(USER_TEXT)
+            await holder.answer(USER_TEXT, reply_markup=_tell_button())
         except Exception:  # noqa: BLE001 — человек мог заблокировать бота
             logger.info("Не удалось ответить человеку о поломке")
 

@@ -9,6 +9,7 @@ CB_EDIT = "prof_edit:"
 CB_BACK = "prof_back"
 CB_REMINDERS = "prof_reminders"
 CB_EXPORT = "prof_export"
+CB_PROBLEM = "prof_problem"
 
 # Порядок не случайный: сверху то, что меняют чаще всего.
 FIELD_LABELS: dict[str, str] = {
@@ -34,7 +35,10 @@ def edit_menu_keyboard(*, reminders_on: bool = True) -> InlineKeyboardMarkup:
     )
     # Выгрузка — не правка анкеты, поэтому стоит последней и отдельной строкой.
     builder.button(text="📦 Выгрузить мои данные", callback_data=CB_EXPORT)
-    builder.adjust(2, 2, 2, 1, 1, 1)
+    # «Что-то не так» — самая последняя: её ищут, когда всё остальное уже
+    # не помогло, и находят именно здесь, а не среди полей анкеты.
+    builder.button(text="✍️ Что-то не так", callback_data=CB_PROBLEM)
+    builder.adjust(2, 2, 2, 1, 1, 1, 1)
     return builder.as_markup()
 
 
@@ -45,5 +49,6 @@ def with_back(markup: InlineKeyboardMarkup) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
-__all__ = ["CB_BACK", "CB_EDIT", "CB_EXPORT", "CB_REMINDERS", "FIELD_LABELS",
+__all__ = ["CB_BACK", "CB_EDIT", "CB_EXPORT", "CB_PROBLEM", "CB_REMINDERS",
+           "FIELD_LABELS",
            "edit_menu_keyboard", "with_back"]

@@ -1433,6 +1433,50 @@ async def post_crash(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def post_feedback(request: web.Request) -> web.Response:
+    """«Что-то не так» из приложения.
+
+    Человек пишет прямо там, где споткнулся: выгонять его в чат ради жалобы
+    значит не получить жалобу вовсе.
+    """
+    from services import feedback
+
+    body = await request.json() if request.can_read_body else {}
+    text = feedback.clean(body.get("text") or "")
+    if not text:
+        return web.json_response({"error": "Напиши, что случилось"}, status=400)
+
+    bot = request.app.get(BOT_KEY)
+    if bot is None or not config.ADMIN_IDS:
+        return web.json_response(
+            {"error": "Сейчас передать некому — бот ещё настраивается."}, status=503)
+
+    user_id = request["user_id"]
+    if not feedback.allowed(user_id):
+        return web.json_response(
+            {"error": "Я уже передала твои сообщения — давай подождём ответа."},
+            status=429)
+
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        name = (user.full_name or "").strip() if user else ""
+
+    from handlers.feedback import answer_button
+
+    screen = str(body.get("screen") or "").strip()[:40]
+    delivered = await feedback.deliver(
+        bot,
+        feedback.Report(user_id=user_id, name=name,
+                        where=f"приложение, экран «{screen}»" if screen else "приложение",
+                        text=text),
+        keyboard=answer_button(user_id),
+    )
+    if not delivered:
+        return web.json_response(
+            {"error": "Не получилось передать. Попробуй ещё раз позже."}, status=502)
+    return web.json_response({"ok": True})
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -1462,6 +1506,7 @@ def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/cube/basket", get_basket)
     app.router.add_post("/api/cube/shelf", post_shelf)
     app.router.add_post("/api/crash", post_crash)
+    app.router.add_post("/api/feedback", post_feedback)
     app.router.add_post("/api/workouts/pick", post_workout_pick)
     app.router.add_get("/api/preps", get_preps)
     app.router.add_post("/api/preps/mine", post_my_prep)

@@ -113,3 +113,11 @@ def test_the_app_reports_its_own_breakage():
     assert "'/api/crash'" in APP_JS
     # Сломанный экран сыплет ошибками без конца — отчётов должно быть немного.
     assert "CRASH_LIMIT" in APP_JS
+
+
+def test_the_problem_form_is_wired_in_the_app():
+    """«Что-то не так» пишется там, где человек споткнулся, а не в чате."""
+    for element_id in ("prof-problem", "prof-problem-send", "prof-problem-hint"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+    assert "'/api/feedback'" in APP_JS

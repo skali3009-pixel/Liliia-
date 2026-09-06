@@ -884,6 +884,80 @@ def test_the_crash_endpoint_needs_a_signature_like_everything_else():
     run(scenario)
 
 
+def test_a_problem_from_the_app_reaches_the_owner_with_the_screen(monkeypatch):
+    """Человек споткнулся на экране — выгонять его в чат ради жалобы значит
+    не получить жалобу вовсе."""
+    async def scenario():
+        bot = _CrashBot()
+        async with webapp_client(bot) as (client, _):
+            from services import feedback
+
+            feedback.reset()
+            monkeypatch.setattr(feedback.config, "ADMIN_IDS", [246959020])
+            monkeypatch.setattr(config, "ADMIN_IDS", [246959020])
+
+            response = await call(client, "POST", "/api/feedback", json_body={
+                "text": "посчитало вдвое больше, чем я съела", "screen": "today"})
+            assert response.status == 200
+
+            (chat_id, text), = bot.sent
+            assert chat_id == 246959020
+            assert "вдвое больше" in text
+            assert "today" in text and f"{USER_ID}" in text
+            feedback.reset()
+    run(scenario)
+
+
+def test_an_empty_problem_from_the_app_is_refused(monkeypatch):
+    async def scenario():
+        bot = _CrashBot()
+        async with webapp_client(bot) as (client, _):
+            from services import feedback
+
+            feedback.reset()
+            monkeypatch.setattr(feedback.config, "ADMIN_IDS", [246959020])
+            monkeypatch.setattr(config, "ADMIN_IDS", [246959020])
+
+            response = await call(client, "POST", "/api/feedback",
+                                  json_body={"text": "   "})
+            assert response.status == 400
+            assert bot.sent == []
+            feedback.reset()
+    run(scenario)
+
+
+def test_the_app_cannot_flood_the_owner_either(monkeypatch):
+    async def scenario():
+        bot = _CrashBot()
+        async with webapp_client(bot) as (client, _):
+            from services import feedback
+
+            feedback.reset()
+            monkeypatch.setattr(feedback.config, "ADMIN_IDS", [246959020])
+            monkeypatch.setattr(config, "ADMIN_IDS", [246959020])
+
+            statuses = []
+            for _ in range(feedback.PER_HOUR + 2):
+                response = await call(client, "POST", "/api/feedback",
+                                      json_body={"text": "опять не так"})
+                statuses.append(response.status)
+
+            assert statuses.count(200) == feedback.PER_HOUR
+            assert 429 in statuses
+            assert len(bot.sent) == feedback.PER_HOUR
+            feedback.reset()
+    run(scenario)
+
+
+def test_the_problem_form_needs_a_signature_like_everything_else():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/feedback", signed=False,
+                                  json_body={"text": "боль"})
+            assert response.status == 401
+    run(scenario)
+
+
 def test_shelf_photo_answers_with_names_the_person_can_check(monkeypatch):
     """Сначала показываем, что увидели, и только потом собираем набор."""
     async def scenario():

@@ -165,12 +165,15 @@ def test_every_button_on_the_card_leads_somewhere():
 
 
 def test_card_buttons_are_wired_to_the_edit_prefix():
+    from keyboards.profile import CB_PROBLEM
+
     codes = [b.callback_data for row in edit_menu_keyboard().inline_keyboard for b in row]
-    # + переключатель напоминаний и выгрузка данных
-    assert len(codes) == len(FIELD_LABELS) + 2
+    # + переключатель напоминаний, выгрузка данных и «что-то не так»
+    assert len(codes) == len(FIELD_LABELS) + 3
     assert sum(code.startswith("prof_edit:") for code in codes) == len(FIELD_LABELS)
     assert CB_REMINDERS in codes
     assert CB_EXPORT in codes
+    assert CB_PROBLEM in codes
 
 
 def test_reminder_button_shows_the_current_state():

@@ -16,6 +16,12 @@ MENU_WHAT_TO_EAT = "🍽️ Что съесть"
 MENU_PROFILE = "⚙️ Профиль"
 
 
+# Все кнопки меню одним множеством. Нужно тем сценариям, которые ждут от
+# человека текст: нажатая кнопка меню — это выход из сценария, а не ответ.
+MENU_TEXTS = {MENU_TURN, MENU_ADD_MEAL, MENU_WATER, MENU_WORKOUT, MENU_PROGRESS,
+              MENU_WHAT_TO_EAT, MENU_PROFILE}
+
+
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
     builder = ReplyKeyboardBuilder()
     builder.button(text=MENU_TURN)

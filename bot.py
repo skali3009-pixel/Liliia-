@@ -13,8 +13,8 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 import config
 from db import init_models
 from services.artwork import ensure_artwork
-from handlers import (access, errors, food, legal, onboarding, profile, progress,
-                      suggestions, supplements, turn, water, workouts)
+from handlers import (access, errors, feedback, food, legal, onboarding, profile,
+                      progress, suggestions, supplements, turn, water, workouts)
 from middlewares.access import AccessMiddleware
 from scheduler import start_scheduler
 from webapp.server import start_webapp
@@ -36,6 +36,9 @@ dp.include_router(onboarding.router)
 # Профиль раньше еды: он снимает состояние правки, когда человек уходит из
 # незаконченного ответа в другую кнопку меню.
 dp.include_router(profile.router)
+# «Что-то не так» — тоже раньше кнопок меню: пока человек пишет, его текст
+# не должен уезжать ни в еду, ни в профиль.
+dp.include_router(feedback.router)
 # «Мой ход» тоже раньше еды: нажатый посреди добавления блюда, он иначе
 # уедет в распознавание как название.
 dp.include_router(turn.router)
