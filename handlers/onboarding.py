@@ -8,7 +8,9 @@ import config
 from aiogram import F, Router
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import (CallbackQuery, InlineKeyboardMarkup, Message,
+                           WebAppInfo)
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from db import get_session
 from keyboards.main_menu import main_menu_keyboard
@@ -132,7 +134,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
 
     if completed:
         greeting = "С возвращением! 👋 Чем займёмся сегодня?"
-        if access.allowed and access.is_trial:
+        if config.PAYWALL and access.allowed and access.is_trial:
             greeting += f"\n\nПробный период: осталось {access.days_left} дн."
         await message.answer(greeting, reply_markup=main_menu_keyboard())
         return
@@ -153,9 +155,14 @@ async def begin_onboarding(message: Message, state: FSMContext, user_id: int) ->
         return
 
     await state.set_state(OnboardingStates.gender)
+    # Про пробный период говорим, только если оплата вообще включена. Пока
+    # бот бесплатен для всех, «первые семь дней бесплатно» — обещание
+    # платы, которой нет: человек ждёт, что его вот-вот отключат, и не
+    # вкладывается.
+    trial = (f"Первые {config.TRIAL_DAYS} дней бесплатно.\n"
+             if config.PAYWALL else "")
     await message.answer(
-        f"Настроим профиль — это 1-2 минуты.\n"
-        f"Первые {config.TRIAL_DAYS} дней бесплатно.\n\n"
+        f"Настроим профиль — это 1-2 минуты.\n{trial}\n"
         "Укажи свой пол:",
         reply_markup=gender_keyboard(),
     )
@@ -261,6 +268,44 @@ async def process_allergies(message: Message, state: FSMContext) -> None:
     await _finish_onboarding(message, state)
 
 
+def norms_text(macros, water_ml: int) -> str:
+    """Норма — то, ради чего человек отвечал на девять вопросов."""
+    return (
+        "Профиль настроен! 🎉\n\n"
+        "Твоя суточная норма:\n"
+        f"🔥 Калории: {macros.calories} ккал\n"
+        f"🥩 Белки: {macros.protein_g} г\n"
+        f"🥑 Жиры: {macros.fat_g} г\n"
+        f"🍚 Углеводы: {macros.carbs_g} г\n"
+        f"🥦 Клетчатка: {macros.fiber_g} г\n"
+        f"💧 Вода: {water_ml} мл\n\n"
+        "Считать и взвешивать ничего не надо — это моя работа."
+    )
+
+
+def first_step_text() -> str:
+    """Одно действие, а не список возможностей."""
+    return (
+        "С чего начать прямо сейчас:\n\n"
+        "📷 Сфотографируй то, что ешь или пьёшь — хоть кофе, хоть печенье. "
+        "Я узнаю блюдо и посчитаю КБЖУ сама.\n\n"
+        "Можно и словами: «два бутерброда с сыром».\n\n"
+        "Остальное подождёт: шаги, вода, тренировки и подбор еды — на кнопках "
+        "внизу. А всё красивое — кольца, мир и таблица команды — живёт в "
+        "приложении."
+    )
+
+
+def open_app_keyboard() -> InlineKeyboardMarkup | None:
+    """Кнопка в приложение: там живёт большая часть того, что мы умеем."""
+    if not config.WEBAPP_URL:
+        return None
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📱 Открыть приложение",
+                   web_app=WebAppInfo(url=config.WEBAPP_URL))
+    return builder.as_markup()
+
+
 async def _finish_onboarding(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
 
@@ -307,15 +352,10 @@ async def _finish_onboarding(message: Message, state: FSMContext) -> None:
 
     await state.clear()
     await message.answer(
-        "Профиль настроен! 🎉\n\n"
-        "Твоя суточная норма:\n"
-        f"🔥 Калории: {macros.calories} ккал\n"
-        f"🥩 Белки: {macros.protein_g} г\n"
-        f"🥑 Жиры: {macros.fat_g} г\n"
-        f"🍚 Углеводы: {macros.carbs_g} г\n"
-        f"🥦 Клетчатка: {macros.fiber_g} г\n"
-        f"💧 Вода: {water_ml} мл\n\n"
-        "Дальше можно фотографировать еду, отмечать воду и тренироваться — "
-        "жми на кнопки в меню 👇",
+        norms_text(macros, water_ml),
         reply_markup=main_menu_keyboard(),
     )
+    # Вторым сообщением — одно действие. Список возможностей в конце анкеты
+    # человек не читает: он только что ответил на девять вопросов и ждёт,
+    # что теперь. Ответ должен быть один и выполнимый прямо сейчас.
+    await message.answer(first_step_text(), reply_markup=open_app_keyboard())
