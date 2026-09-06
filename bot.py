@@ -13,6 +13,7 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 import config
 from db import init_models
 from services.artwork import ensure_artwork
+from services import commands as bot_commands
 from handlers import (access, errors, feedback, food, legal, onboarding, profile,
                       progress, steps, suggestions, supplements, turn, water,
                       workouts)
@@ -115,6 +116,9 @@ async def main() -> None:
     scheduler = start_scheduler(bot)
     try:
         await setup_menu_button()
+        # Список команд в меню Telegram: без него о /problem, /steps
+        # и /delete знает только тот, кому их назвали вслух.
+        await bot_commands.apply(bot)
         logger.info("Бот запускается...")
         await dp.start_polling(bot)
     finally:
