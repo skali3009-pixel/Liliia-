@@ -161,6 +161,40 @@
       </div>
     </section>
 
+    <!-- Шаги. Отдельным кольцом, а не циферкой в ряду: это то, что человек
+         открывает посмотреть само по себе. Число вносит он сам — телефон
+         приложению внутри Telegram шаги не отдаёт. -->
+    <section class="card steps-card">
+      <div class="card-head"><h2>👟 Шаги</h2>
+        <span class="muted" id="steps-streak"></span></div>
+
+      <div class="steps-body">
+        <div class="ring-wrap steps-ring">
+          <svg class="ring small" viewBox="0 0 120 120" aria-hidden="true">
+            <defs>
+              <linearGradient id="steps-gradient" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#FDE68A"/>
+                <stop offset="100%" stop-color="#F59E0B"/>
+              </linearGradient>
+            </defs>
+            <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+            <circle id="steps-fill" class="ring-fill steps" cx="60" cy="60" r="52"></circle>
+          </svg>
+          <div class="ring-center">
+            <div id="steps-value" class="kcal-value">—</div>
+            <div class="kcal-label" id="steps-goal-label">шагов</div>
+          </div>
+        </div>
+        <div class="steps-side">
+          <p class="steps-left" id="steps-left"></p>
+          <p class="hint" id="steps-week"></p>
+          <button class="btn" id="steps-add">Внести шаги</button>
+        </div>
+      </div>
+      <p class="hint" id="steps-hint">Число смотрим в «Здоровье» на телефоне:
+        приложение внутри Telegram само шаги не считает.</p>
+    </section>
+
     <!-- Повтор привычной еды. Стоит выше ленты: записать проще, чем
          посмотреть, и это самое частое действие в дневнике. -->
     <section class="card" id="frequent-card" hidden>
@@ -359,6 +393,44 @@
         <button class="btn" id="friends-invite">Позвать друга</button>
         <button class="btn ghost" id="friends-renew">Сменить ссылку</button>
       </div>
+    </section>
+
+    <!-- Команда. Личный счётчик шагов забрасывают через неделю: смотреть в
+         него незачем. Работает другое — что тебя видят. -->
+    <section class="card" id="team-card">
+      <div class="card-head"><h2>👟 Команда</h2>
+        <span id="team-total" class="muted"></span></div>
+
+      <div id="team-none">
+        <p class="hint">Ходить вместе интереснее: у команды общий счёт за
+          неделю и своя таблица. Соревнуемся только шагами — ни весом, ни
+          калориями здесь не меряются.</p>
+        <input class="input" id="team-name" type="text" maxlength="40"
+               placeholder="Название команды">
+        <button class="btn" id="team-create">Создать команду</button>
+        <p class="hint">Или вступи по коду из ссылки, которую тебе прислали:</p>
+        <input class="input" id="team-code" type="text" maxlength="16"
+               placeholder="Код команды">
+        <button class="btn ghost" id="team-join">Вступить</button>
+      </div>
+
+      <div id="team-mine" hidden>
+        <h3 class="team-name" id="team-name-view"></h3>
+        <div id="team-rows"></div>
+        <div class="cube-actions">
+          <button class="btn" id="team-invite">Позвать в команду</button>
+          <button class="btn ghost" id="team-leave">Выйти</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Рейтинг по всему приложению. Он же объясняет потолок: без этого
+         первое место выглядит как чужое враньё. -->
+    <section class="card" id="top-card">
+      <div class="card-head"><h2>🏅 Неделя приложения</h2>
+        <span id="top-place" class="muted"></span></div>
+      <div id="top-rows"></div>
+      <p class="hint" id="top-hint"></p>
     </section>
 
     <section class="card">
@@ -699,6 +771,15 @@
       <input class="input tight" id="prof-target" type="text" inputmode="decimal">
     </label>
     <p class="hint" id="prof-weight-hint"></p>
+
+    <div class="eyebrow ruled">Цель по шагам</div>
+    <div class="state-options" id="prof-steps"></div>
+    <label class="prof-row">
+      <span>Своё число</span>
+      <input class="input tight" id="prof-steps-own" type="text" inputmode="numeric">
+    </label>
+    <p class="hint">Это не медицинская норма, а договорённость с собой. Лучше
+      взять то число, которое точно получится каждый день.</p>
 
     <div class="eyebrow ruled">Аллергии и что не ешь</div>
     <input class="input" id="prof-allergies" type="text" maxlength="200"

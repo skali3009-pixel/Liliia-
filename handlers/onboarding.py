@@ -40,6 +40,7 @@ GENDER_RU = {GenderEnum.MALE.value: "мужской", GenderEnum.FEMALE.value: "
 
 
 INVITE_PREFIX = "friend_"
+TEAM_PREFIX = "team_"
 
 
 async def _accept_invite(session, user_id: int, args: str | None) -> str | None:
@@ -59,6 +60,19 @@ async def _accept_invite(session, user_id: int, args: str | None) -> str | None:
 
     friend = await session.get(User, owner)
     return (friend.full_name or "").split(" ")[0] if friend else "друг"
+
+
+async def _accept_team(session, user_id: int, args: str | None) -> str | None:
+    """Вступить в команду из ссылки. Возвращает её название или None."""
+    if not args or not args.startswith(TEAM_PREFIX):
+        return None
+
+    from services import teams
+
+    status, team = await teams.join(session, user_id, args[len(TEAM_PREFIX):])
+    if status not in {"ok", "same"} or team is None:
+        return None
+    return team.name
 
 
 @router.message(CommandStart())
@@ -84,6 +98,9 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         # создаётся сразу, потому что обе стороны уже согласились — один
         # прислал ссылку, второй по ней перешёл.
         joined = await _accept_invite(session, user.id, command.args)
+        # Ссылка в команду: t.me/бот?start=team_КОД. Тоже сразу — тот, кто
+        # перешёл по ссылке, уже согласился.
+        team_name = await _accept_team(session, user.id, command.args)
 
         # Пробный период отсчитывается от первого «Привет», а не от конца анкеты.
         await ensure_trial(session, user.id)
@@ -103,6 +120,14 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
             f"🤝 Теперь вы с {joined} друзья.\n\n"
             "Друг видит только игровое: кристаллы, уровень и серию. "
             "Вес, замеры, фотографии и дневник еды не видит никто, кроме тебя."
+        )
+
+    if team_name:
+        await message.answer(
+            f"👟 Ты в команде «{team_name}».\n\n"
+            "Считаем шаги вместе: у команды общий счёт за неделю и своя "
+            "таблица. Число шагов вносишь сама — смотри его в «Здоровье» "
+            "на телефоне."
         )
 
     if completed:

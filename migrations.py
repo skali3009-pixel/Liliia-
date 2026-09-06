@@ -47,6 +47,7 @@ INDEXES: list[tuple[str, str, str]] = [
     ("ix_workout_log_user_done", "workout_log", "(user_id, completed_at)"),
     ("ix_dish_components_dish", "nutrition_dish_components", "(dish_id)"),
     ("ix_api_usage_day_kind", "api_usage", "(day, kind)"),
+    ("ix_step_log_user_day", "step_log", "(user_id, day)"),
 ]
 
 COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
@@ -75,6 +76,7 @@ COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
     ("day_stats", "world_open", "INTEGER NOT NULL DEFAULT 0"),
     ("day_stats", "bonus", "INTEGER NOT NULL DEFAULT 0"),
     ("day_stats", "bonus_codes", "VARCHAR(60) NOT NULL DEFAULT ''"),
+    ("users", "daily_steps", "INTEGER"),
 ]
 
 

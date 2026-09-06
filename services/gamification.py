@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from models import Achievement, BodyMeasurement, DayStat, Meal, User, WorkoutLog
+from services import steps as step_service
 from utils.game import (
     ACHIEVEMENT_BY_CODE,
     ACHIEVEMENTS,
@@ -133,7 +134,8 @@ async def _streak(session: AsyncSession, user_id: int, today: date) -> int:
 
 
 async def _sync_achievements(
-    session: AsyncSession, user: User, *, streak: int, level: int, timezone_name: str
+    session: AsyncSession, user: User, *, streak: int, level: int, timezone_name: str,
+    steps_total: int = 0, steps_streak: int = 0, steps_best: int = 0,
 ) -> tuple[list[dict], set[str]]:
     """Выдать заслуженные награды. Возвращает новые и все полученные коды."""
     meals_total = int(
@@ -151,6 +153,9 @@ async def _sync_achievements(
         weight_lost_kg=weight_lost,
         waist_lost_cm=waist_lost,
         workouts_total=workouts_total,
+        steps_total=steps_total,
+        steps_streak=steps_streak,
+        steps_best=steps_best,
     )
 
     owned = set(
@@ -185,6 +190,10 @@ async def sync_today(
     workouts_today = await _workouts_today(session, user.id, timezone_name)
     days_since_measure = await _days_since_measure(session, user.id, timezone_name)
 
+    # Шаги вносит сам человек: телефон приложению их не отдаёт. Поэтому
+    # задание про них считается ровно по тому, что он записал.
+    walk = await step_service.state(session, user, timezone_name=timezone_name)
+
     quests = build_quests(
         meals_count=meals_count,
         calories=calories,
@@ -196,6 +205,8 @@ async def sync_today(
         workouts_today=workouts_today,
         days_since_measure=days_since_measure,
         stress_marked=stress_marked,
+        steps=walk.today,
+        steps_goal=walk.goal,
     )
 
     done_codes = [quest.code for quest in quests if quest.done]
@@ -211,7 +222,8 @@ async def sync_today(
     streak = await _streak(session, user.id, today)
 
     fresh_awards, owned = await _sync_achievements(
-        session, user, streak=streak, level=level.number, timezone_name=timezone_name
+        session, user, streak=streak, level=level.number, timezone_name=timezone_name,
+        steps_total=walk.total, steps_streak=walk.streak, steps_best=walk.best,
     )
     await session.commit()
 
@@ -231,6 +243,8 @@ async def sync_today(
         # тренировался, а замер — тому, кто взвесился вчера.
         "workouts_today": workouts_today,
         "days_since_measure": days_since_measure,
+        # Шаги нужны и подсказке, и кольцу на экране — считаем один раз здесь.
+        "steps": walk.to_dict(),
         "just_completed": fresh_quests,
         "new_awards": fresh_awards,
         "awards": [

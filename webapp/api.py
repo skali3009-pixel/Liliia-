@@ -899,6 +899,10 @@ def _options(mapping: dict[str, str]) -> list[dict]:
     return [{"code": code, "label": label} for code, label in mapping.items()]
 
 
+from services.steps import GOAL_CHOICES as _STEP_CHOICES
+from services.steps import goal_for as _steps_goal
+
+
 def _profile_json(user: User) -> dict:
     return {
         "profile": {
@@ -914,6 +918,7 @@ def _profile_json(user: User) -> dict:
             "diet": user.diet_type.value if user.diet_type else None,
             "allergies": user.allergies or "",
             "reminders": bool(user.reminders_enabled),
+            "steps_goal": user.daily_steps or 0,
         },
         "norms": {
             "calories": user.daily_calories or 0,
@@ -922,6 +927,10 @@ def _profile_json(user: User) -> dict:
             "carbs_g": user.daily_carbs_g or 0,
             "fiber_g": user.daily_fiber_g or 0,
             "water_ml": user.daily_water_ml or 0,
+        },
+        "steps": {
+            "goal": _steps_goal(user),
+            "choices": list(_STEP_CHOICES),
         },
         "options": {
             "goal": _options(GOAL_RU),
@@ -1477,6 +1486,90 @@ async def post_feedback(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def post_steps(request: web.Request) -> web.Response:
+    """Внести шаги за сегодня.
+
+    Число заменяет прежнее, а не прибавляется к нему: телефон показывает
+    итог с начала суток, и человек, заглянувший трижды, иначе получил бы
+    тройной день.
+    """
+    from services import steps as step_service
+
+    body = await request.json() if request.can_read_body else {}
+    value = step_service.clean_steps(body.get("steps"))
+    if value is None:
+        return web.json_response({"error": "Это не похоже на число шагов"}, status=400)
+
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        await step_service.record(session, user.id, value,
+                                  timezone_name=request["timezone"])
+        state = await step_service.state(session, user,
+                                         timezone_name=request["timezone"])
+    return web.json_response(state.to_dict())
+
+
+async def get_steps_board(request: web.Request) -> web.Response:
+    """Кто сколько прошёл за неделю: своя команда и всё приложение.
+
+    Наружу отдаётся только имя и шаги. Ни веса, ни калорий, ни еды: шагами
+    соревноваться безвредно, остальным — нет.
+    """
+    from services import steps as step_service
+    from services import teams
+
+    async with get_session() as session:
+        user_id, tz = request["user_id"], request["timezone"]
+        team = await teams.board(session, user_id, timezone_name=tz)
+        top = await step_service.global_top(session, me=user_id, timezone_name=tz)
+
+    invite = ""
+    if team is not None and config.BOT_USERNAME:
+        invite = f"https://t.me/{config.BOT_USERNAME}?start=team_{team.code}"
+
+    return web.json_response({
+        "team": dict(team.to_dict(), invite=invite) if team else None,
+        "top": [row.to_dict() for row in top],
+        "place": step_service.place_of(top, user_id),
+        "cap": step_service.RANKED_CAP,
+        "max_members": teams.MAX_MEMBERS,
+    })
+
+
+async def post_team(request: web.Request) -> web.Response:
+    """Создать команду, вступить в чужую, переименовать свою или выйти."""
+    from services import teams
+
+    body = await request.json() if request.can_read_body else {}
+    action = str(body.get("action") or "").strip()
+    user_id = request["user_id"]
+
+    async with get_session() as session:
+        if action == "create":
+            status, _ = await teams.create(session, user_id, body.get("name") or "")
+        elif action == "join":
+            status, _ = await teams.join(session, user_id, body.get("code") or "")
+        elif action == "rename":
+            status = "ok" if await teams.rename(session, user_id, body.get("name") or "") \
+                else "no_team"
+        elif action == "leave":
+            status = "ok" if await teams.leave(session, user_id) else "no_team"
+        else:
+            return web.json_response({"error": "Непонятное действие"}, status=400)
+
+    problems = {
+        "no_name": "Придумай название команды",
+        "already": "Ты уже в команде. Сначала выйди из неё.",
+        "same": "Ты уже в этой команде",
+        "no_team": "Такой команды нет — проверь код",
+        "full": "В команде уже нет свободных мест",
+    }
+    if status != "ok":
+        return web.json_response({"error": problems.get(status, "Не получилось")},
+                                 status=400)
+    return web.json_response({"ok": True})
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -1507,6 +1600,9 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/cube/shelf", post_shelf)
     app.router.add_post("/api/crash", post_crash)
     app.router.add_post("/api/feedback", post_feedback)
+    app.router.add_post("/api/steps", post_steps)
+    app.router.add_get("/api/steps/board", get_steps_board)
+    app.router.add_post("/api/team", post_team)
     app.router.add_post("/api/workouts/pick", post_workout_pick)
     app.router.add_get("/api/preps", get_preps)
     app.router.add_post("/api/preps/mine", post_my_prep)

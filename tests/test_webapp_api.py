@@ -958,6 +958,148 @@ def test_the_problem_form_needs_a_signature_like_everything_else():
     run(scenario)
 
 
+# --- Шаги и команда --------------------------------------------------------
+
+def test_steps_go_in_and_come_back_with_the_ring_numbers():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/steps",
+                                  json_body={"steps": "7 500"})
+            assert response.status == 200
+            body = await response.json()
+            assert body["today"] == 7500
+            assert body["goal"] > 0
+            assert 0 < body["share"] <= 1
+
+            # Второй раз — уточнение, а не прибавка: телефон показывает итог.
+            again = await (await call(client, "POST", "/api/steps",
+                                      json_body={"steps": 9000})).json()
+            assert again["today"] == 9000
+    run(scenario)
+
+
+def test_steps_show_up_in_the_day_and_close_the_quest():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            await call(client, "POST", "/api/steps", json_body={"steps": 30000})
+            data = await (await call(client, "GET", "/api/today")).json()
+
+            assert data["game"]["steps"]["today"] == 30000
+            quests = {q["code"]: q for q in data["game"]["quests"]}
+            assert quests["steps"]["done"] is True
+    run(scenario)
+
+
+def test_a_nonsense_step_count_is_refused_politely():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/steps",
+                                  json_body={"steps": "много"})
+            assert response.status == 400
+            assert "шаг" in (await response.json())["error"].lower()
+    run(scenario)
+
+
+def test_the_step_goal_is_saved_from_the_profile():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "PATCH", "/api/profile",
+                                  json_body={"steps_goal": 6000})
+            assert response.status == 200
+            assert (await response.json())["steps"]["goal"] == 6000
+
+            # Норма КБЖУ от цели по шагам не зависит.
+            assert (await response.json())["recalculated"] is False
+    run(scenario)
+
+
+def test_a_team_is_made_joined_and_shown_with_its_table():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            await call(client, "POST", "/api/steps", json_body={"steps": 5000})
+            await call(client, "POST", "/api/steps", json_body={"steps": 9000},
+                       user_id=OTHER_ID)
+
+            assert (await call(client, "POST", "/api/team",
+                               json_body={"action": "create",
+                                          "name": "Лисы"})).status == 200
+
+            board = await (await call(client, "GET", "/api/steps/board")).json()
+            code = board["team"]["code"]
+
+            assert (await call(client, "POST", "/api/team", user_id=OTHER_ID,
+                               json_body={"action": "join",
+                                          "code": code})).status == 200
+
+            board = await (await call(client, "GET", "/api/steps/board")).json()
+            assert board["team"]["name"] == "Лисы"
+            assert board["team"]["people"] == 2
+            assert [row["steps"] for row in board["team"]["rows"]] == [9000, 5000]
+            # Наружу уходит только имя и шаги — ни веса, ни калорий, ни еды.
+            assert set(board["team"]["rows"][0]) == {"user_id", "name", "steps",
+                                                     "days", "me"}
+    run(scenario)
+
+
+def test_the_board_never_carries_body_data():
+    """Соревнуемся шагами. Всё остальное между людьми не передаётся."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            await call(client, "POST", "/api/steps", json_body={"steps": 5000})
+            response = await call(client, "GET", "/api/steps/board")
+            raw = await response.text()
+
+            for forbidden in ("weight", "calor", "waist", "meal", "fiber"):
+                assert forbidden not in raw.lower(), forbidden
+    run(scenario)
+
+
+def test_a_wrong_team_code_is_explained_not_swallowed():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            response = await call(client, "POST", "/api/team",
+                                  json_body={"action": "join", "code": "нет-такого"})
+            assert response.status == 400
+            assert "код" in (await response.json())["error"].lower()
+    run(scenario)
+
+
+def test_leaving_a_team_leaves_the_person_without_one():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            await call(client, "POST", "/api/team",
+                       json_body={"action": "create", "name": "Лисы"})
+            assert (await call(client, "POST", "/api/team",
+                               json_body={"action": "leave"})).status == 200
+
+            board = await (await call(client, "GET", "/api/steps/board")).json()
+            assert board["team"] is None
+    run(scenario)
+
+
+def test_the_global_table_shows_my_place():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            await call(client, "POST", "/api/steps", json_body={"steps": 4000})
+            await call(client, "POST", "/api/steps", json_body={"steps": 12000},
+                       user_id=OTHER_ID)
+
+            board = await (await call(client, "GET", "/api/steps/board")).json()
+            assert board["place"] == 2
+            assert board["cap"] > 0
+    run(scenario)
+
+
+def test_steps_need_a_signature_like_everything_else():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            assert (await call(client, "POST", "/api/steps", signed=False,
+                               json_body={"steps": 5000})).status == 401
+            assert (await call(client, "GET", "/api/steps/board",
+                               signed=False)).status == 401
+    run(scenario)
+
+
 def test_shelf_photo_answers_with_names_the_person_can_check(monkeypatch):
     """Сначала показываем, что увидели, и только потом собираем набор."""
     async def scenario():

@@ -47,6 +47,9 @@ class DayContext:
     water_ml: float = 0.0
     water_target: float | None = None
     meals_logged: int = 0
+    steps: int = 0
+    steps_goal: int | None = None
+    steps_logged: bool = False
     workouts_today: int = 0
     days_since_measure: int | None = None
     energy: int | None = None
@@ -136,6 +139,23 @@ def _candidates(ctx: DayContext) -> list[Action]:
                           f"На сегодня осталось ещё {round(ctx.calories_left)} ккал. "
                           "Подобрать ужин?",
                           "Подобрать еду", "cube", score=0.7))
+
+    # Шаги приложение не считает само — их вносит человек. Поэтому сначала
+    # напоминаем внести, и только потом говорим, сколько осталось пройти.
+    if ctx.steps_goal and 9 <= ctx.hour < 22:
+        if not ctx.steps_logged:
+            out.append(Action("steps", "Шаги",
+                              "Шаги за сегодня ещё не отмечены. Загляни в «Здоровье» "
+                              "на телефоне и впиши число — это пара секунд.",
+                              "Внести шаги", "steps", score=0.65))
+        elif ctx.steps < ctx.steps_goal:
+            left = ctx.steps_goal - ctx.steps
+            minutes = max(round(left / 100), 1)
+            out.append(Action("steps", "Шаги",
+                              f"До цели осталось {left} шагов — это примерно "
+                              f"{minutes} минут пешком.",
+                              "Пройтись", "steps",
+                              score=0.5 + 0.4 * (left / ctx.steps_goal)))
 
     # Тренировку не предлагаем на пустой батарейке: это не забота, а давление.
     if ctx.workouts_today == 0 and 9 <= ctx.hour < 21:

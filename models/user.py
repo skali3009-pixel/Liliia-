@@ -97,6 +97,9 @@ class User(Base):
     # Клетчатка — отдельная цель, в калорийность рациона не входит.
     daily_fiber_g: Mapped[int | None] = mapped_column(Integer, nullable=True)
     daily_water_ml: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Цель по шагам человек выбирает сам: она не считается по формуле, как
+    # калории, — это его договорённость с собой, а не медицинская норма.
+    daily_steps: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     # Мягкие напоминания бота (дневник, вода, итоги недели). Напоминания о
     # препаратах человек ставит сам поштучно, они этим флагом не выключаются.

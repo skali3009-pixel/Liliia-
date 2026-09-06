@@ -42,6 +42,9 @@ def day_context(user: User, tz: str, *, totals, water, meals, state, game,
         fiber_g=totals.fiber_g, fiber_target=user.daily_fiber_g or None,
         water_ml=water, water_target=user.daily_water_ml or None,
         meals_logged=meals,
+        steps=(game.get("steps") or {}).get("today", 0),
+        steps_goal=(game.get("steps") or {}).get("goal") or None,
+        steps_logged=bool((game.get("steps") or {}).get("today")),
         workouts_today=game.get("workouts_today", 0),
         days_since_measure=days_since_measure,
         energy=state.energy, stress=state.stress,
@@ -94,6 +97,8 @@ class Turn:
     quests_total: int
     level: int
     streak: int
+    steps: int = 0
+    steps_goal: int = 0
 
 
 async def build(session: AsyncSession, user: User, *,
@@ -124,6 +129,8 @@ async def build(session: AsyncSession, user: User, *,
         quests_done=game.get("quests_done", 0),
         quests_total=game.get("quests_total", 0),
         level=game.get("level", 1), streak=game.get("streak", 0),
+        steps=(game.get("steps") or {}).get("today", 0),
+        steps_goal=(game.get("steps") or {}).get("goal", 0),
     )
 
 
@@ -157,6 +164,8 @@ def render(turn: Turn) -> str:
                      + (f" · осталось {left}" if left > 0 else " · норма набрана"))
     if turn.water_target:
         lines.append(f"💧 Вода {turn.water_ml} из {turn.water_target} мл")
+    if turn.steps_goal:
+        lines.append(f"👟 Шаги {turn.steps} из {turn.steps_goal}")
     if turn.quests_total:
         lines.append(f"🎯 Задания дня: {turn.quests_done} из {turn.quests_total}")
     progress = f"💎 Уровень {turn.level}"

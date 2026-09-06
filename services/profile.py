@@ -40,6 +40,9 @@ EDITABLE = {
     "diet": False,
     "allergies": False,
     "target_weight": False,
+    # Цель по шагам на норму КБЖУ не влияет: это договорённость человека с
+    # собой, а не расчёт по формуле.
+    "steps_goal": False,
 }
 
 
@@ -249,6 +252,14 @@ def apply_changes(user: User, changes: dict) -> bool:
                 raise ProfileError(
                     f"Вес цели — от {MIN_TARGET_KG:.0f} до {MAX_TARGET_KG:.0f} кг")
             user.target_weight_kg = value
+        elif field == "steps_goal":
+            from services.steps import MAX_GOAL, MIN_GOAL, clean_goal
+
+            value = clean_goal(raw)
+            if value is None:
+                raise ProfileError(
+                    f"Цель по шагам — число от {MIN_GOAL} до {MAX_GOAL}")
+            user.daily_steps = value
         elif field == "allergies":
             user.allergies = clean_allergies(raw)
         elif field == "reminders":

@@ -139,17 +139,19 @@ def _all_targets() -> set[str]:
             protein_target=120, fiber_g=1, fiber_target=25, water_ml=0,
             water_target=2000, meals_logged=0, days_since_measure=30,
             preps_expiring=("Курица",), energy=1, stress="high",
+            steps=0, steps_goal=8000, steps_logged=False,
         )
         targets |= {action.target for action in context._candidates(ctx)}
         rested = context.DayContext(hour=hour, energy=5, stress="low",
-                                    meals_logged=1, calories_target=2000)
+                                    meals_logged=1, calories_target=2000,
+                                    steps=3000, steps_goal=8000, steps_logged=True)
         targets |= {action.target for action in context._candidates(rested)}
     return targets
 
 
-# Что делается только на экране: отметить самочувствие и заготовки в чате
+# Что делается только на экране: отметить самочувствие и внести шаги в чате
 # нечем. Для них показывается кнопка «открыть приложение».
-APP_ONLY = {"checkin"}
+APP_ONLY = {"checkin", "steps"}
 
 
 def test_every_suggestion_knows_where_it_leads_in_the_chat():

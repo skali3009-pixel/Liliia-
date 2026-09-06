@@ -4,6 +4,7 @@
 const tg = window.Telegram?.WebApp;
 const RING_LENGTH = 327; // длина окружности радиуса 52
 const DIAL_LENGTH = 113; // длина окружности радиуса 18
+const RING_LENGTH_SMALL = RING_LENGTH; // кольцо шагов того же радиуса, меньше размером
 
 let state = null;
 
@@ -279,9 +280,54 @@ function renderToday(data) {
   document.getElementById('bar-water').style.width =
     norms.water_ml ? `${Math.min((totals.water_ml / norms.water_ml) * 100, 100)}%` : '0%';
 
+  renderSteps(data.game && data.game.steps);
   renderHero(data);
   renderTimeline(data.timeline || []);
   renderFrequent(data.frequent || []);
+}
+
+
+/* --- Шаги --------------------------------------------------------------- */
+// Число вносит человек: приложение внутри Telegram не имеет доступа ни к
+// «Здоровью», ни к датчику шагов — это умеет только отдельное приложение
+// из магазина. Поэтому здесь всё построено вокруг одной кнопки.
+
+function renderSteps(steps) {
+  if (!steps) return;
+  document.getElementById('steps-value').textContent = steps.today || 0;
+  document.getElementById('steps-goal-label').textContent = `из ${steps.goal}`;
+
+  const ring = document.getElementById('steps-fill');
+  ring.style.strokeDashoffset = RING_LENGTH_SMALL * (1 - (steps.share || 0));
+
+  document.getElementById('steps-left').textContent = steps.done
+    ? 'Норма пройдена 👏'
+    : steps.today
+      ? `Осталось ${steps.left}`
+      : 'Сегодня ещё не отмечено';
+  document.getElementById('steps-week').textContent =
+    `За неделю ${steps.week}` + (steps.best ? ` · лучший день ${steps.best}` : '');
+  document.getElementById('steps-streak').textContent =
+    steps.streak ? `🔥 ${steps.streak} ${plural(steps.streak, 'день', 'дня', 'дней')} с нормой` : '';
+}
+
+async function askSteps() {
+  const current = document.getElementById('steps-value').textContent;
+  const answer = prompt('Сколько шагов сегодня? Число из «Здоровья» на телефоне.',
+                        current === '—' ? '' : current);
+  if (answer === null) return;
+  try {
+    const steps = await api('/api/steps', {
+      method: 'POST',
+      body: JSON.stringify({ steps: answer }),
+    });
+    renderSteps(steps);
+    haptic('medium');
+    // Задание дня могло закрыться — цифры и кристаллы должны это показать.
+    await refresh();
+  } catch (error) {
+    toast(error.message);
+  }
 }
 
 /* --- игра: уровень, кристалл, задания дня --- */
@@ -2387,6 +2433,16 @@ function renderProfile(data) {
 
   document.getElementById('prof-allergies').value = p.allergies || '';
 
+  // Цель по шагам: готовые числа плюс своё. Это не медицинская норма, а
+  // договорённость с собой, поэтому выбирает её человек, а не формула.
+  const goal = data.steps?.goal || 0;
+  optionButtons('prof-steps',
+    (data.steps?.choices || []).map((value) => ({ code: String(value), label: String(value) })),
+    String(goal), (code) => saveProfile({ steps_goal: code }));
+  const own = document.getElementById('prof-steps-own');
+  own.value = goal || '';
+  own.placeholder = String(goal || '');
+
   const reminders = document.getElementById('prof-reminders');
   reminders.textContent = p.reminders ? 'включены' : 'выключены';
   reminders.classList.toggle('on', p.reminders);
@@ -2461,6 +2517,84 @@ async function refresh() {
   // Награда и закрытое задание приходят от сервера ровно один раз — если не
   // показать их сейчас, пользователь о них не узнает.
   celebrate(state.game);
+}
+
+
+/* --- Команда и рейтинг --------------------------------------------------- */
+// Личный счётчик шагов забрасывают через неделю: смотреть в него незачем.
+// Работает другое — что тебя видят.
+
+let stepsBoard = null;
+
+async function refreshBoard() {
+  stepsBoard = await api('/api/steps/board');
+  renderTeam(stepsBoard);
+  renderTop(stepsBoard);
+}
+
+function boardRow(row, place) {
+  const item = document.createElement('div');
+  item.className = 'board-row' + (row.me ? ' me' : '');
+  const days = row.days ? `<span class="board-days">${row.days} дн. с нормой</span>` : '';
+  item.innerHTML = `<span class="board-place">${place}</span>`
+    + `<span class="board-name"></span>`
+    + `<span class="board-steps">${row.steps}${days}</span>`;
+  // Имя приходит от другого человека — вставляем текстом, а не разметкой.
+  item.querySelector('.board-name').textContent = row.name;
+  return item;
+}
+
+function renderTeam(data) {
+  const team = data.team;
+  document.getElementById('team-none').hidden = Boolean(team);
+  document.getElementById('team-mine').hidden = !team;
+  document.getElementById('team-total').textContent =
+    team ? `${team.total} за неделю` : '';
+  if (!team) return;
+
+  document.getElementById('team-name-view').textContent = team.name;
+  const rows = document.getElementById('team-rows');
+  rows.innerHTML = '';
+  team.rows.forEach((row, index) => rows.appendChild(boardRow(row, index + 1)));
+
+  const invite = document.getElementById('team-invite');
+  invite.disabled = team.full;
+  invite.textContent = team.full ? 'Мест больше нет' : 'Позвать в команду';
+  // Ссылку строит сервер: имя бота знает он, а не страница.
+  invite.onclick = () => shareInvite(team.invite);
+}
+
+function renderTop(data) {
+  const rows = document.getElementById('top-rows');
+  rows.innerHTML = '';
+  (data.top || []).forEach((row, index) => rows.appendChild(boardRow(row, index + 1)));
+  document.getElementById('top-place').textContent =
+    data.place ? `ты ${data.place}-я` : '';
+  document.getElementById('top-hint').textContent =
+    `В зачёт идёт не больше ${data.cap} шагов за день: приписывать бессмысленно, `
+    + 'а до потолка проще дойти ногами.';
+}
+
+async function teamAction(body) {
+  try {
+    await api('/api/team', { method: 'POST', body: JSON.stringify(body) });
+    await refreshBoard();
+    haptic('medium');
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+function wireTeam() {
+  document.getElementById('team-create').onclick = () =>
+    teamAction({ action: 'create', name: document.getElementById('team-name').value });
+  document.getElementById('team-join').onclick = () =>
+    teamAction({ action: 'join', code: document.getElementById('team-code').value.trim() });
+  document.getElementById('team-leave').onclick = () => {
+    if (confirm('Выйти из команды? Её таблица без тебя останется.')) {
+      teamAction({ action: 'leave' });
+    }
+  };
 }
 
 
@@ -3095,6 +3229,7 @@ function switchScreen(name) {
   if (name === 'world') {
     refreshWorld().catch((e) => toast(e.message));
     refreshFriends().catch((e) => toast(e.message));
+    refreshBoard().catch((e) => toast(e.message));
   }
   if (name === 'progress' && !progress) refreshProgress().catch((e) => toast(e.message));
   if (name === 'gym' && !gym) {
@@ -3136,6 +3271,8 @@ async function init() {
   };
 
   document.getElementById('profile-open').onclick = openProfile;
+  document.getElementById('steps-add').onclick = askSteps;
+  wireTeam();
   document.getElementById('profile-close').onclick = closeProfile;
   document.getElementById('prof-export').onclick = requestExport;
   document.getElementById('prof-reminders').onclick = () => {
@@ -3144,7 +3281,8 @@ async function init() {
   document.getElementById('prof-allergies').onchange = (event) =>
     saveProfile({ allergies: event.target.value });
   for (const [id, field] of [['prof-height', 'height'], ['prof-age', 'age'],
-                             ['prof-target', 'target_weight']]) {
+                             ['prof-target', 'target_weight'],
+                             ['prof-steps-own', 'steps_goal']]) {
     document.getElementById(id).onchange = (event) => saveProfileField(field, event.target);
   }
 

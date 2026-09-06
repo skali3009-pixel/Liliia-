@@ -76,6 +76,8 @@ def build_quests(
     workouts_today: int,
     days_since_measure: int | None,
     stress_marked: bool = False,
+    steps: int = 0,
+    steps_goal: int = 0,
 ) -> list[Quest]:
     """Задания на сегодня, посчитанные по данным дня.
 
@@ -123,6 +125,16 @@ def build_quests(
             target=fiber_norm_g,
             done=bool(fiber_norm_g) and fiber_g >= fiber_norm_g,
             hint=f"{round(fiber_g)} из {round(fiber_norm_g)} г",
+        ),
+        Quest(
+            code="steps",
+            title="Пройти свою норму шагов",
+            icon="👟",
+            xp=20,
+            progress=steps,
+            target=steps_goal,
+            done=bool(steps_goal) and steps >= steps_goal,
+            hint=f"{steps} из {steps_goal}" if steps_goal else "цель не выбрана",
         ),
         Quest(
             code="move",
@@ -222,6 +234,13 @@ ACHIEVEMENTS: tuple[AchievementDef, ...] = (
     AchievementDef("waist_5cm", "Талия минус 5", "📏", "−5 см в талии"),
     AchievementDef("workouts_10", "Десять тренировок", "🏋️", "10 тренировок"),
     AchievementDef("workouts_50", "Полсотни", "🥇", "50 тренировок"),
+    # Ходьба — единственное, чем в этом приложении можно соревноваться без
+    # вреда: обогнать другого получится только тем, что полезно обоим.
+    AchievementDef("steps_first", "Первые шаги", "👟", "первая запись шагов"),
+    AchievementDef("steps_week", "Неделя на ногах", "🚶", "7 дней подряд с нормой"),
+    AchievementDef("steps_100k", "Сто тысяч шагов", "🛤", "100 000 шагов всего"),
+    AchievementDef("steps_500k", "Полмиллиона", "🏔", "500 000 шагов всего"),
+    AchievementDef("steps_marathon", "Дневной марафон", "🏅", "20 000 шагов за день"),
 )
 
 ACHIEVEMENT_BY_CODE = {item.code: item for item in ACHIEVEMENTS}
@@ -235,6 +254,9 @@ def earned_codes(
     weight_lost_kg: float,
     waist_lost_cm: float,
     workouts_total: int,
+    steps_total: int = 0,
+    steps_streak: int = 0,
+    steps_best: int = 0,
 ) -> set[str]:
     """Какие награды заслужены прямо сейчас (уже выданные тоже попадают сюда)."""
     earned: set[str] = set()
@@ -256,4 +278,14 @@ def earned_codes(
         earned.add("workouts_10")
     if workouts_total >= 50:
         earned.add("workouts_50")
+    if steps_total >= 1:
+        earned.add("steps_first")
+    if steps_streak >= 7:
+        earned.add("steps_week")
+    if steps_total >= 100_000:
+        earned.add("steps_100k")
+    if steps_total >= 500_000:
+        earned.add("steps_500k")
+    if steps_best >= 20_000:
+        earned.add("steps_marathon")
     return earned

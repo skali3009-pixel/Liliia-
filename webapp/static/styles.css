@@ -1106,6 +1106,32 @@ select.fact-input { text-align: left; width: 130px; }
 .basket-item.on { border-color: var(--accent); background: rgba(124, 92, 255, .18); color: var(--fg); }
 .basket-count { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
 
+/* --- Шаги: своё кольцо, поменьше главного ---------------------------------- */
+.steps-card .card-head { margin-bottom: 4px; }
+.steps-body { display: flex; align-items: center; gap: 16px; }
+.ring.small { width: 116px; height: 116px; }
+.ring-fill.steps { stroke: url(#steps-gradient); }
+.steps-ring { flex: none; }
+.steps-side { flex: 1; min-width: 0; }
+.steps-left { margin: 0 0 4px; font-size: 15px; font-weight: 600; }
+.steps-side .btn { margin-top: 8px; }
+.steps-card .kcal-value { font-size: 22px; }
+
+/* --- Команда и рейтинг ---------------------------------------------------- */
+.team-name { margin: 0 0 10px; font-size: 17px; }
+.board-row {
+  display: flex; align-items: center; gap: 10px; padding: 9px 0;
+  border-bottom: 1px solid var(--stroke);
+}
+.board-row:last-child { border-bottom: none; }
+.board-place { width: 26px; flex: none; color: var(--muted); font-size: 13px; }
+.board-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; }
+.board-steps { font-variant-numeric: tabular-nums; font-weight: 600; }
+.board-days { color: var(--muted); font-size: 12px; margin-left: 6px; }
+.board-row.me .board-name { color: var(--accent); font-weight: 600; }
+#team-none .btn, #team-none .input { margin-bottom: 8px; }
+
 /* Рассказ о проблеме тянется только вниз: вбок он вылезал бы из карточки. */
 #prof-problem { resize: vertical; min-height: 72px; font-family: inherit; }
 

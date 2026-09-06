@@ -121,3 +121,26 @@ def test_the_problem_form_is_wired_in_the_app():
         assert f'id="{element_id}"' in INDEX, element_id
         assert f"'{element_id}'" in APP_JS, element_id
     assert "'/api/feedback'" in APP_JS
+
+
+def test_the_step_ring_and_team_are_wired():
+    """Кольцо шагов и команда: код ищет их по id, опечатка ломает молча."""
+    for element_id in ("steps-fill", "steps-value", "steps-goal-label", "steps-left",
+                       "steps-week", "steps-streak", "steps-add",
+                       "team-create", "team-join", "team-leave", "team-invite",
+                       "team-rows", "team-name-view", "top-rows", "top-place",
+                       "prof-steps", "prof-steps-own"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+
+
+def test_the_step_ring_stands_where_the_calorie_ring_stands():
+    """Шаги открывают посмотреть сами по себе — им нужно место на первом экране."""
+    assert INDEX.index('class="ring-card"') < INDEX.index('class="card steps-card"')
+    assert INDEX.index('class="card steps-card"') < INDEX.index("<h2>Лента дня</h2>")
+
+
+def test_the_person_is_told_that_steps_are_entered_by_hand():
+    """Молчать об этом нельзя: человек решит, что шагомер сломался."""
+    assert "Здоровье" in INDEX
+    assert "сам" in INDEX or "сама" in INDEX

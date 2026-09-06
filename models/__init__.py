@@ -12,6 +12,8 @@ from models.usage import ApiUsage
 from models.day_stat import DayStat
 from models.meal import Meal, MealSourceEnum, MealTypeEnum
 from models.friendship import Friendship, Invite
+from models.steps import StepLog
+from models.team import Team, TeamMember
 from models.user_prep import UserPrep
 from models.user import (
     ActivityLevelEnum,
@@ -32,6 +34,9 @@ from models.workout import LevelEnum, LocationEnum, Workout, WorkoutLog, Workout
 
 __all__ = [
     "Base",
+    "StepLog",
+    "Team",
+    "TeamMember",
     "User",
     "GenderEnum",
     "ActivityLevelEnum",
