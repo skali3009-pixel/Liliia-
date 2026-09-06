@@ -201,17 +201,11 @@ fi
 BOT_USERNAME="$(curl -s --max-time 10 "https://api.telegram.org/bot$BOT_TOKEN/getMe" \
     | python3 -c "import json,sys; print(json.load(sys.stdin).get('result',{}).get('username',''))" 2>/dev/null || true)"
 
-# Резервные копии включаем сразу: бэкап, который надо не забыть включить,
-# обычно оказывается невключённым как раз тогда, когда он нужен.
-if [ -f "$APP_DIR/setup-backup.sh" ]; then
-    bash "$APP_DIR/setup-backup.sh" >/dev/null 2>&1 && \
-        ok "ежедневные резервные копии включены (каждую ночь в 04:30)"
-fi
-
-# Сторож — по той же причине. Упавший бот не может пожаловаться сам.
-if [ -f "$APP_DIR/setup-watchdog.sh" ]; then
-    bash "$APP_DIR/setup-watchdog.sh" >/dev/null 2>&1 && \
-        ok "сторож включён: сообщит владельцу, если бот перестанет отвечать"
+# Сторож, копии и автообновление включаем сразу: то, что надо не забыть
+# включить, оказывается невключённым как раз тогда, когда оно нужно.
+if [ -f "$APP_DIR/ensure-ops.sh" ]; then
+    bash "$APP_DIR/ensure-ops.sh" >/dev/null 2>&1 || true
+    bash "$APP_DIR/ensure-ops.sh" --check | sed 's/^/  /'
 fi
 
 printf "\n\033[1;32m═══════════════════════════════════════════\033[0m\n"
