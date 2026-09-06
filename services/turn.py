@@ -100,6 +100,7 @@ class Turn:
     streak: int
     steps: int = 0
     steps_goal: int = 0
+    hour: int = 12
 
 
 async def build(session: AsyncSession, user: User, *,
@@ -132,6 +133,7 @@ async def build(session: AsyncSession, user: User, *,
         level=game.get("level", 1), streak=game.get("streak", 0),
         steps=(game.get("steps") or {}).get("today", 0),
         steps_goal=(game.get("steps") or {}).get("goal", 0),
+        hour=context.hour_in(tz),
     )
 
 
@@ -200,8 +202,16 @@ def render(turn: Turn) -> str:
     lines.append(progress)
 
     if turn.action is None:
-        # Ночью и когда всё закрыто предлагать нечего — и выдумывать не надо.
-        lines += ["", "На сегодня ничего срочного. Всё идёт как надо."]
+        # Предлагать нечего по трём разным причинам, и говорить о них одной
+        # фразой нельзя. «Всё идёт как надо» в одиннадцать вечера человеку с
+        # шестью незакрытыми заданиями — неправда, а неправда в мелочи бьёт
+        # по доверию ко всему остальному, что говорит бот.
+        if turn.hour >= context.QUIET_FROM or turn.hour < context.QUIET_TO:
+            lines += ["", "Уже ночь — на сегодня всё. Отдыхай."]
+        elif turn.quests_total and turn.quests_done >= turn.quests_total:
+            lines += ["", "Всё на сегодня закрыто. Можно выдохнуть."]
+        else:
+            lines += ["", "Ничего срочного прямо сейчас."]
         return "\n".join(lines)
 
     # Бот отвечает обычным текстом, без разметки: жирного тут не будет.

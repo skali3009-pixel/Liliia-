@@ -227,9 +227,19 @@ def test_the_message_names_the_button_to_press():
 
 
 def test_nothing_urgent_is_said_plainly_instead_of_inventing_a_task():
-    text = turn_service.render(_turn(None))
+    text = turn_service.render(_turn(None, hour=14, quests_done=2))
     assert "ничего срочного" in text.lower()
     assert "Твой ход" not in text
+
+
+def test_the_night_is_not_called_a_day_well_spent():
+    """«Всё идёт как надо» в одиннадцать вечера человеку с незакрытым днём —
+    неправда, а неправда в мелочи бьёт по доверию ко всему остальному."""
+    night = turn_service.render(_turn(None, hour=23, quests_done=1, quests_total=7))
+    assert "ночь" in night.lower() and "как надо" not in night.lower()
+
+    done = turn_service.render(_turn(None, hour=14, quests_done=7, quests_total=7))
+    assert "закрыто" in done.lower()
 
 
 def test_the_message_skips_numbers_that_are_not_set():
