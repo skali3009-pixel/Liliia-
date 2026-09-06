@@ -15,6 +15,7 @@ from models import User
 from services.meals import get_today_totals
 from services.progress import compute_streak, meal_days, measure_points
 from utils.timeframe import today_in
+from utils.plural import plural
 
 logger = logging.getLogger(__name__)
 router = Router(name="progress")
@@ -66,7 +67,8 @@ async def show_progress(message: Message) -> None:
 
     lines += ["", f"🔥 Сегодня: {round(totals.calories)} из {norm or '—'} ккал"]
     if streak:
-        lines.append(f"📅 Записываешь еду {streak} дней подряд")
+        days = plural(streak, "день", "дня", "дней")
+        lines.append(f"📅 Записываешь еду {streak} {days} подряд")
 
     keyboard = _open_app_keyboard()
     if keyboard is None:

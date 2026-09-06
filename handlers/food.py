@@ -589,27 +589,6 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer("Сохранено ✅")
 
 
-def _render_game_lines(game: dict) -> list[str]:
-    """Уровень, стрик и только что закрытые задания — короткой припиской."""
-    if not game:
-        return []
-
-    lines = [""]
-    for code in game.get("just_completed", []):
-        quest = next((q for q in game["quests"] if q["code"] == code), None)
-        if quest:
-            lines.append(f"✅ Задание закрыто: {quest['title']} +{quest['xp']} 💎")
-
-    for award in game.get("new_awards", []):
-        lines.append(f"{award['icon']} Новая награда: {award['title']}")
-
-    progress = f"💎 Уровень {game['level']} · {game['xp_in_level']}/{game['xp_to_next']}"
-    if game.get("streak"):
-        progress += f" · 🔥 {game['streak']} дней подряд"
-    lines.append(progress)
-    return lines
-
-
 def _render_day_summary(analysis, meal_type_label, totals, norms, game=None,
                         *, cheetah=None) -> str:
     calories_norm, protein_norm, fat_norm, carbs_norm, fiber_norm = norms
@@ -628,7 +607,7 @@ def _render_day_summary(analysis, meal_type_label, totals, norms, game=None,
         f"🍚 У {_num(totals.carbs_g)} / {carbs_norm or '—'} г",
         f"🥦 Клетчатка {_num(totals.fiber_g)} / {fiber_norm or '—'} г",
     ]
-    lines += _render_game_lines(game)
+    lines += turn_service.game_lines(game)
     if cheetah is not None:
         lines += ["", f"{cheetah.emoji} {cheetah.line}"]
     return "\n".join(lines)

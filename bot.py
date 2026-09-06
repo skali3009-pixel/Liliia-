@@ -14,7 +14,8 @@ import config
 from db import init_models
 from services.artwork import ensure_artwork
 from handlers import (access, errors, feedback, food, legal, onboarding, profile,
-                      progress, suggestions, supplements, turn, water, workouts)
+                      progress, steps, suggestions, supplements, turn, water,
+                      workouts)
 from middlewares.access import AccessMiddleware
 from scheduler import start_scheduler
 from webapp.server import start_webapp
@@ -42,6 +43,9 @@ dp.include_router(feedback.router)
 # «Мой ход» тоже раньше еды: нажатый посреди добавления блюда, он иначе
 # уедет в распознавание как название.
 dp.include_router(turn.router)
+# Шаги тоже раньше еды: число «8500», присланное в ответ, иначе уедет в
+# распознавание как название блюда.
+dp.include_router(steps.router)
 dp.include_router(food.router)
 dp.include_router(water.router)
 dp.include_router(supplements.router)

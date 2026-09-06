@@ -13,6 +13,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from utils.plural import plural
 
 # Порядок важен: первое подошедшее и побеждает. Сверху — редкие и радостные
 # события, снизу — обычное течение дня.
@@ -67,7 +68,8 @@ def mood(*, hour: int, energy: int | None = None, stress: str | None = None,
 
     if streak >= 7 and quests_done:
         return Mood(STREAK, "🔥",
-                    f"{streak} дней подряд. Гепард уже привык, что ты приходишь.")
+                    f"{streak} {plural(streak, 'день', 'дня', 'дней')} подряд. "
+                    "Гепард уже привык, что ты приходишь.")
 
     if quests_total and quests_done >= quests_total:
         return Mood(PROUD, "😌",

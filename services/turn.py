@@ -30,6 +30,7 @@ from services.water import today_total_ml
 from utils.cheetah import Mood
 from utils.cheetah import mood as cheetah_mood
 from utils.timeframe import DEFAULT_TIMEZONE
+from utils.plural import plural
 
 
 def day_context(user: User, tz: str, *, totals, water, meals, state, game,
@@ -134,11 +135,35 @@ async def build(session: AsyncSession, user: User, *,
     )
 
 
+def game_lines(game: dict) -> list[str]:
+    """Уровень, стрик и только что закрытые задания — короткой припиской."""
+    if not game:
+        return []
+
+    lines = [""]
+    for code in game.get("just_completed", []):
+        quest = next((q for q in game["quests"] if q["code"] == code), None)
+        if quest:
+            lines.append(f"✅ Задание закрыто: {quest['title']} +{quest['xp']} 💎")
+
+    for award in game.get("new_awards", []):
+        lines.append(f"{award['icon']} Новая награда: {award['title']}")
+
+    progress = f"💎 Уровень {game['level']} · {game['xp_in_level']}/{game['xp_to_next']}"
+    if game.get("streak"):
+        days = plural(game["streak"], "день", "дня", "дней")
+        progress += f" · 🔥 {game['streak']} {days} подряд"
+    lines.append(progress)
+    return lines
+
+
+
 # Куда ведёт подсказка в чате. В приложении кнопка открывает экран, в чате
 # экранов нет — зато есть кнопки нижнего меню, и человеку понятнее, когда
 # ему называют ту самую кнопку, которую он видит.
 CHAT_BUTTON = {
     "water": "💧 Вода",
+    "steps": "👟 Шаги",
     "meal": "📷 Добавить еду",
     "cube": "🍽️ Что съесть",
     "workout": "🏋️ Тренировка",
@@ -170,7 +195,8 @@ def render(turn: Turn) -> str:
         lines.append(f"🎯 Задания дня: {turn.quests_done} из {turn.quests_total}")
     progress = f"💎 Уровень {turn.level}"
     if turn.streak:
-        progress += f" · 🔥 {turn.streak} дней подряд"
+        days = plural(turn.streak, "день", "дня", "дней")
+        progress += f" · 🔥 {turn.streak} {days} подряд"
     lines.append(progress)
 
     if turn.action is None:
@@ -187,4 +213,4 @@ def render(turn: Turn) -> str:
 
 
 __all__ = ["CHAT_BUTTON", "Turn", "build", "chat_hint", "cheetah_for",
-           "day_context", "next_action", "render"]
+           "day_context", "game_lines", "next_action", "render"]

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from models import (ActivityLevelEnum, Base, GenderEnum, GoalEnum, User)
 from services import steps as step_service
 from services import teams
+from utils.timeframe import today_in
 
 TODAY = date(2026, 9, 6)
 
@@ -330,3 +331,204 @@ def test_walking_earns_its_own_awards():
     assert "steps_100k" in earned_codes(**base, steps_total=100_000)
     assert "steps_marathon" in earned_codes(**base, steps_best=20_000)
     assert earned_codes(**base) == set()
+
+
+# --- Ввод из чата ----------------------------------------------------------
+# Тому, кто живёт в переписке и приложение не открывает, нужен путь в чате —
+# иначе он выпадает из всей затеи с командой и рейтингом.
+
+class FakeState:
+    def __init__(self):
+        self.state = None
+        self.cleared = False
+
+    async def set_state(self, value):
+        self.state = value
+
+    async def clear(self):
+        self.state, self.cleared = None, True
+
+
+class FakeMessage:
+    def __init__(self, text="", user_id=1):
+        self.text = text
+        self.from_user = type("U", (), {"id": user_id})()
+        self.said: list[str] = []
+
+    async def answer(self, text, **kwargs):
+        self.said.append(text)
+        return self
+
+
+@contextlib.asynccontextmanager
+async def chat_db():
+    """База, подменённая обработчику: он ходит в неё сам."""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+    maker = async_sessionmaker(engine, expire_on_commit=False)
+
+    @contextlib.asynccontextmanager
+    async def get_session():
+        async with maker() as session:
+            yield session
+
+    import db as db_module
+    import handlers.steps as module
+
+    original, original_db = module.get_session, db_module.get_session
+    module.get_session = get_session
+    db_module.get_session = get_session
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    async with maker() as session:
+        session.add(User(
+            id=1, full_name="Лилия", gender=GenderEnum.FEMALE, age=30,
+            height_cm=165, current_weight_kg=60, goal=GoalEnum.LOSE_WEIGHT,
+            activity_level=ActivityLevelEnum.MODERATE, onboarding_completed=True,
+            daily_calories=1600, daily_protein_g=120, daily_fat_g=48,
+            daily_carbs_g=160, daily_fiber_g=22, daily_water_ml=2100,
+            daily_steps=8000, timezone="Europe/Moscow"))
+        await session.commit()
+    try:
+        yield maker
+    finally:
+        module.get_session = original
+        db_module.get_session = original_db
+        await engine.dispose()
+
+
+def test_a_number_sent_in_the_chat_is_written_down():
+    async def scenario():
+        from handlers.steps import take_number
+
+        async with chat_db() as maker:
+            message, state = FakeMessage("9200"), FakeState()
+            await take_number(message, state)
+
+            async with maker() as session:
+                today = today_in("Europe/Moscow")
+                assert await step_service.on_day(session, 1, today) == 9200
+
+            assert "9200" in message.said[0]
+            assert state.cleared
+    run(scenario)
+
+
+def test_the_chat_answer_shows_the_same_numbers_as_the_ring():
+    async def scenario():
+        from handlers.steps import take_number
+
+        async with chat_db():
+            message = FakeMessage("9200")
+            await take_number(message, FakeState())
+            text = message.said[0]
+            assert "из 8000" in text and "Норма пройдена" in text
+            assert "За неделю" in text
+    run(scenario)
+
+
+def test_falling_short_is_told_in_minutes_not_in_shame():
+    async def scenario():
+        from handlers.steps import take_number
+
+        async with chat_db():
+            message = FakeMessage("6000")
+            await take_number(message, FakeState())
+            assert "Осталось 2000" in message.said[0]
+            assert "минут пешком" in message.said[0]
+    run(scenario)
+
+
+def test_a_wrong_answer_asks_again_instead_of_dropping_the_person():
+    async def scenario():
+        from handlers.steps import take_number
+
+        async with chat_db():
+            message, state = FakeMessage("много ходила"), FakeState()
+            await take_number(message, state)
+
+            assert "цифрой" in message.said[0]
+            # Человек ошибся, а не передумал: состояние остаётся.
+            assert state.cleared is False
+    run(scenario)
+
+
+def test_the_command_writes_the_number_right_away():
+    async def scenario():
+        from handlers.steps import steps_command
+
+        async with chat_db():
+            message, state = FakeMessage("/steps 7000"), FakeState()
+            command = type("C", (), {"args": "7000"})()
+            await steps_command(message, state, command)
+
+            assert "7000" in message.said[0]
+    run(scenario)
+
+
+def test_the_command_without_a_number_asks_for_one():
+    async def scenario():
+        from handlers.steps import steps_command
+
+        async with chat_db():
+            message, state = FakeMessage("/steps"), FakeState()
+            command = type("C", (), {"args": None})()
+            await steps_command(message, state, command)
+
+            assert "Сколько шагов" in message.said[0]
+            assert state.state is not None
+    run(scenario)
+
+
+def test_the_button_says_what_is_already_written_down():
+    """Новое число заменяет прежнее — человек должен это понимать заранее."""
+    async def scenario():
+        from handlers.steps import ask_steps, take_number
+
+        async with chat_db():
+            await take_number(FakeMessage("5000"), FakeState())
+
+            message = FakeMessage()
+            await ask_steps(message, FakeState())
+            assert "5000" in message.said[0]
+            assert "заменит" in message.said[0]
+    run(scenario)
+
+
+def test_a_menu_button_ends_the_waiting():
+    async def scenario():
+        from aiogram.dispatcher.event.bases import SkipHandler
+        from handlers.steps import leave_waiting
+        from keyboards.main_menu import MENU_WATER
+
+        state = FakeState()
+        with pytest.raises(SkipHandler):
+            await leave_waiting(FakeMessage(MENU_WATER), state)
+        assert state.cleared
+    run(scenario)
+
+
+def test_the_chat_button_is_in_the_menu_and_the_hint_names_it():
+    from keyboards.main_menu import MENU_STEPS, main_menu_keyboard
+    from services import turn as turn_service
+
+    buttons = {b.text for row in main_menu_keyboard().keyboard for b in row}
+    assert MENU_STEPS in buttons
+    assert turn_service.CHAT_BUTTON["steps"] == MENU_STEPS
+
+
+def test_the_streak_is_written_in_proper_russian():
+    """«1 дней подряд» — мелочь, которую видно в каждом ответе бота."""
+    from handlers.steps import render
+
+    def line(days: int) -> str:
+        walk = step_service.Steps(today=9000, goal=8000, week=9000,
+                                  streak=days, total=9000, best=9000)
+        return render(walk)
+
+    assert "1 день подряд" in line(1)
+    assert "2 дня подряд" in line(2)
+    assert "5 дней подряд" in line(5)
+    assert "21 день подряд" in line(21)
+    # И два разных счётчика в одном сообщении не путаются между собой.
+    assert "с нормой шагов" in line(3)
