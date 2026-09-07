@@ -673,34 +673,37 @@ button:focus-visible, .tab:focus-visible {
   /* Арт — украшение: он не должен перехватывать нажатия того, что под ним. */
   pointer-events: none;
 }
-/* Слои фона: если картинки нет, слой просто не рисуется, и виден
-   следующий. Поэтому у каждого экрана свой арт, за ним — общий портрет
-   гепарда, и только под ними градиент со звёздами. Так экран не остаётся
-   пустым, даже если один файл не скачался. */
+/* Одна шапка — одна картинка, и под ней только градиент.
+   Раньше под каждым артом лежал запасной: если файл не скачался, виден
+   следующий слой. Но браузер грузит все слои сразу и показывает тот, что
+   успел первым. Гепард с «Сегодня» уже лежал в памяти телефона, поэтому
+   на «Моём мире» он вспыхивал на долю секунды и только потом подменялся
+   своим. То же на «Прогрессе» и «Еде». Проверено в браузере: если верхнюю
+   картинку не отдать, под «Моим миром» остаётся hero, под «Прогрессом» —
+   world, под «Едой» — moment.
+   Страховка от нескачанного файла осталась — это градиент со звёздами:
+   он нарисован кодом, ждать его не нужно, и подменять он ничего не может. */
 .hero-art { background-image: url('/static/img/hero.png'), var(--sky-fallback); }
 .world-art, .hero-art[data-art="world"] {
   background-position: center top;
-  background-image: url('/static/img/world.png'), url('/static/img/hero.png'),
-                    var(--sky-fallback);
+  background-image: url('/static/img/world.png'), var(--sky-fallback);
   -webkit-mask-image: radial-gradient(120% 84% at 50% 34%,
     #000 0%, #000 44%, rgba(0, 0, 0, .7) 66%, rgba(0, 0, 0, .25) 84%, transparent 100%);
   mask-image: radial-gradient(120% 84% at 50% 34%,
     #000 0%, #000 44%, rgba(0, 0, 0, .7) 66%, rgba(0, 0, 0, .25) 84%, transparent 100%);
 }
 /* Единственный арт, который лежит в репозитории: он приезжает с кодом и
-   не зависит ни от сети, ни от CDN. Запасных слоёв ему поэтому не нужно. */
+   не зависит ни от сети, ни от CDN. */
 .hero-art[data-art="gym"] {
   background-image: url('/static/img/gym.webp'), var(--sky-fallback);
 }
 .hero-art[data-art="food"] {
   background-position: center top;
-  background-image: url('/static/img/food.png'), url('/static/img/moment.png'),
-                    var(--sky-fallback);
+  background-image: url('/static/img/food.png'), var(--sky-fallback);
 }
 .hero-art[data-art="sky"] {
   background-position: center top;
-  background-image: url('/static/img/sky.png'), url('/static/img/world.png'),
-                    var(--sky-fallback);
+  background-image: url('/static/img/sky.png'), var(--sky-fallback);
 }
 
 /* Затемнение снизу — чтобы текст читался поверх любой картинки и переход
