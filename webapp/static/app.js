@@ -3545,6 +3545,17 @@ async function init() {
 
   document.getElementById('moment-open').onclick = openMoment;
   document.getElementById('decide-btn').onclick = decideForMe;
+  // Объёмы и «как мерить» — по кнопке: чаще всего записывают один вес.
+  for (const [button, box, open, shut] of [
+    ['measure-more', 'measure-extra', 'свернуть', 'объёмы'],
+    ['measure-help', 'measure-help-text', 'скрыть', 'как мерить'],
+  ]) {
+    document.getElementById(button).onclick = () => {
+      const target = document.getElementById(box);
+      target.hidden = !target.hidden;
+      document.getElementById(button).textContent = target.hidden ? shut : open;
+    };
+  }
   wireQuick();
   document.getElementById('paywall-open').onclick = () => tg?.close?.();
   document.getElementById('state-close').onclick = () => {

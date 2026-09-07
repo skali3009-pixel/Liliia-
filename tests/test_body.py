@@ -135,6 +135,23 @@ def test_insight_says_how_much_is_left():
         assert claim not in text, f"осталась категоричная формулировка: {claim}"
 
 
+def test_the_comma_lands_in_the_number_and_not_in_the_sentence():
+    """`.replace(".", ",")` шёл по всей строке и съедал точку между
+
+    предложениями: получалось «2,1 л воды, Шаги и растяжка тоже в счёт» —
+    с большой буквы сразу после запятой.
+    """
+    lines = build_insights(
+        weight_kg=65, target_weight_kg=58, height_cm=165,
+        waist_cm=78, protein_g=124, water_ml=2170,
+    )
+    water = next(item for item in lines if item.title.startswith("Вода"))
+
+    assert "2,2 л" in water.text, "в числе запятая, а не точка"
+    assert ". Шаги" in water.text, "между предложениями точка"
+    assert ", Шаги" not in water.text
+
+
 def test_wide_waist_is_named_as_a_starting_point_not_a_diagnosis():
     lines = build_insights(
         weight_kg=95, target_weight_kg=70, height_cm=165,

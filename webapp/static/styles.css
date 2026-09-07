@@ -59,8 +59,9 @@
 
 body {
   margin: 0;
-  /* Снизу оставлено место под вкладки и кнопку «Расскажи, что происходит». */
-  padding: 0 16px calc(148px + env(safe-area-inset-bottom)) 16px;
+  /* Снизу — место под вкладки и запас под безопасную зону. Было 148px:
+     столько занимала плавающая кнопка «Расскажи», которой больше нет. */
+  padding: 0 16px calc(96px + env(safe-area-inset-bottom)) 16px;
   background: var(--bg);
   color: var(--fg);
   font: 500 15px/1.45 var(--body);

@@ -493,10 +493,14 @@
       </div>
     </section>
 
+    <!-- Чаще всего записывают только вес. Пять полей объёмов открываются
+         по кнопке, а как мерить — под «как мерить»: пять строк объяснений
+         над кнопкой сохранения читал один человек из десяти. -->
     <section class="card">
-      <div class="card-head"><h2>Новый замер</h2></div>
-      <div class="grid2">
-        <input id="m-weight" class="input" type="number" step="0.1" placeholder="Вес, кг">
+      <div class="card-head"><h2>Новый замер</h2>
+        <button class="link-btn" id="measure-more">объёмы</button></div>
+      <input id="m-weight" class="input" type="number" step="0.1" placeholder="Вес, кг">
+      <div class="grid2" id="measure-extra" hidden>
         <input id="m-waist" class="input" type="number" step="0.5" placeholder="Талия, см">
         <input id="m-hips" class="input" type="number" step="0.5"
                placeholder="Бёдра по ягодицам, см">
@@ -506,12 +510,14 @@
         <input id="m-arm" class="input" type="number" step="0.5"
                placeholder="Одна рука (бицепс), см">
       </div>
-      <button id="m-save" class="btn">Сохранить замер</button>
+      <button id="m-save" class="btn primary">Сохранить замер</button>
       <p class="hint">Заполни то, что мерила — остальное можно пропустить.
-        «Бёдра» — вокруг таза по самой широкой точке ягодиц, это один обхват
-        на двоих. «Одна нога» — вокруг одного бедра под ягодицей, «одна рука» —
-        вокруг бицепса. Ногу и руку меряй всегда одну и ту же, иначе замеры
-        не сравнить между собой.</p>
+        <button class="link-btn" id="measure-help">как мерить</button></p>
+      <p class="hint" id="measure-help-text" hidden>«Бёдра» — вокруг таза по
+        самой широкой точке ягодиц, это один обхват на двоих. «Одна нога» —
+        вокруг одного бедра под ягодицей, «одна рука» — вокруг бицепса. Ногу
+        и руку меряй всегда одну и ту же, иначе замеры не сравнить между
+        собой.</p>
     </section>
 
     <section class="card">

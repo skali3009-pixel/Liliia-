@@ -295,6 +295,20 @@ def test_places_are_tiles_and_the_story_comes_early():
     assert world.index('id="world-event"') < world.index('id="team-card"')
 
 
+def test_the_measurement_form_asks_for_one_number_and_hides_the_rest():
+    """Чаще всего записывают только вес, а пять строк «как мерить» над
+    кнопкой сохранения читал один человек из десяти."""
+    for element_id in ("measure-more", "measure-extra",
+                       "measure-help", "measure-help-text"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+    # Поля никуда не делись — они просто под кнопкой.
+    for element_id in ("m-weight", "m-waist", "m-hips", "m-thigh", "m-chest", "m-arm"):
+        assert f'id="{element_id}"' in INDEX, element_id
+    progress = INDEX.split('id="screen-progress"')[1].split("</main>")[0]
+    assert progress.count('class="btn primary"') == 1
+
+
 def test_the_goal_moment_is_wired():
     """Дошла до цели — приложение обязано это заметить и спросить, что дальше."""
     for element_id in ("arrival", "arrival-text", "arrival-switch", "arrival-close"):
