@@ -121,6 +121,20 @@ def test_only_author_dishes_carry_a_mark():
         assert label not in INDEX, label
 
 
+def test_the_food_screen_answers_without_a_single_question():
+    """Половина людей здесь не хочет отвечать на вопросы — им нужен ответ."""
+    assert 'id="decide-btn"' in INDEX
+    assert "'decide-btn'" in APP_JS
+    assert "DECIDE_TEXT" in APP_JS
+    # Обещание разное в каждом режиме: набор из магазина и блюдо из книги —
+    # не одно и то же.
+    for mode in ("cube:", "quick:", "book:", "preps:"):
+        assert mode in APP_JS.split("DECIDE_TEXT")[1][:400], mode
+    # И это единственная главная кнопка экрана.
+    food = INDEX.split('id="screen-cube"')[1].split("</main>")[0]
+    assert food.count('class="btn primary"') == 1
+
+
 def test_the_food_screen_holds_all_four_answers():
     """Подбор блюд вернулся — но не на «Сегодня», а к Кубику, отдельным режимом.
 
@@ -232,7 +246,7 @@ def test_the_food_tab_is_called_by_what_it_holds():
     assert ">Еда</button>" in tabs
     assert ">Кубик</button>" not in tabs
     # А сам Кубик никуда не делся — он первый режим на этом экране.
-    assert "'🧊 Кубик'" in APP_JS
+    assert "'Кубик'" in APP_JS
 
 
 def test_the_team_stands_where_it_gets_seen():

@@ -553,11 +553,17 @@ def test_a_dish_made_of_preps_says_so_and_is_quick():
 
 
 def test_ready_dishes_are_lifted_in_the_offer_list():
-    """При прочих равных собранное из заготовок идёт выше — это её принцип."""
+    """При прочих равных собранное из заготовок идёт выше — это её принцип.
+
+    Просим весь список, а не первые пять: в режиме «полистать» верхушка
+    короткой выдачи нарочно перемешивается, чтобы человек не видел изо дня
+    в день одни и те же три блюда. Проверяем правило сортировки, а не то,
+    как легла перемешанная верхушка, — иначе тест падал бы через раз.
+    """
     async def scenario():
         async with db() as (session, user):
             fitted, _ = await dish_picker.pick_dishes(
-                session, user, meal_type="lunch", budget=560, limit=5)
+                session, user, meal_type="lunch", budget=560, limit=100)
             assert any(p.preps for p in fitted), "заготовки должны попадать в выдачу"
             with_preps = [i for i, p in enumerate(fitted) if p.preps]
             without = [i for i, p in enumerate(fitted) if not p.preps]

@@ -583,12 +583,12 @@
        магазине не знает свой остаток калорий — он знает, насколько голоден
        и чего хочется. Спрашиваем именно это. -->
   <main id="screen-cube" class="screen" hidden>
-    <section class="cube-hero">
+    <section class="hero slim">
       <div class="hero-art" data-art="food"></div>
-      <div class="cube-hero-body">
+      <div class="hero-body">
         <div class="eyebrow">Еда</div>
-        <h1 class="cube-title-big">Что съесть?</h1>
-        <p class="cube-sub" id="food-hint"></p>
+        <h1 class="hero-title">Что съесть?</h1>
+        <p class="hero-sub" id="food-hint"></p>
       </div>
     </section>
 
@@ -596,10 +596,18 @@
          остальные три — вопросы к одной книге рецептов. -->
     <div class="food-modes" id="food-modes"></div>
 
+    <!-- Главный блок экрана: ответ без единого вопроса. Всё, что ниже, —
+         для тех, кто хочет выбрать сам. -->
+    <section class="decide">
+      <div class="eyebrow">Не хочу выбирать</div>
+      <p class="decide-text" id="decide-text">Дам один вариант — без вопросов.</p>
+      <button class="btn primary" id="decide-btn">Реши за меня</button>
+    </section>
+
     <div id="cube-mode">
 
     <!-- Быстрый путь: человек уже стоит у полки, вопросы задавать некогда. -->
-    <button id="cube-shop" class="cube-shop">🛒 Я уже в магазине</button>
+    <button id="cube-shop" class="cube-shop">Я уже в магазине</button>
 
     <!-- Второй вопрос этого пути и он же единственный. -->
     <section class="card" id="cube-shop-ask" hidden>
@@ -609,19 +617,18 @@
 
     <!-- Третий путь: ничего не отмечать руками, а просто показать полку. -->
     <section class="card" id="cube-shelf-card">
-      <h2 class="cube-q">📸 Сфоткай полку</h2>
-      <p class="hint">Сними холодильник, витрину или пакет с покупками. Отмечу
-        то, что узнаю, — а собирать буду только из этого.</p>
-      <label class="btn ghost" for="shelf-input">📸 Сфоткать полку</label>
+      <h2 class="cube-q">Сфоткай полку</h2>
+      <p class="hint">Сними холодильник или пакет с покупками — соберу только из
+        того, что узнаю.</p>
+      <label class="btn ghost" for="shelf-input">Сфоткать полку</label>
       <input id="shelf-input" type="file" accept="image/*" capture="environment" hidden>
       <div id="shelf-found" hidden></div>
     </section>
 
     <section class="card" id="cube-basket-card">
-      <div class="card-head"><h2 class="cube-q">🧺 Что у тебя в корзине</h2>
+      <div class="card-head"><h2 class="cube-q">Что у тебя в корзине</h2>
         <button class="link-btn" id="cube-basket-toggle">показать</button></div>
-      <p class="hint">Отметь, что уже нашла — соберу только из этого, не гоняя
-        тебя в другой конец магазина.</p>
+      <p class="hint">Отметь, что уже нашла — соберу только из этого.</p>
       <div id="cube-basket" hidden></div>
     </section>
 
@@ -636,10 +643,9 @@
         <input type="checkbox" id="cube-nospoon" checked>
         <span>Без ложки и вилки</span>
       </label>
-      <p class="hint">Когда включено, показываем только то, что едят руками
-        или пьют. Ложечное не предлагаем вовсе.</p>
+      <p class="hint">Показываем только то, что едят руками или пьют.</p>
 
-      <button id="cube-go" class="btn">🎲 Собрать кубик</button>
+      <button id="cube-go" class="btn">Собрать кубик</button>
     </section>
 
     <p class="cube-needs" id="cube-needs" hidden></p>
@@ -652,7 +658,7 @@
            разное всю неделю. Видны только в своём режиме: в остальных они
            отвечали бы на вопрос, которого человек не задавал. -->
       <section class="card" id="preps-card" hidden>
-        <div class="card-head"><h2>🥘 Что приготовить впрок</h2>
+        <div class="card-head"><h2>Что приготовить впрок</h2>
           <button class="link-btn" id="preps-toggle">показать</button></div>
         <p class="hint" id="preps-hint">Готовим один раз — собираем несколько дней.
           Здесь видно, сколько что хранится.</p>
@@ -660,7 +666,7 @@
       </section>
 
       <section class="card">
-        <div class="card-head"><h2>🍽️ Что приготовить</h2>
+        <div class="card-head"><h2>Что приготовить</h2>
           <span id="gap-hint" class="muted"></span></div>
 
         <!-- Приём пищи выбирается явно: по времени бот угадывает, но человек
@@ -675,7 +681,7 @@
         <div class="budget-line" id="budget-line"></div>
         <p class="hint plate-hint" id="plate-hint"></p>
 
-        <button id="suggest-btn" class="btn">Подобрать блюдо</button>
+        <button id="suggest-btn" class="btn ghost">Подобрать блюдо</button>
         <div id="suggestions"></div>
       </section>
     </div>

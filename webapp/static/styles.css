@@ -139,6 +139,9 @@ h2 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -.01em; }
 .chip:active { transform: scale(.97); }
 .chip.ghost { flex: 0 0 46px; color: var(--muted); }
 .chip.on { background: var(--accent); color: var(--accent-fg); }
+/* Действие внутри строки списка: заметное, но не спорит с главной кнопкой. */
+.chip.accent { border-color: rgba(139, 92, 246, .6); color: var(--lilac);
+               background: rgba(139, 92, 246, .16); font-weight: 600; }
 
 .btn {
   width: 100%; margin-top: 10px; padding: 13px; border: none; border-radius: 12px;
@@ -1007,10 +1010,8 @@ select.fact-input { text-align: left; width: 130px; }
 /* Переключатель «готовлю / не готовлю» */
 
 /* --- Кубик: быстрый подбор еды из магазина ------------------------------ */
-.cube-hero { position: relative; overflow: hidden; padding: 20px 18px 6px; }
-.cube-hero-body { position: relative; }
-.cube-title-big { margin: 4px 0 6px; font-size: 26px; line-height: 1.15; }
-.cube-sub { margin: 0; color: var(--muted); font-size: 14px; }
+/* Шапка «Еды» — такая же, как у остальных экранов: раньше она была
+   собственной вёрсткой и одна выбивалась из общего вида. */
 .cube-q { margin: 16px 0 8px; font-size: 15px; }
 .cube-q:first-child { margin-top: 0; }
 
@@ -1045,14 +1046,17 @@ select.fact-input { text-align: left; width: 130px; }
 .btn.ghost { background: rgba(255, 255, 255, .06); color: var(--fg); }
 
 /* Большая кнопка магазина: её жмут одной рукой, не глядя. */
+/* Переключатель «я в магазине», а не главная кнопка: главная на этом
+   экране одна — «Реши за меня». */
 .cube-shop {
-  display: block; width: calc(100% - 36px); margin: 0 18px 12px;
-  padding: 18px; border: none; border-radius: 18px;
-  background: linear-gradient(135deg, var(--violet), var(--indigo));
-  color: var(--accent-fg); font-family: inherit; font-size: 17px;
-  font-weight: 700; cursor: pointer;
+  display: block; width: 100%; margin: 14px 0 0;
+  padding: 15px; border: 1px solid var(--stroke); border-radius: 16px;
+  background: var(--card);
+  color: var(--fg); font-family: inherit; font-size: 15px;
+  font-weight: 600; cursor: pointer;
+  transition: border-color .2s ease, background .2s ease;
 }
-.cube-shop.on { background: rgba(255, 255, 255, .08); color: var(--fg); }
+.cube-shop.on { border-color: var(--accent); background: rgba(124, 92, 255, .18); }
 .cube-label {
   display: inline-block; margin-bottom: 6px; padding: 3px 9px;
   border-radius: 999px; background: rgba(124, 92, 255, .2);
@@ -1121,14 +1125,29 @@ select.fact-input { text-align: left; width: 130px; }
 
 /* --- Экран «Что съесть»: режимы ------------------------------------------- */
 .food-modes {
-  display: flex; gap: 6px; overflow-x: auto; padding: 0 18px 4px;
-  margin-bottom: 12px; scrollbar-width: none;
+  display: flex; gap: 6px; overflow-x: auto; padding: 0 2px 4px;
+  margin-top: 14px; scrollbar-width: none;
 }
 .food-modes::-webkit-scrollbar { display: none; }
+/* --- «Реши за меня»: главный блок экрана «Еда» --- */
+.decide {
+  margin-top: 14px; padding: 18px; border-radius: 22px;
+  border: 1px solid rgba(196, 181, 253, .34);
+  background:
+    radial-gradient(130% 110% at 10% 0%, rgba(139, 92, 246, .32), transparent 64%),
+    linear-gradient(140deg, rgba(91, 108, 255, .18), rgba(21, 19, 39, .92));
+  box-shadow: 0 20px 46px rgba(64, 34, 150, .3);
+}
+.decide-text { margin: 0 0 16px; font-size: 18px; font-weight: 600;
+               line-height: 1.3; letter-spacing: -.015em; }
+.decide .btn { margin: 0; }
+
 .food-mode {
-  flex: none; padding: 9px 13px; border: 1px solid var(--stroke); border-radius: 999px;
-  background: none; color: var(--muted); font-family: inherit; font-size: 13px;
+  flex: none; padding: 10px 15px; border: 1px solid var(--stroke); border-radius: 999px;
+  background: var(--card); color: var(--muted); font-family: inherit;
+  font-size: 13px; font-weight: 600;
   white-space: nowrap; cursor: pointer;
+  transition: color .2s ease, border-color .2s ease, background .2s ease;
 }
 .food-mode.on {
   color: var(--fg); border-color: var(--accent); background: rgba(124, 92, 255, .18);
@@ -1181,7 +1200,7 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
              line-height: 1.3; letter-spacing: -.015em; }
 .turn .btn { margin: 0; }
 
-.cube-needs { margin: 0 18px 4px; color: var(--lilac); font-size: 13px; }
+.cube-needs { margin: 12px 2px 0; color: var(--lilac); font-size: 13px; }
 
 /* --- Подбор занятия ------------------------------------------------------ */
 .pick {

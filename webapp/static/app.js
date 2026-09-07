@@ -1940,11 +1940,20 @@ function renderFrequent(items) {
 // что-то стоит.
 
 const FOOD_MODES = [
-  ['cube', '🧊 Кубик', 'Съесть прямо сейчас, ничего не готовя'],
-  ['quick', '⚡ Быстро', 'Рецепты не дольше 15 минут'],
-  ['book', '📕 Рецепты', 'Меню нутрициолога и блюда по её принципам'],
-  ['preps', '🥘 Заготовки', 'Собрать из того, что приготовлено заранее'],
+  ['cube', 'Кубик', 'Съесть прямо сейчас, ничего не готовя'],
+  ['quick', 'Быстро', 'Рецепты не дольше 15 минут'],
+  ['book', 'Рецепты', 'Меню нутрициолога и блюда по её принципам'],
+  ['preps', 'Заготовки', 'Собрать из того, что приготовлено заранее'],
 ];
+
+// Что обещает главная кнопка экрана в каждом режиме. Обещание разное:
+// в «Кубике» это набор из магазина, в остальных — блюдо из книги рецептов.
+const DECIDE_TEXT = {
+  cube: 'Соберу набор сама — ни одного вопроса.',
+  quick: 'Дам блюдо на пятнадцать минут — без вопросов.',
+  book: 'Открою одно блюдо из книги — не выбирая.',
+  preps: 'Соберу из того, что уже стоит в холодильнике.',
+};
 
 let foodMode = 'cube';
 
@@ -1955,6 +1964,7 @@ function switchFoodMode(mode) {
   }
   document.getElementById('food-hint').textContent =
     (FOOD_MODES.find(([code]) => code === mode) || [])[2] || '';
+  document.getElementById('decide-text').textContent = DECIDE_TEXT[mode] || '';
 
   document.getElementById('cube-mode').hidden = mode !== 'cube';
   document.getElementById('menu-mode').hidden = mode === 'cube';
@@ -2059,7 +2069,7 @@ function renderOffers(data) {
       <div class="sug-why"></div>
       <div class="row">
         <button class="chip sug-recipe">Рецепт</button>
-        <button class="btn narrow sug-eat">Съела это</button>
+        <button class="chip accent sug-eat">Съела это</button>
       </div>`;
 
     const name = row.querySelector('.sug-name');
@@ -2075,15 +2085,15 @@ function renderOffers(data) {
     row.querySelector('.sug-macros').textContent =
       `${Math.round(item.weight_g)} г · Б ${Math.round(item.protein_g)} · ` +
       `Ж ${Math.round(item.fat_g)} · У ${Math.round(item.carbs_g)}` +
-      (item.fiber_g ? ` · 🥦 ${Math.round(item.fiber_g)}` : '') +
-      ` · ⏱ ${item.minutes} мин`;
+      (item.fiber_g ? ` · кл ${Math.round(item.fiber_g)}` : '') +
+      ` · ${item.minutes} мин`;
     row.querySelector('.sug-why').textContent = item.reason;
 
     // Что из блюда уже стоит готовым — это её принцип экономии времени.
     if (item.preps?.length) {
       const ready = document.createElement('div');
       ready.className = 'sug-ready';
-      ready.textContent = `🥘 Из заготовок: ${item.preps.join(', ')}`;
+      ready.textContent = `Из заготовок: ${item.preps.join(', ')}`;
       row.querySelector('.sug-why').after(ready);
     }
 
@@ -2135,7 +2145,7 @@ function openRecipe(index) {
   const footer = document.getElementById('recipe-source');
   footer.innerHTML = '';
   const lines = [];
-  if (item.preps?.length) lines.push(`🥘 Из заготовок: ${item.preps.join(', ')}`);
+  if (item.preps?.length) lines.push(`Из заготовок: ${item.preps.join(', ')}`);
   // Откуда рецепт — видно по звёздочке у названия. Писать «меню, неделя 2,
   // день 3» незачем: человеку это ничего не даёт.
   if (item.estimated) lines.push('⚖️ Порции подобраны — точных граммов в рецепте нет.');
@@ -2240,7 +2250,7 @@ function openPrep(index) {
   const storage = [];
   if (prep.fridge) storage.push(`❄️ в холодильнике ${prep.fridge}`);
   if (prep.freezer) storage.push(`🧊 в морозилке ${prep.freezer}`);
-  storage.push(`⏱ готовить ${prep.minutes} мин`);
+  storage.push(`Готовить ${prep.minutes} мин`);
   document.getElementById('prep-storage').textContent = storage.join(' · ');
 
   const parts = document.getElementById('prep-parts');
@@ -3003,7 +3013,7 @@ function renderShelf(data) {
 
   const go = document.createElement('button');
   go.className = 'btn';
-  go.textContent = '🎲 Собрать из этого';
+  go.textContent = 'Собрать из этого';
   go.onclick = () => {
     cubeState.basket = new Set(picked);
     syncBasketChips();
@@ -3012,6 +3022,32 @@ function renderShelf(data) {
   box.appendChild(go);
 }
 
+
+/* --- «Реши за меня» ------------------------------------------------------ */
+// Половина людей на этом экране не хочет отвечать на вопросы — они хотят
+// один ответ. Ничего нового этот блок не считает: он зовёт тот же подбор,
+// что и кнопки ниже, только не спрашивая ни о чём.
+
+async function decideForMe() {
+  const button = document.getElementById('decide-btn');
+  button.disabled = true;
+  const was = button.textContent;
+  button.textContent = 'Подбираю…';
+  try {
+    if (foodMode === 'cube') {
+      await rollCube();
+      document.getElementById('cube-results').scrollIntoView(
+        { behavior: 'smooth', block: 'start' });
+    } else {
+      await loadMenu(mealType);
+      document.getElementById('suggestions').scrollIntoView(
+        { behavior: 'smooth', block: 'start' });
+    }
+  } finally {
+    button.disabled = false;
+    button.textContent = was;
+  }
+}
 
 function markCubeLevel() {
   for (const button of document.querySelectorAll('.cube-level')) {
@@ -3473,6 +3509,7 @@ async function init() {
   }
 
   document.getElementById('moment-open').onclick = openMoment;
+  document.getElementById('decide-btn').onclick = decideForMe;
   wireQuick();
   document.getElementById('paywall-open').onclick = () => tg?.close?.();
   document.getElementById('state-close').onclick = () => {
