@@ -71,23 +71,35 @@ def _remember(folder: Path, name: str, url: str) -> None:
         logger.warning("Не записал, откуда взят арт %s: %s", name, error)
 
 
-def missing(directory: Path | None = None) -> list[str]:
-    """Каких артов не хватает на диске — и какие устарели.
+def absent(directory: Path | None = None) -> list[str]:
+    """Каких артов нет на диске вовсе — или лежит обрывок вместо картинки."""
+    folder = directory or ART_DIR
+    gone = []
+    for name in ARTWORK:
+        path = folder / name
+        if not path.exists() or path.stat().st_size < MIN_BYTES:
+            gone.append(name)
+    return gone
 
-    Устаревший — это файл, который лежит на месте, но скачан не из той
-    ссылки, что стоит в коде сейчас. Для нас он такой же отсутствующий:
-    показывать его нельзя.
+
+def stale(directory: Path | None = None) -> list[str]:
+    """Какие арты лежат на месте, но скачаны не из той ссылки.
+
+    Это другой случай, чем «нет файла», и на экране он выглядит иначе:
+    там не пусто, там старая картинка. Поэтому и говорить о нём надо
+    отдельно — иначе отчёт советует не то.
     """
     folder = directory or ART_DIR
     known = _recorded(folder)
-    absent = []
-    for name, url in ARTWORK.items():
-        path = folder / name
-        if not path.exists() or path.stat().st_size < MIN_BYTES:
-            absent.append(name)
-        elif known.get(name) != url:
-            absent.append(name)
-    return absent
+    gone = set(absent(folder))
+    return [name for name, url in ARTWORK.items()
+            if name not in gone and known.get(name) != url]
+
+
+def missing(directory: Path | None = None) -> list[str]:
+    """Что нужно скачать: и отсутствующее, и устаревшее."""
+    folder = directory or ART_DIR
+    return absent(folder) + stale(folder)
 
 
 async def _download(session: aiohttp.ClientSession, name: str, url: str, folder: Path) -> bool:

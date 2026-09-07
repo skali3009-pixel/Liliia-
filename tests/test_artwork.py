@@ -172,3 +172,37 @@ def test_network_failure_is_survivable(monkeypatch, tmp_path):
 
     # Бот не должен падать из-за картинок: ошибка сети — это пустой результат.
     assert asyncio.run(ensure_artwork(directory=tmp_path)) == []
+
+
+def test_the_report_does_not_confuse_a_missing_picture_with_an_old_one(monkeypatch, tmp_path):
+    """Это два разных случая, и на экране они выглядят по-разному.
+
+    Нет файла — на его месте соседний арт или градиент. Файл устарел — там
+    не пусто, там прежняя картинка. Один текст на оба случая советовал бы
+    не то и сбивал с толку.
+    """
+    import json
+
+    from services import status
+
+    lay_out(tmp_path)
+    (tmp_path / "sky.png").unlink()
+    записка = json.loads((tmp_path / artwork.MANIFEST).read_text(encoding="utf-8"))
+    записка["gym.png"] = "https://example.test/прошлая.png"
+    (tmp_path / artwork.MANIFEST).write_text(json.dumps(записка), encoding="utf-8")
+
+    monkeypatch.setattr(artwork, "ART_DIR", tmp_path)
+    text = "\n".join(status._art_lines())
+
+    assert "не хватает 1" in text and "sky.png" in text
+    assert "устарели 1" in text and "gym.png" in text
+    assert "bash fetch-art.sh" in text
+
+
+def test_the_report_stays_quiet_when_everything_is_current(monkeypatch, tmp_path):
+    lay_out(tmp_path)
+    monkeypatch.setattr(artwork, "ART_DIR", tmp_path)
+
+    from services import status
+
+    assert status._art_lines() == ["🖼 Картинки: все на месте"]

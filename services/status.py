@@ -65,15 +65,27 @@ def _art_lines() -> list[str]:
     Приложение без них не ломается — на месте картинки остаётся соседний
     арт или градиент, — но знать об этом полезно.
     """
-    from services.artwork import missing
+    from services.artwork import absent, stale
 
-    absent = missing()
-    if not absent:
+    gone, old = absent(), stale()
+    if not gone and not old:
         return ["🖼 Картинки: все на месте"]
-    return [
-        f"🖼 Картинки: не хватает {len(absent)} — {', '.join(absent)}",
-        "   Экран покажет соседний арт. Докачать: bash fetch-art.sh",
-    ]
+
+    lines = []
+    if gone:
+        lines += [
+            f"🖼 Картинки: не хватает {len(gone)} — {', '.join(gone)}",
+            "   На их месте пока соседний арт или градиент.",
+        ]
+    # Устаревшая картинка выглядит не как пустое место, а как старая
+    # картинка: посоветовать тут «покажем соседний арт» значит сбить с толку.
+    if old:
+        lines += [
+            f"🖼 Картинки: устарели {len(old)} — {', '.join(old)}",
+            "   Экран пока показывает прежние.",
+        ]
+    lines.append("   Обновить: bash fetch-art.sh")
+    return lines
 
 
 def _invite_lines() -> list[str]:
