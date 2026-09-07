@@ -556,8 +556,45 @@ async def post_measurement(request: web.Request) -> web.Response:
             "fiber_g": user.daily_fiber_g,
             "water_ml": user.daily_water_ml,
         }
+        arrival = await _arrival(session, user)
 
-    return web.json_response({"ok": True, "norms_updated": norms_updated, "norms": norms})
+    return web.json_response({"ok": True, "norms_updated": norms_updated,
+                              "norms": norms, "arrival": arrival})
+
+
+async def _arrival(session, user: User) -> dict | None:
+    """Дошёл ли человек до цели — и говорили ли мы ему об этом раньше.
+
+    Один раз: поздравление на каждом следующем взвешивании превращается в
+    шум, а вопрос про поддержание — в назойливость.
+    """
+    from sqlalchemy import select as _select
+
+    from models import Achievement, BodyMeasurement
+    from services import goal as goal_service
+
+    if not goal_service.reached(user, user.current_weight_kg):
+        return None
+
+    told = (await session.execute(
+        _select(Achievement.id).where(Achievement.user_id == user.id,
+                                      Achievement.code == "goal_reached")
+    )).first()
+    if told is not None:
+        return None
+
+    started = (await session.execute(
+        _select(BodyMeasurement.weight_kg)
+        .where(BodyMeasurement.user_id == user.id, BodyMeasurement.weight_kg.is_not(None))
+        .order_by(BodyMeasurement.measured_at).limit(1)
+    )).scalar_one_or_none()
+
+    return {
+        "text": goal_service.render(goal_service.Arrival(
+            weight_kg=user.current_weight_kg, target_kg=user.target_weight_kg,
+            started_kg=started)),
+        "can_switch": user.goal is not None and user.goal.value != "maintain",
+    }
 
 
 async def post_photo(request: web.Request) -> web.Response:

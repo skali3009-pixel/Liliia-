@@ -211,3 +211,21 @@ def test_the_food_tab_is_called_by_what_it_holds():
     assert ">Кубик</button>" not in tabs
     # А сам Кубик никуда не делся — он первый режим на этом экране.
     assert "'🧊 Кубик'" in APP_JS
+
+
+def test_the_team_stands_where_it_gets_seen():
+    """До команды приходилось листать полэкрана, а это самое живое на вкладке."""
+    world = INDEX.split('id="screen-world"')[1].split("</main>")[0]
+    assert world.index('id="team-card"') < world.index("<h2>Места</h2>")
+    assert world.index('id="top-card"') < world.index("<h2>Открытия</h2>")
+    # Но ближайшее открытие остаётся первым: ради него на вкладку возвращаются.
+    assert world.index('id="world-next-card"') < world.index('id="team-card"')
+
+
+def test_the_goal_moment_is_wired():
+    """Дошла до цели — приложение обязано это заметить и спросить, что дальше."""
+    for element_id in ("arrival", "arrival-text", "arrival-switch", "arrival-close"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+    # Переход на поддержание делается в одно нажатие, а не поиском в анкете.
+    assert "goal: 'maintain'" in APP_JS

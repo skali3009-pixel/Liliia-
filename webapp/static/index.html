@@ -308,41 +308,6 @@
       <div class="q-track"><i id="world-next-bar"></i></div>
     </section>
 
-    <!-- Места мира. Каждое растёт ступенями, а не просто «открыто/закрыто». -->
-    <section class="card">
-      <div class="card-head"><h2>Места</h2><span id="world-count" class="muted"></span></div>
-      <div id="world-zones"></div>
-    </section>
-
-    <!-- Событие дня. Есть не каждый день — иначе это уже не событие. -->
-    <section class="card event" id="world-event" hidden>
-      <div class="zone-head">
-        <span class="zone-icon" id="event-icon"></span>
-        <div>
-          <h2 class="zone-title" id="event-title"></h2>
-          <p class="zone-hint" id="event-hint"></p>
-        </div>
-      </div>
-      <p class="event-text" id="event-text"></p>
-      <div class="q-track"><i id="event-bar"></i></div>
-    </section>
-
-    <section class="card discovery">
-      <div class="eyebrow">Последнее открытие</div>
-      <h2 class="discovery-title" id="discovery-title">Пока закрыто</h2>
-      <dl class="discovery-why">
-        <div><dt>Почему</dt><dd id="discovery-why">—</dd></div>
-        <div><dt>Дальше</dt><dd id="discovery-next">—</dd></div>
-      </dl>
-      <div class="steps" id="discovery-steps"></div>
-    </section>
-
-    <section class="card">
-      <div class="card-head"><h2>Открытия</h2><span id="award-count" class="muted"></span></div>
-      <div id="awards" class="awards"></div>
-      <p class="hint" id="award-next"></p>
-    </section>
-
     <!-- Команда. Личный счётчик шагов забрасывают через неделю: смотреть в
          него незачем. Работает другое — что тебя видят. -->
     <section class="card" id="team-card">
@@ -403,6 +368,41 @@
       <div id="top-rows"></div>
       <p class="hint" id="top-last"></p>
       <p class="hint" id="top-hint"></p>
+    </section>
+
+    <!-- Места мира. Каждое растёт ступенями, а не просто «открыто/закрыто». -->
+    <section class="card">
+      <div class="card-head"><h2>Места</h2><span id="world-count" class="muted"></span></div>
+      <div id="world-zones"></div>
+    </section>
+
+    <!-- Событие дня. Есть не каждый день — иначе это уже не событие. -->
+    <section class="card event" id="world-event" hidden>
+      <div class="zone-head">
+        <span class="zone-icon" id="event-icon"></span>
+        <div>
+          <h2 class="zone-title" id="event-title"></h2>
+          <p class="zone-hint" id="event-hint"></p>
+        </div>
+      </div>
+      <p class="event-text" id="event-text"></p>
+      <div class="q-track"><i id="event-bar"></i></div>
+    </section>
+
+    <section class="card discovery">
+      <div class="eyebrow">Последнее открытие</div>
+      <h2 class="discovery-title" id="discovery-title">Пока закрыто</h2>
+      <dl class="discovery-why">
+        <div><dt>Почему</dt><dd id="discovery-why">—</dd></div>
+        <div><dt>Дальше</dt><dd id="discovery-next">—</dd></div>
+      </dl>
+      <div class="steps" id="discovery-steps"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Открытия</h2><span id="award-count" class="muted"></span></div>
+      <div id="awards" class="awards"></div>
+      <p class="hint" id="award-next"></p>
     </section>
 
     <section class="card">
@@ -470,6 +470,17 @@
       </div>
       <div id="chart-box"></div>
       <div id="chart-table" hidden></div>
+    </section>
+
+    <!-- Дошла до цели. Показывается один раз: приложение обязано это
+         заметить, а заодно спросить, что дальше — иначе оно продолжит
+         держать в дефиците того, кому худеть уже некуда. -->
+    <section class="card arrival" id="arrival" hidden>
+      <p class="arrival-text" id="arrival-text"></p>
+      <div class="cube-actions">
+        <button class="btn" id="arrival-switch">Перейти на поддержание</button>
+        <button class="btn ghost" id="arrival-close">Оставить как есть</button>
+      </div>
     </section>
 
     <section class="card">

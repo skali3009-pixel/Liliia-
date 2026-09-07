@@ -311,6 +311,38 @@ function renderSteps(steps) {
     steps.streak ? `🔥 ${steps.streak} ${plural(steps.streak, 'день', 'дня', 'дней')} с нормой` : '';
 }
 
+/* --- Дошла до цели ------------------------------------------------------- */
+// Раньше в этот день не происходило ничего: приложение молча продолжало
+// считать дефицит. Это не только обидно — так и уезжают в недоедание, не
+// сорвавшись, а старательно продолжая делать то, что говорит приложение.
+
+function showArrival(arrival) {
+  const card = document.getElementById('arrival');
+  if (!arrival) {
+    card.hidden = true;
+    return;
+  }
+  document.getElementById('arrival-text').textContent = arrival.text;
+  document.getElementById('arrival-switch').hidden = !arrival.can_switch;
+  card.hidden = false;
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  haptic('medium');
+}
+
+async function switchToMaintain() {
+  try {
+    const data = await api('/api/profile', {
+      method: 'PATCH', body: JSON.stringify({ goal: 'maintain' }),
+    });
+    document.getElementById('arrival').hidden = true;
+    toast(`Теперь поддержание: ${data.norms.calories} ккал`);
+    await refresh();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+
 /* --- Чтобы шаги приходили сами ------------------------------------------ */
 // Вбивать число каждый день не будет почти никто, а без шагов не работает
 // ничего вокруг них. Читать «Здоровье» из Telegram нельзя — но телефон умеет
@@ -1594,6 +1626,8 @@ async function saveMeasurement() {
       : 'Записал');
     await refreshProgress();
     await refresh();
+    // Дошла до цели — об этом нельзя молчать, и спросить надо сразу.
+    showArrival(result.arrival);
   } catch (e) { toast(e.message); }
 }
 
@@ -3396,6 +3430,10 @@ async function init() {
   for (const tab of document.querySelectorAll('.meal-tab')) {
     tab.onclick = () => { mealType = tab.dataset.meal; loadMenu(mealType); };
   }
+  document.getElementById('arrival-switch').onclick = switchToMaintain;
+  document.getElementById('arrival-close').onclick = () => {
+    document.getElementById('arrival').hidden = true;
+  };
   document.getElementById('steps-add').onclick = askSteps;
   document.getElementById('steps-sync').onclick = () => openSync();
   document.getElementById('sync-close').onclick = () => {

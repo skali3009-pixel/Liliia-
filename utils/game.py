@@ -241,6 +241,8 @@ ACHIEVEMENTS: tuple[AchievementDef, ...] = (
     AchievementDef("steps_100k", "Сто тысяч шагов", "🛤", "100 000 шагов всего"),
     AchievementDef("steps_500k", "Полмиллиона", "🏔", "500 000 шагов всего"),
     AchievementDef("steps_marathon", "Дневной марафон", "🏅", "20 000 шагов за день"),
+    # Единственная награда за то, ради чего человек всё это начинал.
+    AchievementDef("goal_reached", "Цель взята", "🎯", "дойти до своего веса"),
 )
 
 ACHIEVEMENT_BY_CODE = {item.code: item for item in ACHIEVEMENTS}
@@ -257,6 +259,7 @@ def earned_codes(
     steps_total: int = 0,
     steps_streak: int = 0,
     steps_best: int = 0,
+    goal_reached: bool = False,
 ) -> set[str]:
     """Какие награды заслужены прямо сейчас (уже выданные тоже попадают сюда)."""
     earned: set[str] = set()
@@ -288,4 +291,6 @@ def earned_codes(
         earned.add("steps_500k")
     if steps_best >= 20_000:
         earned.add("steps_marathon")
+    if goal_reached:
+        earned.add("goal_reached")
     return earned

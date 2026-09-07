@@ -1119,6 +1119,12 @@ select.fact-input { text-align: left; width: 130px; }
 /* Рассказ о проблеме тянется только вниз: вбок он вылезал бы из карточки. */
 #prof-problem { resize: vertical; min-height: 72px; font-family: inherit; }
 
+.arrival {
+  border: 1px solid rgba(196, 181, 253, .35);
+  background: linear-gradient(180deg, rgba(124, 92, 255, .18), var(--surface));
+}
+.arrival-text { margin: 0 0 12px; white-space: pre-wrap; font-size: 14px; line-height: 1.5; }
+
 /* --- Экран «Что съесть»: режимы ------------------------------------------- */
 .food-modes {
   display: flex; gap: 6px; overflow-x: auto; padding: 0 18px 4px;

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
 
 from models import Achievement, BodyMeasurement, DayStat, Meal, User, WorkoutLog
+from services import goal as goal_service
 from services import steps as step_service
 from utils.game import (
     ACHIEVEMENT_BY_CODE,
@@ -156,6 +157,7 @@ async def _sync_achievements(
         steps_total=steps_total,
         steps_streak=steps_streak,
         steps_best=steps_best,
+        goal_reached=goal_service.reached(user, user.current_weight_kg),
     )
 
     owned = set(
