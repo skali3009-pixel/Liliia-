@@ -26,8 +26,35 @@ def lay_out(folder, *, sources=True):
 def test_all_art_names_are_known_and_unique():
     """Имена файлов зашиты в CSS — список не должен разъезжаться."""
     assert set(ARTWORK) == {"hero.png", "world.png", "moment.png", "sky.png",
-                            "gym.png", "food.png"}
+                            "food.png"}
     assert len(set(ARTWORK.values())) == len(ARTWORK)
+
+
+SHIPPED = "gym.webp"
+
+
+def test_the_sport_header_ships_with_the_code():
+    """Её не качают — она лежит в репозитории, и в этом весь смысл.
+
+    Скачивание с CDN на сервере не сработало, и вкладка «Спорт» открывалась
+    чёрной полосой: не было ни своей картинки, ни запасной. Картинка,
+    которая приезжает вместе с кодом, не может не приехать.
+    """
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parent.parent
+    art = root / "webapp" / "static" / "img" / SHIPPED
+
+    assert art.exists(), "картинка шапки «Спорта» должна лежать в репозитории"
+    assert art.stat().st_size < 300_000, "в репозитории — только лёгкая версия"
+
+    css = (root / "webapp" / "static" / "styles.css").read_text(encoding="utf-8")
+    assert f"/static/img/{SHIPPED}" in css
+
+    # И её не должно быть среди скачиваемых: иначе скачивание её же и затрёт.
+    assert SHIPPED not in ARTWORK
+    assert "gym.png" not in ARTWORK
+    assert "/static/img/gym.png" not in css
 
 
 def test_every_art_is_actually_used_by_the_styles():
@@ -63,10 +90,10 @@ def test_a_replaced_picture_is_actually_replaced(tmp_path):
     import json
 
     записка = json.loads((tmp_path / artwork.MANIFEST).read_text(encoding="utf-8"))
-    записка["gym.png"] = "https://example.test/старая-картинка.png"
+    записка["food.png"] = "https://example.test/старая-картинка.png"
     (tmp_path / artwork.MANIFEST).write_text(json.dumps(записка), encoding="utf-8")
 
-    assert missing(tmp_path) == ["gym.png"]
+    assert missing(tmp_path) == ["food.png"]
 
 
 def test_art_from_before_the_manifest_is_refetched_once(tmp_path):
@@ -188,14 +215,14 @@ def test_the_report_does_not_confuse_a_missing_picture_with_an_old_one(monkeypat
     lay_out(tmp_path)
     (tmp_path / "sky.png").unlink()
     записка = json.loads((tmp_path / artwork.MANIFEST).read_text(encoding="utf-8"))
-    записка["gym.png"] = "https://example.test/прошлая.png"
+    записка["food.png"] = "https://example.test/прошлая.png"
     (tmp_path / artwork.MANIFEST).write_text(json.dumps(записка), encoding="utf-8")
 
     monkeypatch.setattr(artwork, "ART_DIR", tmp_path)
     text = "\n".join(status._art_lines())
 
     assert "не хватает 1" in text and "sky.png" in text
-    assert "устарели 1" in text and "gym.png" in text
+    assert "устарели 1" in text and "food.png" in text
     assert "bash fetch-art.sh" in text
 
 
