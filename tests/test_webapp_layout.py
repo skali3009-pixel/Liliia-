@@ -272,6 +272,29 @@ def test_the_team_stands_where_it_gets_seen():
     assert world.index('id="world-next-card"') < world.index('id="team-card"')
 
 
+def test_the_story_card_does_not_borrow_the_timeline_row_styles():
+    """`.event` — строка ленты дня, и её display:flex разваливал карточку.
+
+    Заголовок «Редкий день» переносился по слогам в узкую колонку, а текст
+    события жался справа. Два разных смысла на одном имени класса.
+    """
+    assert 'class="card story" id="world-event"' in INDEX
+    world = INDEX.split('id="screen-world"')[1].split("</main>")[0]
+    assert 'class="event' not in world
+    assert ".story {" in STYLES
+
+
+def test_places_are_tiles_and_the_story_comes_early():
+    """Мир должно быть видно, а не читать списком."""
+    assert "#world-zones { display: grid" in STYLES
+    assert ".place {" in STYLES
+    assert "'place'" in APP_JS or "place${" in APP_JS
+    # Имя не пересекается с зонами тела на «Прогрессе» — там свой `.zone`.
+    assert ".zone ellipse" in STYLES
+    world = INDEX.split('id="screen-world"')[1].split("</main>")[0]
+    assert world.index('id="world-event"') < world.index('id="team-card"')
+
+
 def test_the_goal_moment_is_wired():
     """Дошла до цели — приложение обязано это заметить и спросить, что дальше."""
     for element_id in ("arrival", "arrival-text", "arrival-switch", "arrival-close"):

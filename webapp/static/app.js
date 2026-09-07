@@ -3279,25 +3279,53 @@ function renderWorld(data) {
 
   renderEvent(data.event);
 
+  // Места — плитки, а не строки списка: мир должно быть видно, а не читать.
+  // Открытое светится, закрытое приглушено — разницу видно, не вчитываясь.
   const box = document.getElementById('world-zones');
+  const known = openPlaces();
   box.innerHTML = '';
   for (const zone of data.zones) {
-    const row = document.createElement('div');
-    row.className = `zone${zone.open ? '' : ' locked'}`;
+    const tile = document.createElement('div');
+    tile.className = `place${zone.open ? '' : ' locked'}`;
     // Ступени рисуем полосками: сразу видно, что место растёт, а не просто есть.
     const steps = Array.from({ length: zone.stages }, (_, index) =>
-      `<i class="zone-step${index < zone.stage ? ' on' : ''}"></i>`).join('');
-    row.innerHTML = `
-      <span class="zone-icon"></span>
-      <div class="zone-main">
-        <div class="zone-name"></div>
-        <p class="zone-story"></p>
-        <div class="zone-steps">${steps}</div>
-      </div>`;
-    row.querySelector('.zone-icon').textContent = zone.icon;
-    row.querySelector('.zone-name').textContent = zone.title;
-    row.querySelector('.zone-story').textContent = zone.hint;
-    box.appendChild(row);
+      `<i class="place-step${index < zone.stage ? ' on' : ''}"></i>`).join('');
+    tile.innerHTML = `
+      <span class="place-icon"></span>
+      <div class="place-name"></div>
+      <p class="place-story"></p>
+      <div class="place-steps">${steps}</div>`;
+    tile.querySelector('.place-icon').textContent = zone.icon;
+    tile.querySelector('.place-name').textContent = zone.title;
+    tile.querySelector('.place-story').textContent = zone.hint;
+    // Место, которого не было в прошлый заход, вспыхивает один раз.
+    if (zone.open && known && !known.has(zone.title)) tile.classList.add('fresh');
+    box.appendChild(tile);
+  }
+  rememberPlaces(data.zones);
+}
+
+// Какие места были открыты в прошлый заход. Нужно ровно для одного:
+// показать вспышку у нового и не показывать её у всех остальных. Хранится
+// в браузере — сервер об этом знать не обязан, а без записи анимация
+// повторялась бы при каждом открытии вкладки.
+const PLACES_KEY = 'aura.places';
+
+function openPlaces() {
+  try {
+    const raw = localStorage.getItem(PLACES_KEY);
+    return raw ? new Set(JSON.parse(raw)) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function rememberPlaces(zones) {
+  try {
+    localStorage.setItem(PLACES_KEY, JSON.stringify(
+      zones.filter((zone) => zone.open).map((zone) => zone.title)));
+  } catch (error) {
+    // Приватный режим или запрет на хранилище — просто без вспышки.
   }
 }
 

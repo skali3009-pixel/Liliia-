@@ -289,6 +289,7 @@
 
 
   <main id="screen-world" class="screen" hidden>
+
     <section class="world-hero">
       <div class="world-art" data-art="world"></div>
       <div class="world-body">
@@ -317,20 +318,32 @@
       <div class="q-track"><i id="world-next-bar"></i></div>
     </section>
 
+    <!-- Событие дня. Есть не каждый день — иначе это уже не событие. -->
+    <section class="card story" id="world-event" hidden>
+      <div class="zone-head">
+        <span class="zone-icon" id="event-icon"></span>
+        <div>
+          <h2 class="zone-title" id="event-title"></h2>
+          <p class="zone-hint" id="event-hint"></p>
+        </div>
+      </div>
+      <p class="story-text" id="event-text"></p>
+      <div class="q-track"><i id="event-bar"></i></div>
+    </section>
+
     <!-- Команда. Личный счётчик шагов забрасывают через неделю: смотреть в
          него незачем. Работает другое — что тебя видят. -->
     <section class="card" id="team-card">
-      <div class="card-head"><h2>👟 Команда</h2>
+      <div class="card-head"><h2>Команда</h2>
         <span id="team-total" class="muted"></span></div>
 
       <div id="team-none">
-        <p class="hint">Ходить вместе интереснее: у команды общий счёт за
-          неделю и своя таблица. Соревнуемся только шагами — ни весом, ни
-          калориями здесь не меряются.</p>
+        <p class="hint">Общий счёт за неделю и своя таблица. Соревнуемся
+          только шагами.</p>
         <input class="input" id="team-name" type="text" maxlength="40"
                placeholder="Название команды">
         <button class="btn" id="team-create">Создать команду</button>
-        <p class="hint">Или вступи по коду из ссылки, которую тебе прислали:</p>
+        <p class="hint">Или вступи по коду из присланной ссылки:</p>
         <input class="input" id="team-code" type="text" maxlength="16"
                placeholder="Код команды">
         <button class="btn ghost" id="team-join">Вступить</button>
@@ -348,7 +361,7 @@
       <!-- Друзья свернуты внутрь команды: два соревнования подряд читались
            как одно и то же слово, сказанное дважды. Команда считает шаги,
            друзья — кристаллы, и обычно человеку нужна именно команда. -->
-      <div class="card-head sub-head"><h3>🤝 Друзья</h3>
+      <div class="card-head sub-head"><h3>Друзья</h3>
         <button class="link-btn" id="friends-toggle">показать</button></div>
       <div id="friends-box" hidden>
         <p class="hint" id="friends-count"></p>
@@ -360,7 +373,7 @@
 
         <div id="friends-list"></div>
 
-        <p class="hint">Друг видит только кристаллы, уровень и серию. Вес,
+        <p class="hint">Друг видит кристаллы, уровень и серию. Вес,
           замеры, фотографии и дневник еды не видит никто, кроме тебя.</p>
         <div class="cube-actions">
           <button class="btn" id="friends-invite">Позвать друга</button>
@@ -372,7 +385,7 @@
     <!-- Рейтинг по всему приложению. Он же объясняет потолок: без этого
          первое место выглядит как чужое враньё. -->
     <section class="card" id="top-card">
-      <div class="card-head"><h2>🏅 Неделя приложения</h2>
+      <div class="card-head"><h2>Неделя приложения</h2>
         <span id="top-place" class="muted"></span></div>
       <div id="top-rows"></div>
       <p class="hint" id="top-last"></p>
@@ -383,19 +396,6 @@
     <section class="card">
       <div class="card-head"><h2>Места</h2><span id="world-count" class="muted"></span></div>
       <div id="world-zones"></div>
-    </section>
-
-    <!-- Событие дня. Есть не каждый день — иначе это уже не событие. -->
-    <section class="card event" id="world-event" hidden>
-      <div class="zone-head">
-        <span class="zone-icon" id="event-icon"></span>
-        <div>
-          <h2 class="zone-title" id="event-title"></h2>
-          <p class="zone-hint" id="event-hint"></p>
-        </div>
-      </div>
-      <p class="event-text" id="event-text"></p>
-      <div class="q-track"><i id="event-bar"></i></div>
     </section>
 
     <section class="card discovery">
@@ -416,10 +416,11 @@
 
     <section class="card">
       <div class="card-head"><h2>Как это устроено</h2></div>
-      <p class="note">Каждое закрытое задание — кристаллы. Из кристаллов растёт
-        уровень, из уровня — твой мир. Ничего отмечать вручную не нужно: всё
-        считается по тому, что ты и так записываешь.</p>
+      <p class="note">Задание — кристаллы, кристаллы — уровень, уровень — мир.
+        Отмечать вручную нечего.</p>
     </section>
+
+
   </main>
 
 
