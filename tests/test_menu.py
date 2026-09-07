@@ -16,7 +16,7 @@ from seed.nutrition.dishes_guide import GUIDE_DISHES
 from seed.nutrition.dishes_store import STORE_DISHES
 from seed.nutrition.loader import nutrition_of, seed_nutrition
 from seed.nutrition.products import BY_CODE, PRODUCTS
-from services import dish_picker, method
+from services import dish_picker, menu as menu_module, method
 from services.dish_builder import validate
 from services.food_vision import FoodRecognitionError
 from services.menu import board
@@ -351,6 +351,14 @@ class _FakeClient:
         return _Response(self.payloads.pop(0))
 
 
+def _fixed_budget(budget: int, *, left: int, gap: str | None):
+    """Подменить расчёт бюджета приёма, чтобы час на часах ничего не решал."""
+    async def _stub(session, user, meal_type):
+        return budget, left, gap
+
+    return _stub
+
+
 def _use(monkeypatch, client):
     import services.dish_builder as builder
 
@@ -461,6 +469,13 @@ def test_a_vegan_gets_a_built_dish_when_her_menu_has_none(monkeypatch):
                        {"code": "olive_oil", "grams": 10}],
     })
     _use(monkeypatch, client)
+
+    # Бюджет приёма считается от текущего часа, и в одни часы веганский салат
+    # из меню в него влезал, а в другие нет — тест то проходил, то падал, не
+    # поймав ни одной настоящей поломки. Здесь важно не «сколько ккал», а
+    # «подходящего блюда в меню нет», поэтому час фиксируем.
+    monkeypatch.setattr(menu_module, "_budget_and_gap",
+                        _fixed_budget(700, left=1600, gap=None))
 
     async def scenario():
         async with db(diet_type=DietTypeEnum.VEGAN) as (session, user):

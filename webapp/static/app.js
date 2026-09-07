@@ -518,8 +518,26 @@ async function doTurn(action, button) {
     return;
   }
   if (action.target === 'checkin') {
-    document.querySelector('.state-grid button')?.click();
+    document.querySelector('#state-grid .state')?.click();
   }
+}
+
+/* --- Быстрые действия ---------------------------------------------------- */
+// Четыре самых частых шага дня одним касанием. Ничего нового они не умеют —
+// это короткая дорога к тому, что и так есть ниже на экране.
+
+function wireQuick() {
+  document.getElementById('quick-food').onclick = () => switchScreen('cube');
+  document.getElementById('quick-move').onclick = askSteps;
+  document.getElementById('quick-water').onclick = async (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      await addWater(250);
+    } finally {
+      button.disabled = false;
+    }
+  };
 }
 
 function plural(count, one, few, many) {
@@ -3366,8 +3384,6 @@ function switchScreen(name) {
   for (const screen of ['today', 'world', 'gym', 'cube', 'progress']) {
     document.getElementById(`screen-${screen}`).hidden = screen !== name;
   }
-  // Кнопка ввода живёт на «Сегодня»: на других экранах она бы закрывала списки.
-  document.getElementById('moment-open').classList.toggle('hidden-screen', name !== 'today');
   window.scrollTo(0, 0);
   moveArt();
 
@@ -3457,6 +3473,7 @@ async function init() {
   }
 
   document.getElementById('moment-open').onclick = openMoment;
+  wireQuick();
   document.getElementById('paywall-open').onclick = () => tg?.close?.();
   document.getElementById('state-close').onclick = () => {
     document.getElementById('state-sheet').hidden = true;

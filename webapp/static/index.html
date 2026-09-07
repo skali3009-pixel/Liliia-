@@ -15,6 +15,7 @@
 
 <div id="app" hidden>
   <main id="screen-today" class="screen">
+
     <!-- Шапка как в макете: крупное «СЕГОДНЯ» разрядкой, гепард справа,
          приветствие и строка состояния дня. -->
     <section class="hero">
@@ -87,9 +88,38 @@
          вопрос. Пусто, когда предлагать нечего: тишина лучше выдуманного
          совета. -->
     <section class="turn" id="turn" hidden>
-      <div class="turn-head"><span class="turn-mark">🐆</span> Твой ход</div>
+      <div class="turn-head">
+        <span class="turn-mark">🐆</span>
+        <span class="eyebrow">Твой ход</span>
+      </div>
       <p class="turn-text" id="turn-text"></p>
-      <button class="btn" id="turn-cta"></button>
+      <button class="btn primary" id="turn-cta"></button>
+    </section>
+
+    <!-- Быстрые действия: четыре самых частых шага одним касанием. Раньше
+         на их месте стоял большой блок записи с волной — он занимал экран
+         целиком ради одной кнопки. -->
+    <section class="quick">
+      <button class="quick-act" id="quick-food" aria-label="Что съесть">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/>
+          <path d="M12 3v18M4 7.5l8 4.5 8-4.5"/></svg>
+        <span>Еда</span>
+      </button>
+      <button class="quick-act" id="moment-open" aria-label="Рассказать, что происходит">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-8 8H5l1.5-3A8 8 0 1 1 20 12z"/>
+          <path d="M9 11h6M9 14h4"/></svg>
+        <span>Голос</span>
+      </button>
+      <button class="quick-act" id="quick-water" aria-label="Добавить стакан воды">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3s6 6.5 6 10.5A6 6 0 0 1 6 13.5C6 9.5 12 3 12 3z"/></svg>
+        <span>Вода</span>
+      </button>
+      <button class="quick-act" id="quick-move" aria-label="Внести шаги">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14" cy="4.5" r="2"/>
+          <path d="M10.5 21l2-6-2.5-2.5 1-4.5 3-1 2 3 2.5 1"/>
+          <path d="M12.5 15l-3 1.5L7 21"/></svg>
+        <span>Движение</span>
+      </button>
     </section>
 
     <!-- Кольцо стоит первым после шапки: «сколько осталось» — то, ради чего
@@ -165,7 +195,7 @@
          открывает посмотреть само по себе. Число вносит он сам — телефон
          приложению внутри Telegram шаги не отдаёт. -->
     <section class="card steps-card">
-      <div class="card-head"><h2>👟 Шаги</h2>
+      <div class="card-head"><h2>Шаги</h2>
         <span class="muted" id="steps-streak"></span></div>
 
       <div class="steps-body">
@@ -188,51 +218,15 @@
         <div class="steps-side">
           <p class="steps-left" id="steps-left"></p>
           <p class="hint" id="steps-week"></p>
-          <button class="btn" id="steps-add">Внести шаги</button>
+          <button class="btn ghost" id="steps-add">Внести шаги</button>
         </div>
       </div>
-      <p class="hint" id="steps-hint">Число смотрим в «Здоровье» на телефоне:
-        приложение внутри Telegram само шаги не считает.</p>
+      <p class="hint" id="steps-hint">Число — в «Здоровье» на телефоне: сам он его
+        сюда не отдаёт.</p>
       <!-- Вбивать руками каждый день не будет почти никто — и тогда всё, что
            стоит на шагах, не работает. Телефон умеет присылать их сам. -->
-      <button class="btn ghost" id="steps-sync">⚡ Чтобы приходили сами</button>
+      <button class="btn ghost" id="steps-sync">Чтобы приходили сами</button>
       <p class="hint" id="steps-synced" hidden></p>
-    </section>
-
-    <!-- Повтор привычной еды. Стоит выше ленты: записать проще, чем
-         посмотреть, и это самое частое действие в дневнике. -->
-    <section class="card" id="frequent-card" hidden>
-      <div class="card-head"><h2>Ешь как обычно</h2>
-        <span class="muted">нажми — запишу</span></div>
-      <div id="frequent"></div>
-    </section>
-
-    <!-- Блок записи идёт сразу за цифрами дня: сначала человек видит,
-         сколько осталось, потом рассказывает, что съел. -->
-    <section class="capture">
-      <div class="eyebrow mid">Расскажи, что происходит</div>
-      <div class="wave" aria-hidden="true">
-        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-        <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
-      </div>
-      <div class="capture-row">
-        <button class="mic-btn" id="moment-open" aria-label="Рассказать, что происходит">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M20 12a8 8 0 0 1-8 8H5l1.5-3A8 8 0 1 1 20 12z"/>
-            <path d="M9 11h6M9 14h4"/>
-          </svg>
-        </button>
-      </div>
-      <p class="capture-hint">Фото и голосовое — в чате с ботом: он поймёт так же,
-        а записанное придёт сюда само.</p>
-    </section>
-
-    <section class="state-grid" id="state-grid"></section>
-
-    <section class="card">
-      <div class="card-head"><h2>Лента дня</h2><span id="timeline-count" class="muted"></span></div>
-      <div id="timeline"></div>
     </section>
 
     <section class="card">
@@ -245,18 +239,28 @@
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>💧 Вода</h2><span id="water-val" class="muted"></span></div>
+      <div class="card-head"><h2>Вода</h2><span id="water-val" class="muted"></span></div>
       <div class="bar big"><i id="bar-water"></i></div>
       <div class="row">
-        <button class="chip" data-water="250">🥛 250</button>
-        <button class="chip" data-water="350">☕ 350</button>
-        <button class="chip" data-water="500">🍶 500</button>
+        <button class="chip" data-water="250">250 мл</button>
+        <button class="chip" data-water="350">350 мл</button>
+        <button class="chip" data-water="500">500 мл</button>
         <button class="chip ghost" id="water-undo">↩︎</button>
       </div>
     </section>
 
+    <section class="state-grid" id="state-grid"></section>
+
+    <!-- Повтор привычной еды. Стоит выше ленты: записать проще, чем
+         посмотреть, и это самое частое действие в дневнике. -->
+    <section class="card" id="frequent-card" hidden>
+      <div class="card-head"><h2>Ешь как обычно</h2>
+        <span class="muted">нажми — запишу</span></div>
+      <div id="frequent"></div>
+    </section>
+
     <section class="card">
-      <div class="card-head"><h2>💊 Приём на сегодня</h2>
+      <div class="card-head"><h2>Приём на сегодня</h2>
         <button class="link-btn" id="pill-form-toggle">добавить</button></div>
       <div id="pills"></div>
 
@@ -274,6 +278,11 @@
         <input id="pill-time" class="input" type="time" placeholder="Напоминание">
         <button id="pill-add" class="btn">Добавить препарат</button>
       </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Лента дня</h2><span id="timeline-count" class="muted"></span></div>
+      <div id="timeline"></div>
     </section>
 
   </main>

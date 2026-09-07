@@ -13,16 +13,38 @@ INDEX = (STATIC / "index.html").read_text(encoding="utf-8")
 STYLES = (STATIC / "styles.css").read_text(encoding="utf-8")
 
 
-def test_calories_come_before_the_input_block():
-    """Кольцо с остатком — то, ради чего приложение открывают."""
-    assert INDEX.index('class="ring-card"') < INDEX.index('class="capture"')
+def test_the_turn_is_the_first_thing_after_the_hero():
+    """«Твой ход» — самый умный блок приложения, и он стоит выше цифр."""
+    today = INDEX.split('id="screen-today"')[1].split("</main>")[0]
+    assert today.index('id="turn"') < today.index('class="quick"')
+    assert today.index('class="quick"') < today.index('class="ring-card"')
 
 
 def test_nothing_pushes_the_ring_below_the_fold():
-    """На экране телефона до кольца помещается только шапка."""
+    """До кольца помещаются только шапка, «Твой ход» и ряд быстрых действий."""
     ring = INDEX.index('class="ring-card"')
-    for later in ('class="capture"', 'class="state-grid"', "<h2>Лента дня</h2>"):
+    for later in ('class="state-grid"', "<h2>Лента дня</h2>", "<h2>Задания дня</h2>"):
         assert ring < INDEX.index(later), later
+
+
+def test_the_quick_row_leads_to_places_that_exist():
+    """Четыре быстрых действия: мёртвая кнопка здесь заметнее всего."""
+    for element_id in ("quick-food", "quick-water", "quick-move", "moment-open"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+
+
+def test_one_button_is_the_main_one_on_the_day_screen():
+    """Если главные все, главной нет ни одной."""
+    today = INDEX.split('id="screen-today"')[1].split("</main>")[0]
+    assert today.count('class="btn primary"') == 1
+    assert '.btn.primary' in STYLES
+
+
+def test_marking_how_she_feels_from_the_turn_actually_opens_a_tile():
+    """Селектор искал button, а плитки состояния — div: кнопка молчала."""
+    assert "'#state-grid .state'" in APP_JS
+    assert ".state-grid button" not in APP_JS
 
 
 def test_sheet_button_rule_stays_inside_the_sheet():
