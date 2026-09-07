@@ -309,6 +309,53 @@ def test_the_measurement_form_asks_for_one_number_and_hides_the_rest():
     assert progress.count('class="btn primary"') == 1
 
 
+def test_every_animation_can_be_switched_off_by_the_system():
+    """«Уменьшить движение» — не украшение настроек.
+
+    Человеку с чувствительностью к движению приложение должно остаться
+    пригодным, а не просто «менее красивым». Поэтому весь блок движения
+    живёт внутри `prefers-reduced-motion: no-preference`, а слой частиц
+    прячется отдельным правилом.
+    """
+    motion = STYLES.split("Движение\n", 1)[1]
+    assert "@media (prefers-reduced-motion: no-preference)" in motion
+    assert "@media (prefers-reduced-motion: reduce)" in motion
+
+    # Ни одна анимация не объявлена снаружи этих скобок.
+    outside = re.split(r"@media \(prefers-reduced-motion[^)]*\)", motion)[0]
+    assert "animation:" not in outside, "анимация мимо настройки «уменьшить движение»"
+
+    # И код тоже спрашивает разрешения, а не только стили.
+    assert "prefers-reduced-motion: reduce" in APP_JS
+    for helper in ("function sparks(", "function flyReward(", "function countTo(",
+                   "function playEntrance("):
+        body = APP_JS.split(helper, 1)[1][:900]
+        assert "motion()" in body, helper
+
+
+def test_particles_are_cleaned_up_and_capped():
+    """Частица — отдельный слой в браузере. Забыть их убрать значит
+
+    посадить телефон: их станет тысяча, и прокрутка начнёт дёргаться.
+    """
+    assert "SPARK_LIMIT" in APP_JS
+    for helper in ("function sparks(", "function flyReward("):
+        body = APP_JS.split(helper, 1)[1][:1800]
+        assert "animationend" in body, helper
+        assert ".remove()" in body, helper
+
+
+def test_the_ring_flashes_when_the_goal_closes_and_not_on_every_redraw():
+    """Экран перерисовывается после каждого стакана воды.
+
+    Без памяти о прошлом состоянии кольцо вспыхивало бы каждый раз, и
+    вспышка перестала бы что-либо значить.
+    """
+    assert "doneBefore" in APP_JS
+    body = APP_JS.split("function markDone(", 1)[1][:600]
+    assert "was !== false" in body
+
+
 def test_the_goal_moment_is_wired():
     """Дошла до цели — приложение обязано это заметить и спросить, что дальше."""
     for element_id in ("arrival", "arrival-text", "arrival-switch", "arrival-close"):

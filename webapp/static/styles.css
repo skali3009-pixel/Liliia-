@@ -616,18 +616,7 @@ button:focus-visible, .tab:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 .quest.done .q-xp { background: rgba(45, 212, 191, .16); color: var(--teal); }
-/* Закрытое задание отмечается заметно, но коротко: галочка «схлопывается»
-   на месте, ничего не двигая вокруг. */
-@media (prefers-reduced-motion: no-preference) {
-  .quest.done .q-icon { animation: quest-done .45s cubic-bezier(.2, 1.4, .4, 1); }
-  .cheetah:not([hidden]) { animation: cheetah-in .5s ease both; }
-}
-@keyframes quest-done {
-  0% { transform: scale(.6); } 60% { transform: scale(1.14); } 100% { transform: scale(1); }
-}
-@keyframes cheetah-in {
-  from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; }
-}
+/* Анимации заданий и гепарда — в блоке «Движение» в конце файла. */
 
 /* Награды */
 .awards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
@@ -1252,7 +1241,7 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
    классе рано или поздно сталкиваются. */
 #world-zones { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
 .place {
-  position: relative; overflow: hidden;
+  position: relative;
   padding: 14px 13px 13px; border-radius: 18px;
   border: 1px solid rgba(196, 181, 253, .26);
   background:
@@ -1270,15 +1259,7 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
 .place-steps { display: flex; gap: 4px; }
 .place-step { flex: 1; height: 4px; border-radius: 2px; background: var(--void); }
 .place-step.on { background: var(--accent); }
-/* Новое место вспыхивает один раз — и только оно. */
-@media (prefers-reduced-motion: no-preference) {
-  .place.fresh { animation: unlock 1.1s ease-out; }
-}
-@keyframes unlock {
-  0% { box-shadow: 0 0 0 0 rgba(196, 181, 253, .55); }
-  60% { box-shadow: 0 0 26px 4px rgba(196, 181, 253, .45); }
-  100% { box-shadow: 0 0 0 0 rgba(196, 181, 253, 0); }
-}
+/* Вспышка нового места — в блоке «Движение» в конце файла. */
 
 /* Гепард: одна строка настроения, не карточка. */
 .cheetah {
@@ -1314,4 +1295,253 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
 .friend-drop {
   border: none; background: none; color: var(--muted);
   font-size: 15px; cursor: pointer; padding: 4px 6px;
+}
+
+/* ======================================================================
+   Движение
+   ======================================================================
+   Всё здесь анимирует только transform, opacity и filter — то, что рисует
+   видеокарта. Ширину, высоту и отступы не трогаем: их пересчитывает
+   процессор, и на слабом телефоне из-за этого дёргается прокрутка.
+
+   Весь блок выключается системной настройкой «уменьшить движение»: она есть
+   и на iPhone, и на Android, и человеку с чувствительностью к движению
+   приложение должно остаться пригодным. */
+
+.sparkle {
+  position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden;
+}
+/* Частица: летит по своему углу и расстоянию, они приходят из кода. */
+.spark {
+  position: absolute; width: 8px; height: 8px; border-radius: 2px;
+  will-change: transform, opacity;
+}
+.spark.round { border-radius: 50%; }
+
+/* Улетающие кристаллы: «+15 💎» уходит от карточки к кристаллу в шапке. */
+.fly {
+  position: absolute; font-size: 15px; font-weight: 700; color: var(--lilac);
+  text-shadow: 0 2px 12px rgba(139, 92, 246, .8);
+  white-space: nowrap; will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sparkle { display: none; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+
+  /* --- Вход экрана: карточки поднимаются каскадом --------------------- */
+  .screen.enter > * {
+    animation: rise .52s cubic-bezier(.2, .85, .25, 1) backwards;
+  }
+  .screen.enter > *:nth-child(1) { animation-delay: .00s; }
+  .screen.enter > *:nth-child(2) { animation-delay: .05s; }
+  .screen.enter > *:nth-child(3) { animation-delay: .10s; }
+  .screen.enter > *:nth-child(4) { animation-delay: .15s; }
+  .screen.enter > *:nth-child(5) { animation-delay: .20s; }
+  .screen.enter > *:nth-child(6) { animation-delay: .25s; }
+  .screen.enter > *:nth-child(7) { animation-delay: .30s; }
+  .screen.enter > *:nth-child(8) { animation-delay: .34s; }
+  .screen.enter > *:nth-child(n+9) { animation-delay: .38s; }
+
+  @keyframes rise {
+    from { opacity: 0; transform: translate3d(0, 22px, 0) scale(.986); }
+    to { opacity: 1; transform: none; }
+  }
+
+  /* Шапка проявляется, а не выезжает: она не карточка, а фон.
+     Масштаб здесь пробовали — и убрали по замеру. Шапка это картинка во всю
+     ширину с мягкой маской по краям; пока она едет в масштабе, браузер
+     пересчитывает её заново на каждом кадре, и первый заход на «Прогресс»
+     на медленном телефоне проседал с 233 до 350 мс — видимым рывком.
+     Прозрачность считает видеокарта, и разница между «с движением» и «без»
+     пропадает совсем. */
+  .screen.enter > .hero, .screen.enter > .world-hero { animation-name: swell; }
+  @keyframes swell {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  /* --- Кристалл ------------------------------------------------------- */
+  /* Он живой: медленно дышит, поворачивается и по граням идёт блик. */
+  .crystal {
+    animation: crystal-float 5.5s ease-in-out infinite,
+               crystal-turn 9s ease-in-out infinite;
+    transform-origin: 50% 55%;
+  }
+  @keyframes crystal-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+  @keyframes crystal-turn {
+    0%, 100% { scale: 1 1; }
+    50% { scale: .88 1; }
+  }
+  .c-sheen { animation: sheen 6s cubic-bezier(.5, 0, .5, 1) infinite; }
+  @keyframes sheen {
+    0%, 62% { transform: translateX(0); }
+    92%, 100% { transform: translateX(78px); }
+  }
+  /* Искры не просто мигают — они всплывают и гаснут. */
+  .crystal[data-stage="3"] .sparks circle,
+  .crystal[data-stage="4"] .sparks circle,
+  .crystal[data-stage="5"] .sparks circle {
+    animation: spark-rise 3.4s ease-in-out infinite;
+  }
+  @keyframes spark-rise {
+    0% { opacity: 0; transform: translateY(4px) scale(.6); }
+    35% { opacity: .95; }
+    100% { opacity: 0; transform: translateY(-9px) scale(1.15); }
+  }
+  /* Прибавка кристаллов: он вспыхивает и подпрыгивает. */
+  .crystal.gain { animation: crystal-gain .85s cubic-bezier(.2, 1.5, .4, 1); }
+  @keyframes crystal-gain {
+    0% { transform: scale(1); filter: none; }
+    35% { transform: scale(1.28) translateY(-5px);
+          filter: drop-shadow(0 0 22px rgba(196, 181, 253, .95)); }
+    100% { transform: scale(1); filter: none; }
+  }
+
+  /* --- Кольца и полоски ---------------------------------------------- */
+  /* Кольцо рисуется от нуля при входе на экран, а не прыгает в позицию. */
+  .ring-fill { transition: stroke-dashoffset 1.1s cubic-bezier(.2, .8, .2, 1),
+                           stroke .3s; }
+  .dial-fill { transition: stroke-dashoffset .9s cubic-bezier(.2, .8, .2, 1); }
+  .bar i, .q-track i, .xp-track i {
+    transition: width .9s cubic-bezier(.2, .85, .25, 1);
+  }
+  /* Вода: по залитой части бежит блик — видно, что полоска живая. */
+  #bar-water {
+    background-image: linear-gradient(90deg, var(--indigo), var(--blue)),
+      linear-gradient(100deg, transparent 40%, rgba(255, 255, 255, .45) 50%,
+                      transparent 60%);
+    background-size: 100% 100%, 240% 100%;
+    background-blend-mode: normal, screen;
+    animation: water-sheen 3.6s linear infinite;
+  }
+  @keyframes water-sheen {
+    from { background-position: 0 0, 100% 0; }
+    to { background-position: 0 0, -140% 0; }
+  }
+  /* Норма закрыта — кольцо коротко вспыхивает. */
+  .ring-wrap.done { animation: ring-done 1s ease-out; }
+  @keyframes ring-done {
+    0% { filter: none; }
+    30% { filter: drop-shadow(0 0 18px rgba(45, 212, 191, .9)); }
+    100% { filter: none; }
+  }
+
+  /* --- Задания -------------------------------------------------------- */
+  .quest.done .q-icon { animation: quest-done .6s cubic-bezier(.2, 1.6, .35, 1); }
+  @keyframes quest-done {
+    0% { transform: scale(.5) rotate(-25deg); }
+    55% { transform: scale(1.22) rotate(6deg); }
+    100% { transform: scale(1) rotate(0); }
+  }
+  /* Строка, закрытая только что, коротко подсвечивается целиком. */
+  .quest.fresh { animation: quest-glow 1.2s ease-out; }
+  @keyframes quest-glow {
+    0% { background: rgba(45, 212, 191, .28); }
+    100% { background: transparent; }
+  }
+
+  /* --- Гепард --------------------------------------------------------- */
+  .cheetah:not([hidden]) { animation: cheetah-in .6s cubic-bezier(.2, 1.4, .4, 1) both; }
+  @keyframes cheetah-in {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: none; }
+  }
+  .cheetah-emoji { display: inline-block; animation: cheetah-nod 4s ease-in-out infinite; }
+  @keyframes cheetah-nod {
+    0%, 88%, 100% { transform: rotate(0) scale(1); }
+    92% { transform: rotate(-12deg) scale(1.12); }
+    96% { transform: rotate(9deg) scale(1.12); }
+  }
+
+  /* --- Открытие места ------------------------------------------------- */
+  .place.fresh { animation: place-pop 1.15s cubic-bezier(.2, 1.3, .3, 1); }
+  @keyframes place-pop {
+    0% { transform: scale(.86); box-shadow: 0 0 0 0 rgba(196, 181, 253, .6); }
+    45% { transform: scale(1.05); box-shadow: 0 0 34px 6px rgba(196, 181, 253, .55); }
+    100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(196, 181, 253, 0); }
+  }
+  /* Лучи из-под плитки: один оборот и всё. */
+  .place.fresh::before {
+    content: ''; position: absolute; inset: -60%; pointer-events: none;
+    background: conic-gradient(from 0deg, transparent 0deg, rgba(196, 181, 253, .34) 12deg,
+      transparent 24deg, transparent 90deg, rgba(196, 181, 253, .34) 102deg,
+      transparent 114deg, transparent 180deg, rgba(196, 181, 253, .34) 192deg,
+      transparent 204deg, transparent 270deg, rgba(196, 181, 253, .34) 282deg,
+      transparent 294deg);
+    z-index: -1; animation: rays 1.15s ease-out forwards;
+  }
+  @keyframes rays {
+    0% { opacity: 0; transform: rotate(0) scale(.4); }
+    35% { opacity: 1; }
+    100% { opacity: 0; transform: rotate(140deg) scale(1); }
+  }
+  .place-icon { display: inline-block; }
+  .place:not(.locked) .place-icon { animation: place-breathe 6s ease-in-out infinite; }
+  @keyframes place-breathe {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-3px); }
+  }
+
+  /* --- Награда -------------------------------------------------------- */
+  .pop-card { animation: award-in .7s cubic-bezier(.2, 1.5, .3, 1); }
+  @keyframes award-in {
+    0% { opacity: 0; transform: scale(.6) translateY(24px); }
+    60% { opacity: 1; transform: scale(1.06) translateY(0); }
+    100% { transform: scale(1); }
+  }
+  .pop-icon { display: inline-block; animation: award-icon 1.6s ease-in-out .25s infinite; }
+  @keyframes award-icon {
+    0%, 70%, 100% { transform: rotate(0) scale(1); }
+    78% { transform: rotate(-9deg) scale(1.1); }
+    86% { transform: rotate(7deg) scale(1.1); }
+  }
+
+  /* --- Частицы -------------------------------------------------------- */
+  .spark { animation: spark-fly var(--life, 1100ms) cubic-bezier(.15, .7, .3, 1) forwards; }
+  @keyframes spark-fly {
+    0% { opacity: 1; transform: translate3d(0, 0, 0) rotate(0) scale(1); }
+    100% { opacity: 0;
+           transform: translate3d(var(--dx), var(--dy), 0) rotate(var(--spin)) scale(.4); }
+  }
+  .fly { animation: fly-to var(--life, 900ms) cubic-bezier(.4, 0, .3, 1) forwards; }
+  @keyframes fly-to {
+    0% { opacity: 0; transform: translate3d(0, 0, 0) scale(.7); }
+    18% { opacity: 1; transform: translate3d(0, -14px, 0) scale(1.15); }
+    100% { opacity: 0; transform: translate3d(var(--dx), var(--dy), 0) scale(.45); }
+  }
+
+  /* --- Нажатия -------------------------------------------------------- */
+  /* Круг от пальца. Лежит внутри кнопки и обрезается её формой. */
+  .btn, .chip, .food-mode, .cube-shop, .quick-act, .tab, .meal-tab {
+    position: relative; overflow: hidden;
+  }
+  .ripple {
+    position: absolute; border-radius: 50%; pointer-events: none;
+    background: radial-gradient(circle, rgba(255, 255, 255, .55), transparent 70%);
+    transform: translate(-50%, -50%) scale(0);
+    animation: ripple .55s ease-out forwards;
+  }
+  @keyframes ripple {
+    to { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+  }
+  .tab svg { transition: transform .35s cubic-bezier(.2, 1.5, .4, 1); }
+  .tab.active svg { transform: translateY(-2px) scale(1.12); }
+
+  /* --- Смена режима внутри экрана ------------------------------------- */
+  #cube-mode:not([hidden]), #menu-mode:not([hidden]),
+  #pick-result .pick, #suggestions .suggestion, #cube-results .cube-card {
+    animation: rise .42s cubic-bezier(.2, .85, .25, 1) backwards;
+  }
+  #suggestions .suggestion:nth-child(2) { animation-delay: .07s; }
+  #suggestions .suggestion:nth-child(3) { animation-delay: .14s; }
+  #cube-results .cube-card:nth-child(2) { animation-delay: .07s; }
+  #cube-results .cube-card:nth-child(3) { animation-delay: .14s; }
+  #pick-result .pick:nth-child(2) { animation-delay: .07s; }
+  #pick-result .pick:nth-child(3) { animation-delay: .14s; }
 }

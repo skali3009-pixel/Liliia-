@@ -249,13 +249,15 @@ function renderToday(data) {
 
   const left = Math.max(norms.calories - totals.calories, 0);
   const over = totals.calories > norms.calories;
-  document.getElementById('kcal-left').textContent = over ? `+${totals.calories - norms.calories}` : left;
+  countTo(document.getElementById('kcal-left'),
+          over ? totals.calories - norms.calories : left, { prefix: over ? '+' : '' });
   document.querySelector('.kcal-label').textContent = over ? 'ккал перебор' : 'ккал осталось';
   document.getElementById('kcal-sub').textContent =
     `${totals.calories} из ${norms.calories} ккал`;
 
   const ratio = norms.calories ? Math.min(totals.calories / norms.calories, 1) : 0;
   const ring = document.getElementById('ring-fill');
+  markDone(ring.closest('.ring-wrap'), 'kcal', ratio >= 1 && !over);
   ring.style.strokeDashoffset = RING_LENGTH * (1 - ratio);
   // Обычный день — фиолетовый градиент; подход к норме и перебор красим
   // сплошным цветом, чтобы предупреждение читалось однозначно.
@@ -294,11 +296,12 @@ function renderToday(data) {
 
 function renderSteps(steps) {
   if (!steps) return;
-  document.getElementById('steps-value').textContent = steps.today || 0;
+  countTo(document.getElementById('steps-value'), steps.today || 0);
   document.getElementById('steps-goal-label').textContent = `из ${steps.goal}`;
 
   const ring = document.getElementById('steps-fill');
   ring.style.strokeDashoffset = RING_LENGTH_SMALL * (1 - (steps.share || 0));
+  markDone(ring.closest('.ring-wrap'), 'steps', Boolean(steps.done));
 
   document.getElementById('steps-left').textContent = steps.done
     ? 'Норма пройдена 👏'
@@ -424,9 +427,25 @@ function renderGame(game) {
   box.innerHTML = '';
   rest.innerHTML = '';
 
+  // Закрытое только что видно отдельно: строка подсвечивается, а награда
+  // улетает к кристаллу в шапке — иначе прибавка происходит где-то в стороне
+  // и человек не связывает её с тем, что сделал.
+  const justClosed = new Set(game.just_completed || []);
+  const flying = [];
   for (const quest of game.quests) {
     const target = quest.main === false ? rest : box;
-    target.appendChild(questRow(quest));
+    const row = questRow(quest);
+    if (justClosed.has(quest.code)) {
+      row.classList.add('fresh');
+      flying.push([row, `+${quest.xp} 💎`]);
+    }
+    target.appendChild(row);
+  }
+  // Ждём раскладку: до неё у строки нет координат, и лететь неоткуда.
+  if (flying.length) {
+    requestAnimationFrame(() => flying.forEach(([row, text], index) => {
+      setTimeout(() => flyReward(row, text), index * 240);
+    }));
   }
 
   const hidden = rest.children.length;
@@ -520,6 +539,168 @@ async function doTurn(action, button) {
   if (action.target === 'checkin') {
     document.querySelector('#state-grid .state')?.click();
   }
+}
+
+/* --- Движение ------------------------------------------------------------ */
+// Частицы, летящие кристаллы и счётчики чисел. Всё здесь — только украшение:
+// если оно не сработает, ни одна цифра и ни одна кнопка от этого не меняются.
+// Поэтому ошибки внутри гасятся, а не всплывают наверх.
+//
+// Системная настройка «уменьшить движение» выключает весь блок целиком:
+// человеку с чувствительностью к движению приложение должно остаться
+// пригодным, а не просто «менее красивым».
+
+const SPARK_COLORS = ['#C4B5FD', '#8B5CF6', '#5B6CFF', '#2DD4BF', '#C9A961'];
+// Больше этого числа частиц на экране одновременно не держим: на слабом
+// телефоне каждая — отдельный слой, и прокрутка начинает дёргаться.
+const SPARK_LIMIT = 180;
+
+function motion() {
+  return !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+function sparkLayer() {
+  return document.getElementById('sparkle');
+}
+
+/** Взрыв частиц из точки экрана. Координаты — как у события мыши. */
+function sparks(x, y, { count = 24, spread = 150, life = 1100, round = false } = {}) {
+  const layer = sparkLayer();
+  if (!motion() || !layer) return;
+  const room = SPARK_LIMIT - layer.childElementCount;
+  for (let i = 0; i < Math.min(count, room); i += 1) {
+    const dot = document.createElement('i');
+    dot.className = round ? 'spark round' : 'spark';
+    const angle = Math.random() * Math.PI * 2;
+    const far = spread * (0.35 + Math.random() * 0.65);
+    const size = 5 + Math.random() * 6;
+    dot.style.left = `${x}px`;
+    dot.style.top = `${y}px`;
+    dot.style.width = `${size}px`;
+    dot.style.height = `${size}px`;
+    dot.style.background = SPARK_COLORS[Math.floor(Math.random() * SPARK_COLORS.length)];
+    dot.style.setProperty('--dx', `${Math.cos(angle) * far}px`);
+    // Вниз чуть сильнее, чем вверх: без этого частицы висят кольцом и
+    // выглядят как схема, а не как брызги.
+    dot.style.setProperty('--dy', `${Math.sin(angle) * far + far * 0.4}px`);
+    dot.style.setProperty('--spin', `${Math.round(Math.random() * 720 - 360)}deg`);
+    dot.style.setProperty('--life', `${life + Math.random() * 400}ms`);
+    dot.addEventListener('animationend', () => dot.remove());
+    layer.appendChild(dot);
+  }
+}
+
+/** Взрыв по центру элемента — чаще всего нужен именно он. */
+function sparksAt(element, options) {
+  if (!element) return;
+  const box = element.getBoundingClientRect();
+  if (!box.width && !box.height) return;
+  sparks(box.left + box.width / 2, box.top + box.height / 2, options);
+}
+
+/** Кристалл коротко вспыхивает: пришла прибавка. */
+function pulseCrystal() {
+  const crystal = document.getElementById('crystal');
+  if (!crystal || !motion()) return;
+  crystal.classList.remove('gain');
+  void crystal.offsetWidth;          // без этого второй раз подряд не сыграет
+  crystal.classList.add('gain');
+  crystal.addEventListener('animationend', () => crystal.classList.remove('gain'),
+                           { once: true });
+}
+
+/** «+15 💎» улетает от карточки к кристаллу в шапке. */
+function flyReward(from, text) {
+  const to = document.getElementById('crystal');
+  const layer = sparkLayer();
+  if (!motion() || !from || !to || !layer) return;
+  const a = from.getBoundingClientRect();
+  const b = to.getBoundingClientRect();
+  if (!a.width || !b.width) return;
+  const chip = document.createElement('div');
+  chip.className = 'fly';
+  chip.textContent = text;
+  chip.style.left = `${a.left + a.width / 2}px`;
+  chip.style.top = `${a.top + a.height / 2}px`;
+  chip.style.setProperty('--dx', `${b.left + b.width / 2 - a.left - a.width / 2}px`);
+  chip.style.setProperty('--dy', `${b.top + b.height / 2 - a.top - a.height / 2}px`);
+  chip.style.setProperty('--life', '950ms');
+  chip.addEventListener('animationend', () => {
+    chip.remove();
+    pulseCrystal();
+    sparksAt(to, { count: 14, spread: 70, life: 800, round: true });
+  }, { once: true });
+  layer.appendChild(chip);
+}
+
+/** Число не подставляется, а докручивается от того, что стояло раньше. */
+function countTo(element, value, { prefix = '' } = {}) {
+  if (!element) return;
+  const target = Math.round(value);
+  const from = parseInt(String(element.textContent).replace(/[^\d-]/g, ''), 10);
+  if (!motion() || !Number.isFinite(from) || from === target) {
+    element.textContent = prefix + target;
+    return;
+  }
+  const started = performance.now();
+  const span = 700;
+  const step = (now) => {
+    const share = Math.min((now - started) / span, 1);
+    // Быстро в начале, мягко в конце — так число «доезжает», а не тормозит.
+    const eased = 1 - (1 - share) ** 3;
+    element.textContent = prefix + Math.round(from + (target - from) * eased);
+    if (share < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+// Что уже было закрыто, когда экран рисовали в прошлый раз. Вспышка нужна
+// в момент перехода «не закрыто → закрыто», а не при каждой перерисовке:
+// иначе кольцо мигает после каждого стакана воды.
+const doneBefore = {};
+
+/** Кольцо коротко вспыхивает в тот раз, когда норма только что закрылась. */
+function markDone(wrap, key, done) {
+  const was = doneBefore[key];
+  doneBefore[key] = done;
+  if (!wrap || !motion() || !done || was !== false) return;
+  wrap.classList.remove('done');
+  void wrap.offsetWidth;
+  wrap.classList.add('done');
+  sparksAt(wrap, { count: 22, spread: 120, round: true });
+  wrap.addEventListener('animationend', () => wrap.classList.remove('done'),
+                        { once: true });
+}
+
+/** Карточки экрана въезжают каскадом. Повторный вход играет заново. */
+function playEntrance(name) {
+  const screen = document.getElementById(`screen-${name}`);
+  if (!screen || !motion()) return;
+  screen.classList.remove('enter');
+  void screen.offsetWidth;
+  screen.classList.add('enter');
+}
+
+// Круг от пальца. Один слушатель на всё приложение: вешать его на каждую
+// кнопку — значит забыть про кнопки, которые рисуются кодом позже.
+const RIPPLE_ON = '.btn, .chip, .food-mode, .cube-shop, .quick-act, .tab, .meal-tab';
+
+function wireRipple() {
+  document.addEventListener('pointerdown', (event) => {
+    if (!motion()) return;
+    const target = event.target.closest?.(RIPPLE_ON);
+    if (!target || target.disabled) return;
+    const box = target.getBoundingClientRect();
+    const size = Math.max(box.width, box.height) * 2.2;
+    const dot = document.createElement('span');
+    dot.className = 'ripple';
+    dot.style.width = `${size}px`;
+    dot.style.height = `${size}px`;
+    dot.style.left = `${event.clientX - box.left}px`;
+    dot.style.top = `${event.clientY - box.top}px`;
+    dot.addEventListener('animationend', () => dot.remove(), { once: true });
+    target.appendChild(dot);
+  }, { passive: true });
 }
 
 /* --- Быстрые действия ---------------------------------------------------- */
@@ -624,6 +805,9 @@ function celebrate(game) {
     setTimeout(() => {
       toast(`🎁 Гепард что-то нашёл: +${game.surprise} 💎`);
       haptic('medium');
+      pulseCrystal();
+      sparksAt(document.getElementById('crystal'),
+               { count: 20, spread: 110, round: true });
     }, closed.length ? 2200 : 0);
   }
 
@@ -636,6 +820,10 @@ function celebrate(game) {
     document.getElementById('pop-title').textContent = award.title;
     pop.hidden = false;
     tg?.HapticFeedback?.notificationOccurred?.('success');
+    // Открытие — главное событие в приложении, и выглядеть должно так же.
+    const card = pop.querySelector('.pop-card');
+    setTimeout(() => sparksAt(card, { count: 44, spread: 260, life: 1500 }), 180);
+    setTimeout(() => sparksAt(card, { count: 30, spread: 320, life: 1700 }), 620);
   };
   document.getElementById('pop-close').onclick = showNext;
   if (queue.length) showNext();
@@ -1613,7 +1801,7 @@ async function refreshProgress() {
   document.getElementById('stat-weight').textContent = s.current_weight ? fmt(s.current_weight) : '—';
   document.getElementById('stat-change').textContent =
     s.changed > 0 ? `+${fmt(s.changed)}` : fmt(s.changed || 0);
-  document.getElementById('stat-streak').textContent = s.streak;
+  countTo(document.getElementById('stat-streak'), s.streak);
   document.getElementById('stat-streak-label').textContent =
     `${plural(s.streak, 'день', 'дня', 'дней')} подряд`;
   document.getElementById('chart-title').textContent = progress.title;
@@ -1715,10 +1903,10 @@ function renderWorkouts(data) {
   const program = data.programs.find((p) => p.code === data.selected);
   document.getElementById('program-title').textContent = program ? program.title : 'Программа';
   document.getElementById('program-sub').textContent = program ? program.subtitle : '';
-  document.getElementById('gym-count').textContent = data.week.workouts;
+  countTo(document.getElementById('gym-count'), data.week.workouts);
   document.getElementById('gym-count-label').textContent =
     plural(data.week.workouts, 'тренировка', 'тренировки', 'тренировок');
-  document.getElementById('gym-kcal').textContent = data.week.calories;
+  countTo(document.getElementById('gym-kcal'), data.week.calories);
 
   renderChips('category-switch', data.categories, category, (code) => {
     category = code;
@@ -3299,7 +3487,11 @@ function renderWorld(data) {
     tile.querySelector('.place-name').textContent = zone.title;
     tile.querySelector('.place-story').textContent = zone.hint;
     // Место, которого не было в прошлый заход, вспыхивает один раз.
-    if (zone.open && known && !known.has(zone.title)) tile.classList.add('fresh');
+    if (zone.open && known && !known.has(zone.title)) {
+      tile.classList.add('fresh');
+      // Плитка ещё не в раскладке — координаты появятся на следующем кадре.
+      requestAnimationFrame(() => sparksAt(tile, { count: 34, spread: 190, life: 1400 }));
+    }
     box.appendChild(tile);
   }
   rememberPlaces(data.zones);
@@ -3457,6 +3649,7 @@ function switchScreen(name) {
   }
   window.scrollTo(0, 0);
   moveArt();
+  playEntrance(name);
 
   if (name === 'cube' && !cubeState.ready) {
     buildCubeControls();
@@ -3543,6 +3736,7 @@ async function init() {
     document.getElementById(id).onchange = (event) => saveProfileField(field, event.target);
   }
 
+  wireRipple();
   document.getElementById('moment-open').onclick = openMoment;
   document.getElementById('decide-btn').onclick = decideForMe;
   // Объёмы и «как мерить» — по кнопке: чаще всего записывают один вес.
@@ -3624,6 +3818,9 @@ async function init() {
     await refresh();
     document.getElementById('loading').hidden = true;
     document.getElementById('app').hidden = false;
+    // Каскад играет после того, как экран стал видимым: до этого браузер
+    // анимировал бы то, чего на экране нет.
+    playEntrance('today');
   } catch (e) {
     if (e.message.includes('Подписка')) return;   // экран оплаты уже показан
     document.getElementById('loading').textContent =
