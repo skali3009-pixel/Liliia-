@@ -356,6 +356,25 @@ def test_the_ring_flashes_when_the_goal_closes_and_not_on_every_redraw():
     assert "was !== false" in body
 
 
+def test_no_blanket_rule_moves_the_crop_down_the_picture():
+    """У каждой картинки зверь на своей высоте — общего числа не бывает.
+
+    Один раз попробовали: чтобы вытащить зверя в узкую шапку «Спорта», окно
+    сдвинули на 42% вниз сразу у всех узких шапок. «Спорту» помогло, а на
+    «Прогрессе» ровно в середине кадра оказались спина и хвост — шапка стала
+    показывать заднюю часть гепарда. Правильный ответ был не в проценте, а в
+    том, чтобы у «Спорта» был горизонтальный кадр.
+    """
+    for line in STYLES.splitlines():
+        stripped = line.strip()
+        if "background-position" not in stripped or stripped.startswith("/*"):
+            continue
+        # Разрешены только края: top/center/right. Проценты по вертикали —
+        # это и есть попытка угадать одно место для всех картинок.
+        assert "%" not in stripped or "background-position: 0 0" in stripped, (
+            f"сдвиг окна по кадру общим правилом: {stripped}")
+
+
 def test_the_goal_moment_is_wired():
     """Дошла до цели — приложение обязано это заметить и спросить, что дальше."""
     for element_id in ("arrival", "arrival-text", "arrival-switch", "arrival-close"):
