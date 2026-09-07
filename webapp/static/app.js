@@ -311,6 +311,43 @@ function renderSteps(steps) {
     steps.streak ? `🔥 ${steps.streak} ${plural(steps.streak, 'день', 'дня', 'дней')} с нормой` : '';
 }
 
+/* --- Чтобы шаги приходили сами ------------------------------------------ */
+// Вбивать число каждый день не будет почти никто, а без шагов не работает
+// ничего вокруг них. Читать «Здоровье» из Telegram нельзя — но телефон умеет
+// присылать шаги сам, по расписанию. Здесь ссылка и инструкция к ней.
+
+async function openSync(renew = false) {
+  const sheet = document.getElementById('sync-sheet');
+  sheet.hidden = false;
+  try {
+    const data = await api('/api/steps/sync',
+      renew ? { method: 'POST', body: JSON.stringify({ renew: true }) } : {});
+    const link = document.getElementById('sync-link');
+    link.textContent = data.link || data.no_site;
+    document.getElementById('sync-why').textContent = data.why;
+    document.getElementById('sync-iphone').textContent = data.iphone;
+    document.getElementById('sync-android').textContent = data.android;
+    document.getElementById('sync-safety').textContent = data.safety;
+
+    const copy = document.getElementById('sync-copy');
+    copy.hidden = !data.link;
+    copy.onclick = () => {
+      navigator.clipboard?.writeText(data.link);
+      copy.textContent = 'Скопировано';
+      haptic('medium');
+    };
+    copy.textContent = 'Скопировать ссылку';
+    document.getElementById('sync-renew').hidden = !data.link;
+
+    const synced = document.getElementById('steps-synced');
+    synced.hidden = !data.last;
+    synced.textContent = data.last ? `Телефон присылал шаги ${data.last}` : '';
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+
 async function askSteps() {
   const current = document.getElementById('steps-value').textContent;
   const answer = prompt('Сколько шагов сегодня? Число из «Здоровья» на телефоне.',
@@ -3142,6 +3179,13 @@ async function init() {
 
   document.getElementById('profile-open').onclick = openProfile;
   document.getElementById('steps-add').onclick = askSteps;
+  document.getElementById('steps-sync').onclick = () => openSync();
+  document.getElementById('sync-close').onclick = () => {
+    document.getElementById('sync-sheet').hidden = true;
+  };
+  document.getElementById('sync-renew').onclick = () => {
+    if (confirm('Старая ссылка перестанет работать. Сменить?')) openSync(true);
+  };
   wireTeam();
   document.getElementById('profile-close').onclick = closeProfile;
   document.getElementById('prof-export').onclick = requestExport;

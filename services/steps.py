@@ -18,8 +18,10 @@
 
 from __future__ import annotations
 
+import secrets
+from collections import deque
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -128,7 +130,7 @@ class Steps:
 
 
 async def record(session: AsyncSession, user_id: int, steps: int, *,
-                 day: date | None = None,
+                 day: date | None = None, source: str = "manual",
                  timezone_name: str = DEFAULT_TIMEZONE) -> int:
     """Записать шаги за день. Повторная запись уточняет число, а не прибавляет.
 
@@ -145,9 +147,10 @@ async def record(session: AsyncSession, user_id: int, steps: int, *,
     )).scalar_one_or_none()
 
     if row is None:
-        session.add(StepLog(user_id=user_id, day=when, steps=value, source="manual"))
+        session.add(StepLog(user_id=user_id, day=when, steps=value, source=source))
     else:
         row.steps = value
+        row.source = source
     await session.commit()
     return value
 
@@ -231,6 +234,85 @@ async def state(session: AsyncSession, user: User, *,
         total=total,
         best=best,
     )
+
+
+# --- Присылка с телефона ----------------------------------------------------
+# Главное ограничение и обход вокруг него.
+#
+# Мини-приложение внутри Telegram — это веб-страница. iOS не отдаёт ей данные
+# «Здоровья» ни по какой галочке: дело не в согласии, а в том, что канала не
+# существует. Прочитать шаги из приложения нельзя никак.
+#
+# Но телефон умеет отправлять их сам. На айфоне это «Команды» (Shortcuts):
+# встроенное приложение Apple берёт шаги из «Здоровья» и по расписанию, без
+# участия человека, стучится по обычной ссылке. На Android то же делает
+# Health Connect вместе с приложением-автоматизацией.
+#
+# Значит, нам нужна ссылка, которую можно дать телефону. Ключ в ней — не
+# пароль: по нему можно только записать себе шаги за день, прочитать нельзя
+# ничего. Утёкшую ссылку человек меняет в один шаг.
+
+TOKEN_LENGTH = 22
+
+# Сколько присылок в час принимаем с одного ключа. Расписание шлёт раз в
+# несколько часов; ограничитель нужен на случай зациклившейся автоматизации.
+SYNC_PER_HOUR = 60
+
+# Как помечаются записи, пришедшие с телефона: по ним видно, что человек
+# ничего не вбивал руками.
+SOURCE_PHONE = "phone"
+
+_pushes: dict[str, deque[datetime]] = {}
+
+
+def _fresh_token() -> str:
+    return secrets.token_urlsafe(24)[:TOKEN_LENGTH]
+
+
+async def sync_token(session: AsyncSession, user: User, *,
+                     renew: bool = False) -> str:
+    """Личный ключ присылки. `renew` выдаёт новый — так отзывают старую ссылку."""
+    if user.steps_token and not renew:
+        return user.steps_token
+
+    user.steps_token = _fresh_token()
+    await session.commit()
+    return user.steps_token
+
+
+async def by_token(session: AsyncSession, token: str) -> User | None:
+    """Чей это ключ. None — если такого нет."""
+    value = (token or "").strip()
+    if not value:
+        return None
+    return (await session.execute(
+        select(User).where(User.steps_token == value)
+    )).scalar_one_or_none()
+
+
+def push_allowed(token: str, *, now: datetime | None = None) -> bool:
+    """Не зациклилась ли автоматизация на телефоне."""
+    moment = now or datetime.now(timezone.utc)
+    marks = _pushes.setdefault(token, deque(maxlen=SYNC_PER_HOUR * 4))
+    while marks and marks[0] < moment - timedelta(hours=1):
+        marks.popleft()
+    if len(marks) >= SYNC_PER_HOUR:
+        return False
+    marks.append(moment)
+    return True
+
+
+def forget_pushes() -> None:
+    """Забыть счётчики присылок. Нужно тестам."""
+    _pushes.clear()
+
+
+async def last_sync(session: AsyncSession, user_id: int) -> datetime | None:
+    """Когда телефон присылал шаги в последний раз."""
+    return (await session.execute(
+        select(func.max(StepLog.updated_at)).where(
+            StepLog.user_id == user_id, StepLog.source == SOURCE_PHONE)
+    )).scalar_one_or_none()
 
 
 # --- Рейтинг ---------------------------------------------------------------
@@ -331,7 +413,8 @@ def place_of(rows: list[Row], user_id: int) -> int | None:
     return None
 
 
-__all__ = ["DEFAULT_GOAL", "GOAL_BY_ACTIVITY", "GOAL_CHOICES", "MAX_DAILY", "MAX_GOAL",
+__all__ = ["DEFAULT_GOAL", "SOURCE_PHONE", "SYNC_PER_HOUR", "TOKEN_LENGTH",
+           "by_token", "forget_pushes", "last_sync", "push_allowed", "sync_token", "GOAL_BY_ACTIVITY", "GOAL_CHOICES", "MAX_DAILY", "MAX_GOAL",
            "MIN_GOAL", "RANKED_CAP", "WEEK_DAYS", "Row", "Steps", "clean_goal",
            "clean_steps", "global_top", "goal_for", "history", "last_week_bounds",
            "on_day", "place_of", "record", "state", "streak", "totals",

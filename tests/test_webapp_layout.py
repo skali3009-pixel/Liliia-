@@ -162,3 +162,20 @@ def test_the_person_is_told_that_steps_are_entered_by_hand():
     """Молчать об этом нельзя: человек решит, что шагомер сломался."""
     assert "Здоровье" in INDEX
     assert "сам" in INDEX or "сама" in INDEX
+
+
+def test_the_automatic_sync_is_offered_in_the_app():
+    """Вбивать шаги руками каждый день не будет почти никто."""
+    for element_id in ("steps-sync", "sync-sheet", "sync-link", "sync-copy",
+                       "sync-iphone", "sync-android", "sync-renew", "steps-synced"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+    assert "'/api/steps/sync'" in APP_JS
+
+
+def test_the_phone_hook_lives_outside_the_signed_api():
+    """Стучится не приложение, а «Команды» по расписанию — подписи там нет."""
+    api = (Path(__file__).resolve().parent.parent / "webapp" /
+           "api.py").read_text(encoding="utf-8")
+    assert '"/hook/steps/{token}"' in api
+    assert '"/api/hook' not in api

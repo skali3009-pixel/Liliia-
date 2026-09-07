@@ -1084,6 +1084,15 @@ select.fact-input { text-align: left; width: 130px; }
 .sub-head { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--stroke); }
 .sub-head h3 { margin: 0; font-size: 15px; }
 
+.sync-link {
+  margin: 0 0 10px; padding: 10px; border-radius: 10px; background: var(--surface-2);
+  font-size: 12px; word-break: break-all; color: var(--lilac);
+}
+.sync-steps {
+  margin: 0 0 12px; padding: 0; white-space: pre-wrap; font-family: inherit;
+  font-size: 13px; color: var(--muted); line-height: 1.5;
+}
+
 /* --- Команда и рейтинг ---------------------------------------------------- */
 .team-name { margin: 0 0 10px; font-size: 17px; }
 .board-row {

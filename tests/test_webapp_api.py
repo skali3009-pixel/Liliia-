@@ -1100,6 +1100,160 @@ def test_steps_need_a_signature_like_everything_else():
     run(scenario)
 
 
+# --- Присылка шагов с телефона ---------------------------------------------
+# Читать «Здоровье» из Telegram нельзя, поэтому телефон присылает шаги сам —
+# по личной ссылке, без подписи Telegram: стучится не приложение, а
+# «Команды» на айфоне по расписанию.
+
+async def hook(client, token, *, steps=None, body=None, method="POST"):
+    path = f"/hook/steps/{token}"
+    if steps is not None:
+        path += f"?steps={steps}"
+    return await client.request(method, path, json=body)
+
+
+async def token_of(client, user_id=USER_ID) -> str:
+    """Ключ присылки. Ссылку собрать нельзя — в тестах нет адреса сайта."""
+    await call(client, "GET", "/api/steps/sync", user_id=user_id)
+    async with maker_holder["maker"]() as session:
+        user = await session.get(User, user_id)
+        return user.steps_token
+
+
+def test_the_phone_writes_steps_by_the_link_without_any_telegram_signature():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import steps as step_service
+
+            step_service.forget_pushes()
+            token = await token_of(client)
+
+            response = await hook(client, token, steps=8432)
+            assert response.status == 200
+            body = await response.json()
+            assert body["steps"] == 8432 and body["ok"] is True
+
+            # И это те же шаги, что видит человек на своём экране.
+            today = await (await call(client, "GET", "/api/today")).json()
+            assert today["game"]["steps"]["today"] == 8432
+    run(scenario)
+
+
+def test_the_phone_may_send_the_number_in_the_body_too():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import steps as step_service
+
+            step_service.forget_pushes()
+            token = await token_of(client)
+
+            response = await hook(client, token, body={"steps": 7100})
+            assert response.status == 200
+            assert (await response.json())["steps"] == 7100
+    run(scenario)
+
+
+def test_a_repeated_push_corrects_the_day_instead_of_adding_up():
+    """Расписание шлёт итог с начала суток — складывать нельзя."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import steps as step_service
+
+            step_service.forget_pushes()
+            token = await token_of(client)
+
+            await hook(client, token, steps=3000)
+            await hook(client, token, steps=9000)
+            assert (await (await hook(client, token, steps=9500)).json())["steps"] == 9500
+    run(scenario)
+
+
+def test_a_wrong_link_writes_nothing_to_anybody():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import steps as step_service
+
+            step_service.forget_pushes()
+            response = await hook(client, "чужой-ключ", steps=9000)
+            assert response.status == 404
+
+            today = await (await call(client, "GET", "/api/today")).json()
+            assert today["game"]["steps"]["today"] == 0
+    run(scenario)
+
+
+def test_the_link_writes_only_to_its_own_owner():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import steps as step_service
+
+            step_service.forget_pushes()
+            mine = await token_of(client)
+            await hook(client, mine, steps=6000)
+
+            theirs = await (await call(client, "GET", "/api/today",
+                                       user_id=OTHER_ID)).json()
+            assert theirs["game"]["steps"]["today"] == 0
+    run(scenario)
+
+
+def test_a_typo_from_the_phone_is_capped_not_stored():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import steps as step_service
+
+            step_service.forget_pushes()
+            token = await token_of(client)
+
+            body = await (await hook(client, token, steps=999999)).json()
+            assert body["steps"] == step_service.MAX_DAILY
+    run(scenario)
+
+
+def test_a_push_without_a_number_says_what_is_expected():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import steps as step_service
+
+            step_service.forget_pushes()
+            token = await token_of(client)
+
+            response = await hook(client, token, body={})
+            assert response.status == 400
+            assert "steps" in (await response.json())["error"]
+    run(scenario)
+
+
+def test_changing_the_link_stops_the_old_one_immediately():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import steps as step_service
+
+            step_service.forget_pushes()
+            old = await token_of(client)
+            await call(client, "POST", "/api/steps/sync", json_body={"renew": True})
+
+            assert (await hook(client, old, steps=9000)).status == 404
+            new = await token_of(client)
+            assert (await hook(client, new, steps=9000)).status == 200
+    run(scenario)
+
+
+def test_the_screen_shows_when_the_phone_last_sent_something():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from services import steps as step_service
+
+            step_service.forget_pushes()
+            token = await token_of(client)
+            assert (await (await call(client, "GET", "/api/steps/sync")).json())["last"] == ""
+
+            await hook(client, token, steps=9000)
+            data = await (await call(client, "GET", "/api/steps/sync")).json()
+            assert data["last"], "без этого человек не поймёт, работает настройка или нет"
+    run(scenario)
+
+
 def test_shelf_photo_answers_with_names_the_person_can_check(monkeypatch):
     """Сначала показываем, что увидели, и только потом собираем набор."""
     async def scenario():

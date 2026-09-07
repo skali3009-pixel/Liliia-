@@ -73,7 +73,8 @@ from utils import images
 from utils.macros import GAP_LABELS, dominant_gap, remaining
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, scale_nutrition
-from utils.timeframe import get_zone, is_known_zone, to_local, today_in
+from utils.timeframe import (DEFAULT_TIMEZONE, get_zone, is_known_zone,
+                            to_local, today_in)
 from webapp.auth import AuthError, verify_init_data
 
 logger = logging.getLogger(__name__)
@@ -1561,6 +1562,83 @@ async def post_team(request: web.Request) -> web.Response:
     return web.json_response({"ok": True})
 
 
+async def get_steps_sync(request: web.Request) -> web.Response:
+    """Личная ссылка присылки и инструкция к ней."""
+    from services import step_sync
+    from services import steps as step_service
+
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        renew = bool((await request.json()).get("renew")) \
+            if request.method == "POST" and request.can_read_body else False
+        token = await step_service.sync_token(session, user, renew=renew)
+        synced = await step_service.last_sync(session, user.id)
+
+    return web.json_response({
+        "link": step_sync.link_for(token),
+        "why": step_sync.WHY,
+        "iphone": step_sync.IPHONE,
+        "android": step_sync.ANDROID,
+        "safety": step_sync.SAFETY,
+        "no_site": step_sync.NO_SITE,
+        "last": to_local(synced, request["timezone"]).strftime("%d.%m в %H:%M")
+                if synced else "",
+    })
+
+
+async def push_steps(request: web.Request) -> web.Response:
+    """Телефон присылает шаги сам, по личной ссылке.
+
+    Живёт вне /api/ нарочно: подписи Telegram здесь нет и быть не может —
+    стучится не приложение, а «Команды» на айфоне или автоматизация на
+    Android, по расписанию и без участия человека. Вместо подписи — ключ в
+    самой ссылке.
+
+    Принимаем и число в адресе (`?steps=8432`), и JSON в теле. Первое проще
+    собрать в «Командах» одной строкой, второе — то, что шлют привычные
+    автоматизации; отказывать ни тем, ни другим незачем.
+    """
+    from services import steps as step_service
+
+    token = request.match_info.get("token", "")
+    async with get_session() as session:
+        user = await step_service.by_token(session, token)
+        if user is None:
+            # Про чужой ключ не рассказываем ничего сверх того, что он не наш.
+            return web.json_response({"error": "Ссылка не подходит"}, status=404)
+
+        if not step_service.push_allowed(token):
+            return web.json_response(
+                {"error": "Слишком часто. Достаточно нескольких раз в день."},
+                status=429)
+
+        raw = request.query.get("steps")
+        if raw is None and request.can_read_body:
+            body = await request.json()
+            raw = body.get("steps") if isinstance(body, dict) else None
+
+        value = step_service.clean_steps(raw)
+        if value is None:
+            return web.json_response(
+                {"error": "Не вижу числа шагов. Ожидаю ?steps=8432 или "
+                          "{\"steps\": 8432}"}, status=400)
+
+        tz = user.timezone or DEFAULT_TIMEZONE
+        await step_service.record(session, user.id, value, timezone_name=tz,
+                                  source=step_service.SOURCE_PHONE)
+        state = await step_service.state(session, user, timezone_name=tz)
+
+    # Ответ человеческий: его видно, если открыть ссылку в браузере — так
+    # проверяют, что настройка получилась.
+    return web.json_response({
+        "ok": True,
+        "steps": state.today,
+        "goal": state.goal,
+        "done": state.done,
+        "text": f"Записано {state.today} шагов из {state.goal}",
+    })
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -1591,7 +1669,11 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/crash", post_crash)
     app.router.add_post("/api/feedback", post_feedback)
     app.router.add_post("/api/steps", post_steps)
+    # Присылка с телефона: вне /api/, потому что подписи Telegram там нет.
+    app.router.add_route("*", "/hook/steps/{token}", push_steps)
     app.router.add_get("/api/steps/board", get_steps_board)
+    app.router.add_get("/api/steps/sync", get_steps_sync)
+    app.router.add_post("/api/steps/sync", get_steps_sync)
     app.router.add_post("/api/team", post_team)
     app.router.add_post("/api/workouts/pick", post_workout_pick)
     app.router.add_get("/api/preps", get_preps)

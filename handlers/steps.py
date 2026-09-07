@@ -22,6 +22,7 @@ from aiogram.types import Message
 from db import get_session
 from keyboards.main_menu import MENU_STEPS, MENU_TEXTS, main_menu_keyboard
 from models import User
+from services import step_sync
 from services import steps as step_service
 from services import turn as turn_service
 from services.checkins import today_state
@@ -38,6 +39,8 @@ ASK = (
     "👟 Сколько шагов сегодня?\n\n"
     "Число смотри в «Здоровье» на телефоне — я его сам не вижу. "
     "Напиши цифрой, например: 8500.\n\n"
+    "Чтобы больше не вбивать руками — /sync: телефон будет присылать шаги "
+    "сам, по расписанию.\n\n"
     "Передумала — нажми любую кнопку меню."
 )
 
@@ -129,6 +132,30 @@ async def steps_command(message: Message, state: FSMContext,
         await state.clear()
         return
     await ask_steps(message, state)
+
+
+@router.message(Command("sync"))
+async def show_sync(message: Message, state: FSMContext) -> None:
+    """Как сделать, чтобы шаги приходили сами.
+
+    Вбивать число каждый день не будет почти никто, и тогда всё, что стоит
+    на шагах, не работает. Читать «Здоровье» из Telegram нельзя, но телефон
+    умеет присылать шаги сам — этому и учит инструкция.
+    """
+    await state.clear()
+    async with get_session() as session:
+        user = await session.get(User, message.from_user.id)
+        if user is None or not user.onboarding_completed:
+            await message.answer(NOT_READY)
+            return
+        token = await step_service.sync_token(session, user)
+        synced = await step_service.last_sync(session, user.id)
+
+    text = step_sync.instructions(step_sync.link_for(token))
+    if synced:
+        text += f"\n\nПоследняя присылка с телефона: {synced:%d.%m в %H:%M}."
+    await message.answer(text, disable_web_page_preview=True,
+                         reply_markup=main_menu_keyboard())
 
 
 @router.message(StepStates.waiting_number, F.text)

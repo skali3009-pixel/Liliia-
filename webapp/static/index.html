@@ -193,6 +193,10 @@
       </div>
       <p class="hint" id="steps-hint">Число смотрим в «Здоровье» на телефоне:
         приложение внутри Telegram само шаги не считает.</p>
+      <!-- Вбивать руками каждый день не будет почти никто — и тогда всё, что
+           стоит на шагах, не работает. Телефон умеет присылать их сам. -->
+      <button class="btn ghost" id="steps-sync">⚡ Чтобы приходили сами</button>
+      <p class="hint" id="steps-synced" hidden></p>
     </section>
 
     <!-- Повтор привычной еды. Стоит выше ленты: записать проще, чем
@@ -784,6 +788,25 @@
     <button class="btn ghost" id="prof-problem-send">✍️ Рассказать</button>
     <p class="hint" id="prof-problem-hint">Прочтёт живой человек. Если понадобится
       уточнить, ответят прямо в чат боту.</p>
+  </div>
+</div>
+
+<!-- Присылка шагов с телефона: единственный способ не вбивать их руками. -->
+<div id="sync-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2>Шаги сами</h2>
+      <button class="icon-btn" id="sync-close" aria-label="Закрыть">✕</button>
+    </div>
+    <p class="hint" id="sync-why"></p>
+    <div class="eyebrow ruled">Твоя ссылка</div>
+    <p class="sync-link" id="sync-link"></p>
+    <button class="btn" id="sync-copy">Скопировать ссылку</button>
+    <div class="eyebrow ruled">Как настроить</div>
+    <pre class="sync-steps" id="sync-iphone"></pre>
+    <pre class="sync-steps" id="sync-android"></pre>
+    <p class="hint" id="sync-safety"></p>
+    <button class="btn ghost" id="sync-renew">Сменить ссылку</button>
   </div>
 </div>
 
