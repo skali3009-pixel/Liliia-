@@ -651,6 +651,8 @@ button:focus-visible, .tab:focus-visible {
   mask-image: radial-gradient(115% 78% at 72% 26%,
     #000 0%, #000 38%, rgba(0, 0, 0, .72) 60%, rgba(0, 0, 0, .28) 80%, transparent 100%);
   will-change: transform;
+  /* Арт — украшение: он не должен перехватывать нажатия того, что под ним. */
+  pointer-events: none;
 }
 /* Слои фона: если картинки нет, слой просто не рисуется, и виден
    следующий. Поэтому у каждого экрана свой арт, за ним — общий портрет
@@ -668,6 +670,11 @@ button:focus-visible, .tab:focus-visible {
 }
 .hero-art[data-art="gym"] {
   background-image: url('/static/img/gym.png'), url('/static/img/hero.png'),
+                    var(--sky-fallback);
+}
+.hero-art[data-art="food"] {
+  background-position: center top;
+  background-image: url('/static/img/food.png'), url('/static/img/moment.png'),
                     var(--sky-fallback);
 }
 .hero-art[data-art="sky"] {
@@ -1006,7 +1013,8 @@ select.fact-input { text-align: left; width: 130px; }
 /* Переключатель «готовлю / не готовлю» */
 
 /* --- Кубик: быстрый подбор еды из магазина ------------------------------ */
-.cube-hero { padding: 20px 18px 6px; }
+.cube-hero { position: relative; overflow: hidden; padding: 20px 18px 6px; }
+.cube-hero-body { position: relative; }
 .cube-title-big { margin: 4px 0 6px; font-size: 26px; line-height: 1.15; }
 .cube-sub { margin: 0; color: var(--muted); font-size: 14px; }
 .cube-q { margin: 16px 0 8px; font-size: 15px; }
@@ -1110,6 +1118,44 @@ select.fact-input { text-align: left; width: 130px; }
 
 /* Рассказ о проблеме тянется только вниз: вбок он вылезал бы из карточки. */
 #prof-problem { resize: vertical; min-height: 72px; font-family: inherit; }
+
+/* --- Экран «Что съесть»: режимы ------------------------------------------- */
+.food-modes {
+  display: flex; gap: 6px; overflow-x: auto; padding: 0 18px 4px;
+  margin-bottom: 12px; scrollbar-width: none;
+}
+.food-modes::-webkit-scrollbar { display: none; }
+.food-mode {
+  flex: none; padding: 9px 13px; border: 1px solid var(--stroke); border-radius: 999px;
+  background: none; color: var(--muted); font-family: inherit; font-size: 13px;
+  white-space: nowrap; cursor: pointer;
+}
+.food-mode.on {
+  color: var(--fg); border-color: var(--accent); background: rgba(124, 92, 255, .18);
+}
+.food-mode:active { transform: scale(.97); }
+
+/* --- Подбор блюда (вернулся на экран еды) --------------------------------- */
+/* Правила те же, что были до переезда: разметка карточек не менялась. */
+.meal-tabs { display: flex; gap: 6px; margin: 12px 0 10px; }
+.meal-tab {
+  flex: 1 1 0; padding: 9px 4px; cursor: pointer; font-family: inherit;
+  font-size: 12px; font-weight: 600; color: var(--muted);
+  border: 1px solid var(--stroke); border-radius: 11px; background: var(--surface-2);
+}
+.meal-tab.on { color: var(--fg); border-color: var(--violet);
+               background: rgba(139, 92, 246, .22); }
+.meal-tab:active { transform: scale(.97); }
+.suggestion { padding: 12px 0; border-bottom: 1px solid var(--bg); }
+.suggestion:last-child { border-bottom: none; }
+.sug-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.sug-name { font-size: 14px; font-weight: 500; }
+.sug-kcal { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.sug-macros { font-size: 12px; color: var(--muted); margin-top: 3px; }
+.sug-why { font-size: 12px; color: var(--muted); margin-top: 5px; font-style: italic; }
+.sug-ready { margin-top: 6px; font-size: 12px; color: var(--lilac); }
+.recipe-note { margin-top: 6px; }
+.recipe-note:first-child { margin-top: 0; }
 
 /* «Сфоткай полку». Кнопка выбора файла — это label, а не button: без этих
    трёх свойств она не растягивается на карточку и уезжает влево. */

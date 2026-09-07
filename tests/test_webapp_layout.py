@@ -99,13 +99,36 @@ def test_only_author_dishes_carry_a_mark():
         assert label not in INDEX, label
 
 
-def test_the_dish_picker_is_gone_from_the_app():
-    """Два одинаковых подбора в одном приложении — и человек не знает, какой."""
-    for gone in ("suggest-btn", "meal-tab", "cook-opt", "recipe-sheet"):
+def test_the_food_screen_holds_all_four_answers():
+    """Подбор блюд вернулся — но не на «Сегодня», а к Кубику, отдельным режимом.
+
+    Повтором был не он: одинаковыми были подбор на «Сегодня» и та же кнопка
+    в чате. Кубик отвечает на другой вопрос — «съесть, ничего не готовя», — и
+    стоять рядом им не мешает, пока видно, что это разные вопросы.
+    """
+    for element_id in ("food-modes", "cube-mode", "menu-mode", "preps-card",
+                       "suggest-btn", "recipe-sheet", "food-hint"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+
+    # Четыре режима названы в одном месте, а не разбросаны по разметке.
+    assert "FOOD_MODES" in APP_JS
+    for mode in ("'cube'", "'quick'", "'book'", "'preps'"):
+        assert mode in APP_JS, mode
+
+
+def test_the_dish_picker_no_longer_stands_on_the_day_screen():
+    """Ради этого его и убирали: «Сегодня» — про день, а не про выбор еды."""
+    today = INDEX.split('id="screen-today"')[1].split("</main>")[0]
+    for gone in ("suggest-btn", "meal-tab", "preps-toggle"):
+        assert gone not in today, gone
+
+
+def test_choosing_to_cook_is_a_mode_not_a_switch_inside_the_picker():
+    """Переключатель «готовлю / не готовлю» дублировал бы выбор режима."""
+    for gone in ("cook-opt", "cook-switch"):
         assert gone not in INDEX, gone
         assert gone not in APP_JS, gone
-    # А «Кубик» остался: у него другая задача — еда без готовки.
-    assert 'id="screen-cube"' in INDEX
 
 
 def test_shelf_photo_is_wired():
@@ -179,3 +202,12 @@ def test_the_phone_hook_lives_outside_the_signed_api():
            "api.py").read_text(encoding="utf-8")
     assert '"/hook/steps/{token}"' in api
     assert '"/api/hook' not in api
+
+
+def test_the_food_tab_is_called_by_what_it_holds():
+    """Внутри четыре режима, и «Кубик» — имя только первого из них."""
+    tabs = INDEX.split('<nav class="tabs">')[1].split("</nav>")[0]
+    assert ">Еда</button>" in tabs
+    assert ">Кубик</button>" not in tabs
+    # А сам Кубик никуда не делся — он первый режим на этом экране.
+    assert "'🧊 Кубик'" in APP_JS

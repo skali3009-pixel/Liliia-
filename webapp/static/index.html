@@ -276,15 +276,6 @@
       </div>
     </section>
 
-    <!-- Заготовки: её главный принцип — приготовить один раз и собирать
-         разное всю неделю. Сроки хранения здесь важнее рецептов. -->
-    <section class="card">
-      <div class="card-head"><h2>🥘 Заготовки</h2>
-        <button class="link-btn" id="preps-toggle">показать</button></div>
-      <p class="hint" id="preps-hint">Готовим один раз — собираем несколько дней.
-        Здесь видно, сколько что хранится.</p>
-      <div id="preps-list" hidden></div>
-    </section>
   </main>
 
 
@@ -573,10 +564,19 @@
        и чего хочется. Спрашиваем именно это. -->
   <main id="screen-cube" class="screen" hidden>
     <section class="cube-hero">
-      <div class="eyebrow">Операция Кубик</div>
-      <h1 class="cube-title-big">Что съесть прямо сейчас</h1>
-      <p class="cube-sub">Купить и съесть без приборов — в машине, на работе, на бегу.</p>
+      <div class="hero-art" data-art="food"></div>
+      <div class="cube-hero-body">
+        <div class="eyebrow">Еда</div>
+        <h1 class="cube-title-big">Что съесть?</h1>
+        <p class="cube-sub" id="food-hint"></p>
+      </div>
     </section>
+
+    <!-- Четыре ответа на один вопрос. Кубик — про «не готовить вовсе»,
+         остальные три — вопросы к одной книге рецептов. -->
+    <div class="food-modes" id="food-modes"></div>
+
+    <div id="cube-mode">
 
     <!-- Быстрый путь: человек уже стоит у полки, вопросы задавать некогда. -->
     <button id="cube-shop" class="cube-shop">🛒 Я уже в магазине</button>
@@ -624,6 +624,41 @@
 
     <p class="cube-needs" id="cube-needs" hidden></p>
     <div id="cube-results"></div>
+    </div>
+
+    <!-- Подбор блюда: та же книга рецептов, разные вопросы к ней. -->
+    <div id="menu-mode" hidden>
+      <!-- Заготовки: её главный принцип — приготовить один раз и собирать
+           разное всю неделю. Видны только в своём режиме: в остальных они
+           отвечали бы на вопрос, которого человек не задавал. -->
+      <section class="card" id="preps-card" hidden>
+        <div class="card-head"><h2>🥘 Что приготовить впрок</h2>
+          <button class="link-btn" id="preps-toggle">показать</button></div>
+        <p class="hint" id="preps-hint">Готовим один раз — собираем несколько дней.
+          Здесь видно, сколько что хранится.</p>
+        <div id="preps-list" hidden></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>🍽️ Что приготовить</h2>
+          <span id="gap-hint" class="muted"></span></div>
+
+        <!-- Приём пищи выбирается явно: по времени бот угадывает, но человек
+             может собираться готовить ужин днём. -->
+        <div class="meal-tabs" id="meal-tabs">
+          <button class="meal-tab" data-meal="breakfast">Завтрак</button>
+          <button class="meal-tab" data-meal="lunch">Обед</button>
+          <button class="meal-tab" data-meal="dinner">Ужин</button>
+          <button class="meal-tab" data-meal="snack">Перекус</button>
+        </div>
+
+        <div class="budget-line" id="budget-line"></div>
+        <p class="hint plate-hint" id="plate-hint"></p>
+
+        <button id="suggest-btn" class="btn">Подобрать блюдо</button>
+        <div id="suggestions"></div>
+      </section>
+    </div>
   </main>
 
   <nav class="tabs">
@@ -637,7 +672,7 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6M8 7v10M16 7v10M20 9v6M8 12h8"/></svg>Спорт</button>
     <button class="tab" data-screen="cube">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/>
-        <path d="M12 3v18M4 7.5l8 4.5 8-4.5"/></svg>Кубик</button>
+        <path d="M12 3v18M4 7.5l8 4.5 8-4.5"/></svg>Еда</button>
     <button class="tab" data-screen="progress">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l5-5 4 3 7-8"/>
         <path d="M4 20h16"/></svg>Прогресс</button>
@@ -788,6 +823,22 @@
     <button class="btn ghost" id="prof-problem-send">✍️ Рассказать</button>
     <p class="hint" id="prof-problem-hint">Прочтёт живой человек. Если понадобится
       уточнить, ответят прямо в чат боту.</p>
+  </div>
+</div>
+
+<div id="recipe-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="recipe-title">Рецепт</h2>
+      <button class="icon-btn" id="recipe-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="recipe-macros" id="recipe-macros"></div>
+    <div class="eyebrow ruled">Состав на порцию</div>
+    <ul class="recipe-parts" id="recipe-parts"></ul>
+    <div class="eyebrow ruled">Как приготовить</div>
+    <p class="recipe-steps" id="recipe-steps"></p>
+    <p class="hint" id="recipe-source"></p>
+    <button class="btn" id="recipe-eat">Съела это</button>
   </div>
 </div>
 

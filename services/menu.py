@@ -217,7 +217,8 @@ async def _built_offers(session: AsyncSession, user: User, *, meal_type: str,
 
 
 async def board(session: AsyncSession, user: User, *, meal_type: str | None = None,
-                allow_build: bool = True, no_cook: bool = False) -> Board:
+                allow_build: bool = True, no_cook: bool = False,
+                mode: str = dish_picker.MODE_BOOK) -> Board:
     """Собрать экран подбора для человека.
 
     `no_cook` — «готовить негде»: только то, что собирается из купленного.
@@ -231,7 +232,7 @@ async def board(session: AsyncSession, user: User, *, meal_type: str | None = No
     budget, left, gap = await _budget_and_gap(session, user, meal)
     fitted, near = await dish_picker.pick_dishes(
         session, user, meal_type=meal, budget=budget, gap=gap, limit=WANTED,
-        no_cook=no_cook)
+        no_cook=no_cook, mode=mode)
 
     offers = [_from_pick(pick) for pick in fitted]
     approximate = False

@@ -287,10 +287,22 @@ def test_board_gives_the_screen_everything_it_needs():
 
 
 def test_offers_from_her_menu_are_marked_and_others_are_not():
+    """Проверяем свойство, а не место в списке: книга рецептов перемешивается,
+    и первым может оказаться как её блюдо, так и собранное по её принципам."""
     async def scenario():
         async with db() as (session, user):
-            result = await board(session, user, meal_type="breakfast", allow_build=False)
-            assert all(o.author and o.source for o in result.offers)
+            offers = []
+            for _ in range(8):
+                result = await board(session, user, meal_type="breakfast",
+                                     allow_build=False)
+                offers += result.offers
+
+            assert any(o.author for o in offers), "её рецепты должны попадаться"
+            for offer in offers:
+                if offer.author:
+                    assert offer.source, "авторское блюдо подписано источником"
+                else:
+                    assert not offer.source, "чужое ничем не подписано"
     run(scenario)
 
 
@@ -842,7 +854,16 @@ def test_the_board_answers_for_the_asked_meal_with_composition():
             first = data.offers[0]
             assert first.calories > 0
             assert first.components, "без состава нельзя показать рецепт"
-            assert first.author is True and "Анастасии" in first.source
+
+            # Книга перемешивается, поэтому проверяем не первое место, а
+            # свойство: её рецепты подписаны источником, чужие — нет.
+            hers = []
+            for _ in range(8):
+                more = await board(session, user, meal_type="dinner",
+                                   allow_build=False)
+                hers += [o for o in more.offers if o.author]
+            assert hers, "рецепты из её меню должны попадаться"
+            assert all("Анастасии" in o.source for o in hers)
     run(scenario)
 
 
@@ -856,12 +877,63 @@ def test_the_board_guesses_the_meal_when_it_is_not_asked():
     run(scenario)
 
 
-def test_the_board_says_what_is_already_cooked():
+def test_the_preps_mode_offers_only_what_is_assembled_from_stock():
+    """Гарантия переехала в свой режим: в книге рецептов её больше нет — там
+    подбор нарочно перемешивается, чтобы её можно было листать."""
     async def scenario():
+        from services import dish_picker
         from services.menu import board
 
         async with db() as (session, user):
-            data = await board(session, user, meal_type="lunch", allow_build=False)
-            assert any(offer.preps for offer in data.offers), \
-                "блюда из заготовок должны попадать в подбор"
+            data = await board(session, user, meal_type="lunch", allow_build=False,
+                               mode=dish_picker.MODE_PREPS)
+            assert data.offers, "обед из заготовок должен подбираться"
+            for offer in data.offers:
+                assert offer.preps, "в этом режиме всё собирается из заготовок"
+    run(scenario)
+
+
+def test_the_quick_mode_offers_nothing_long_to_cook():
+    async def scenario():
+        from services import dish_picker
+        from services.menu import board
+
+        async with db() as (session, user):
+            data = await board(session, user, meal_type="dinner", allow_build=False,
+                               mode=dish_picker.MODE_QUICK)
+            assert data.offers
+            for offer in data.offers:
+                assert offer.minutes <= dish_picker.QUICK_MINUTES, offer.name
+    run(scenario)
+
+
+def test_the_recipe_book_shows_something_new_when_asked_again():
+    """Книгу листают. Один и тот же ответ на кнопку «подобрать» — это не книга."""
+    async def scenario():
+        from services import dish_picker
+        from services.menu import board
+
+        async with db() as (session, user):
+            seen = set()
+            for _ in range(8):
+                data = await board(session, user, meal_type="dinner",
+                                   allow_build=False, mode=dish_picker.MODE_BOOK)
+                seen.update(offer.name for offer in data.offers)
+            assert len(seen) > 3, seen
+    run(scenario)
+
+
+def test_the_modes_really_look_at_different_dishes():
+    async def scenario():
+        from services import dish_picker
+
+        async with db() as (session, user):
+            pools = {}
+            for mode in dish_picker.MODES:
+                pools[mode] = {d.code for d in await dish_picker.candidates(
+                    session, user, "dinner", mode=mode)}
+
+            assert pools["preps"] < pools["quick"] | pools["book"]
+            assert pools["quick"] < pools["book"], "быстрое — часть книги"
+            assert len(pools["book"]) > len(pools["quick"]) > len(pools["preps"])
     run(scenario)

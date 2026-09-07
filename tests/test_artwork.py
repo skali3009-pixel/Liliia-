@@ -10,8 +10,19 @@ BIG_ENOUGH = b"x" * (MIN_BYTES + 1)
 
 def test_all_art_names_are_known_and_unique():
     """Имена файлов зашиты в CSS — список не должен разъезжаться."""
-    assert set(ARTWORK) == {"hero.png", "world.png", "moment.png", "sky.png", "gym.png"}
+    assert set(ARTWORK) == {"hero.png", "world.png", "moment.png", "sky.png",
+                            "gym.png", "food.png"}
     assert len(set(ARTWORK.values())) == len(ARTWORK)
+
+
+def test_every_art_is_actually_used_by_the_styles():
+    """Скачанная и никем не показанная картинка — это просто занятое место."""
+    from pathlib import Path
+
+    css = (Path(__file__).resolve().parent.parent / "webapp" / "static" /
+           "styles.css").read_text(encoding="utf-8")
+    for name in ARTWORK:
+        assert f"/static/img/{name}" in css, name
 
 
 def test_missing_lists_everything_on_empty_folder(tmp_path):

@@ -24,6 +24,7 @@ from services.gamification import awards_summary, sync_today
 from services import context
 from services import turn as turn_service
 from services.meals import get_today_totals, list_today_meals, save_meal
+from services.menu import board as menu_board
 from services.moments import Moment, analyze_moment, facts as moment_facts
 from services.export import build_export
 from services.profile import (
@@ -1007,6 +1008,29 @@ async def post_export(request: web.Request) -> web.Response:
 
 
 
+async def get_menu(request: web.Request) -> web.Response:
+    """Подбор блюда: что приготовить на этот приём пищи.
+
+    Одна книга рецептов, три вопроса к ней. `mode=quick` — когда некогда,
+    `mode=book` — вся книга, `mode=preps` — собрать из того, что заранее
+    приготовлено. Сборка сверх справочника выключается параметром build=0.
+    """
+    from services import dish_picker
+
+    meal = request.query.get("meal")
+    allow_build = request.query.get("build", "1") != "0"
+    mode = request.query.get("mode", dish_picker.MODE_BOOK)
+    if mode not in dish_picker.MODES:
+        mode = dish_picker.MODE_BOOK
+
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        result = await menu_board(session, user, meal_type=meal,
+                                  allow_build=allow_build, mode=mode)
+
+    return web.json_response(dict(result.to_dict(), mode=mode))
+
+
 async def post_cube(request: web.Request) -> web.Response:
     """Кубик: что купить и съесть прямо сейчас.
 
@@ -1663,6 +1687,7 @@ def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/profile", get_profile)
     app.router.add_patch("/api/profile", patch_profile)
     app.router.add_post("/api/export", post_export)
+    app.router.add_get("/api/menu", get_menu)
     app.router.add_post("/api/cube", post_cube)
     app.router.add_get("/api/cube/basket", get_basket)
     app.router.add_post("/api/cube/shelf", post_shelf)

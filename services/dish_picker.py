@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import logging
+import random
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 
@@ -117,8 +118,40 @@ async def _recent_codes(session: AsyncSession, user_id: int, days: int = REPEAT_
     return {name.strip().lower() for name in names}
 
 
+# --- Режимы подбора ---------------------------------------------------------
+# Одна и та же книга рецептов, три разных вопроса к ней. «Быстро» — когда
+# голодно и некогда; «Рецепты» — когда есть время полистать; «Из заготовок» —
+# когда в холодильнике уже что-то стоит и хочется это доесть.
+QUICK_MINUTES = 15
+
+MODE_QUICK = "quick"
+MODE_BOOK = "book"
+MODE_PREPS = "preps"
+MODES = (MODE_QUICK, MODE_BOOK, MODE_PREPS)
+
+# Делитель для минут: чем меньше, тем сильнее время влияет на порядок.
+TIME_WEIGHT = {MODE_QUICK: 60, MODE_BOOK: 10 ** 6, MODE_PREPS: 600}
+
+# Сколько лучших блюд считаем «одинаково подходящими» в режиме книги.
+# Порции подгоняются под бюджет приёма, поэтому в него попадает почти всё, и
+# по счёту наверху всегда оказываются одни и те же три блюда. Книгу рецептов
+# так не листают: нажал «подобрать» — увидел другое. Поэтому здесь из дюжины
+# подходящих берём случайные, а не первые.
+BROWSE_POOL = 12
+
+
+def by_mode(dishes: list[CachedDish], mode: str) -> list[CachedDish]:
+    """Оставить те блюда, о которых спрашивают в этом режиме."""
+    if mode == MODE_QUICK:
+        return [d for d in dishes if d.minutes <= QUICK_MINUTES]
+    if mode == MODE_PREPS:
+        return [d for d in dishes if d.prep_codes]
+    return dishes
+
+
 async def candidates(session: AsyncSession, user: User, meal_type: str,
-                     *, no_cook: bool = False) -> list[CachedDish]:
+                     *, no_cook: bool = False,
+                     mode: str = MODE_BOOK) -> list[CachedDish]:
     """Блюда, которые этому человеку в принципе можно показывать.
 
     Справочник берётся из памяти: он не меняется во время работы, и ходить
@@ -126,10 +159,12 @@ async def candidates(session: AsyncSession, user: User, meal_type: str,
 
     `no_cook` — режим «готовить негде»: остаются только комбо, которые
     собираются из купленного в магазине.
+    `mode` — какой из трёх вопросов задан книге рецептов.
     """
     dishes = await catalogue.for_meal(session, meal_type)
     if no_cook:
         dishes = [d for d in dishes if d.no_cook]
+    dishes = by_mode(dishes, mode)
 
     words = _allergen_words(user.allergies)
     diet = user.diet_type.value if user.diet_type else "regular"
@@ -166,7 +201,7 @@ async def prep_names(session: AsyncSession, dish) -> list[str]:
 
 def rank(picks: list[Pick], *, budget: float, gap: str | None,
          recent: set[str], have: set[str] | None = None,
-         expiring: set[str] | None = None) -> list[Pick]:
+         expiring: set[str] | None = None, mode: str = MODE_BOOK) -> list[Pick]:
     """Отсортировать варианты: чем меньше счёт, тем уместнее сейчас.
 
     `have` — заготовки, которые у человека реально есть, `expiring` — те,
@@ -185,9 +220,12 @@ def rank(picks: list[Pick], *, budget: float, gap: str | None,
             value -= 0.05
         if pick.dish.name.strip().lower() in recent:
             value += 0.5
-        # Долгая готовка вечером — так себе предложение, а собранное из
-        # заготовок наоборот: это её главный способ экономить время.
-        value += min(pick.dish.minutes, 60) / 600
+        # Сколько весят минуты — зависит от того, о чём человек спросил.
+        # Нажал «Быстро» — значит некогда, и время тут главный вопрос, а не
+        # поправка. Открыл книгу рецептов — время не важно вовсе, иначе
+        # наверх всегда всплывают одни и те же пятиминутные боулы, а
+        # шакшука и запеканки не показываются никогда.
+        value += min(pick.dish.minutes, 60) / TIME_WEIGHT.get(mode, 600)
         if pick.preps:
             value -= 0.08
         # А если заготовка не просто упомянута, а реально стоит в холодильнике,
@@ -297,14 +335,15 @@ def explain(pick: Pick, *, budget: float, gap: str | None,
 
 async def pick_dishes(session: AsyncSession, user: User, *, meal_type: str,
                       budget: float, gap: str | None = None, limit: int = 3,
-                      no_cook: bool = False) -> tuple[list[Pick], list[Pick]]:
+                      no_cook: bool = False,
+                      mode: str = MODE_BOOK) -> tuple[list[Pick], list[Pick]]:
     """Подобрать блюда под приём пищи.
 
     Возвращает (подошедшие, ближайшие). Второй список не пустой только когда
     первый пуст: это честный ответ «точного варианта нет, вот что рядом»
     вместо выдуманного блюда.
     """
-    allowed = await candidates(session, user, meal_type, no_cook=no_cook)
+    allowed = await candidates(session, user, meal_type, no_cook=no_cook, mode=mode)
     recent = await _recent_codes(session, user.id)
 
     # Что реально стоит в холодильнике: из этого блюдо собирается почти без
@@ -328,8 +367,13 @@ async def pick_dishes(session: AsyncSession, user: User, *, meal_type: str,
     for pick in fitted:
         pick.preps = await prep_names(session, pick.dish)
 
-    ranked = varied(rank(fitted, budget=budget, gap=gap, recent=recent,
-                         have=have, expiring=expiring), limit)
+    scored = rank(fitted, budget=budget, gap=gap, recent=recent,
+                  have=have, expiring=expiring, mode=mode)
+    if mode == MODE_BOOK and len(scored) > limit:
+        head = scored[:BROWSE_POOL]
+        random.shuffle(head)
+        scored = head + scored[BROWSE_POOL:]
+    ranked = varied(scored, limit)
     for pick in ranked:
         pick.reason = explain(pick, budget=budget, gap=gap,
                               have=have, expiring=expiring)
@@ -372,6 +416,7 @@ async def components_of(session: AsyncSession, dish, scale: float = 1.0) -> list
     return out
 
 
-__all__ = ["BUDGET_TOLERANCE", "FAMILY_WORDS", "Pick", "REPEAT_DAYS", "SCALE_MAX",
+__all__ = ["BUDGET_TOLERANCE", "FAMILY_WORDS", "MODES", "MODE_BOOK", "MODE_PREPS",
+           "MODE_QUICK", "Pick", "QUICK_MINUTES", "REPEAT_DAYS", "SCALE_MAX",
            "SCALE_MIN", "candidates", "components_of", "explain", "family",
-           "pick_dishes", "prep_names", "rank", "scale_for", "varied"]
+           "BROWSE_POOL", "by_mode", "pick_dishes", "prep_names", "rank", "scale_for", "varied"]

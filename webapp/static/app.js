@@ -1881,20 +1881,230 @@ function renderFrequent(items) {
   }
 }
 
-/* --- Подбор блюда живёт в чате ------------------------------------- */
-// Раньше он стоял и здесь, и на кнопке «🍽️ Что съесть» в чате: два
-// одинаковых подбора в одном приложении, а рядом третий — «Кубик».
-// Человек не понимал, чем они отличаются и какой из них правильный.
-// Осталось по одному месту на задачу: рецепты и готовка — в чате,
-// «что съесть прямо сейчас без готовки» — на вкладке «Кубик».
+/* --- Экран «Что съесть»: четыре режима ----------------------------------- */
+// Кубик отвечает «съесть прямо сейчас, ничего не готовя» — это наборы
+// продуктов, а не блюда. Остальные три — вопросы к одной книге рецептов:
+// когда некогда, когда есть время полистать, и когда в холодильнике уже
+// что-то стоит.
+
+const FOOD_MODES = [
+  ['cube', '🧊 Кубик', 'Съесть прямо сейчас, ничего не готовя'],
+  ['quick', '⚡ Быстро', 'Рецепты не дольше 15 минут'],
+  ['book', '📕 Рецепты', 'Меню нутрициолога и блюда по её принципам'],
+  ['preps', '🥘 Заготовки', 'Собрать из того, что приготовлено заранее'],
+];
+
+let foodMode = 'cube';
+
+function switchFoodMode(mode) {
+  foodMode = mode;
+  for (const button of document.querySelectorAll('.food-mode')) {
+    button.classList.toggle('on', button.dataset.mode === mode);
+  }
+  document.getElementById('food-hint').textContent =
+    (FOOD_MODES.find(([code]) => code === mode) || [])[2] || '';
+
+  document.getElementById('cube-mode').hidden = mode !== 'cube';
+  document.getElementById('menu-mode').hidden = mode === 'cube';
+  document.getElementById('preps-card').hidden = mode !== 'preps';
+
+  if (mode !== 'cube') loadMenu(mealType);
+  if (mode === 'preps' && !preps) togglePreps(true);
+}
+
+function buildFoodModes() {
+  const box = document.getElementById('food-modes');
+  box.innerHTML = '';
+  for (const [code, label] of FOOD_MODES) {
+    const button = document.createElement('button');
+    button.className = 'food-mode';
+    button.dataset.mode = code;
+    button.textContent = label;
+    button.onclick = () => switchFoodMode(code);
+    box.appendChild(button);
+  }
+  switchFoodMode(foodMode);
+}
+
+
+/* --- Подбор блюда: меню Анастасии плюс сборка по её принципам ------------ */
+// Одна книга рецептов, три вопроса к ней: «быстро», «полистать», «из
+// заготовок». Выбор режима — кнопками наверху экрана, а не переключателем
+// «готовлю / не готовлю»: не готовить — это «Кубик», отдельный режим рядом.
+let mealType = null;
+let menuBoard = null;
+
+// Значок у блюд из её меню. Ставится только им — остальное без пометок.
+const AUTHOR_MARK = '⭐';
+
+function setMealTabs(active) {
+  for (const tab of document.querySelectorAll('.meal-tab')) {
+    tab.classList.toggle('on', tab.dataset.meal === active);
+  }
+}
+
+async function loadMenu(meal) {
+  const button = document.getElementById('suggest-btn');
+  const box = document.getElementById('suggestions');
+  button.disabled = true;
+  button.textContent = 'Подбираю…';
+
+  try {
+    const params = new URLSearchParams();
+    if (meal) params.set('meal', meal);
+    params.set('mode', foodMode === 'preps' ? 'preps'
+                     : foodMode === 'quick' ? 'quick' : 'book');
+    const query = params.toString();
+    menuBoard = await api(`/api/menu${query ? '?' + query : ''}`);
+    mealType = menuBoard.meal_type;
+    setMealTabs(mealType);
+
+    document.getElementById('budget-line').textContent =
+      `На ${menuBoard.meal_name} — около ${menuBoard.budget} ккал`;
+    document.getElementById('plate-hint').textContent = menuBoard.hint;
+    document.getElementById('gap-hint').textContent =
+      menuBoard.gap === 'protein_g' ? 'не хватает белка'
+      : menuBoard.gap === 'fiber_g' ? 'не хватает клетчатки'
+      : menuBoard.gap === 'carbs_g' ? 'не хватает углеводов' : '';
+
+    renderOffers(menuBoard);
+    button.textContent = 'Подобрать ещё';
+  } catch (e) {
+    box.innerHTML = `<div class="empty">${e.message}</div>`;
+    button.textContent = 'Попробовать снова';
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function renderOffers(data) {
+  const box = document.getElementById('suggestions');
+  box.innerHTML = '';
+
+  if (!data.offers.length) {
+    box.innerHTML = '<div class="empty">' + (data.no_cook
+      ? 'Готовых наборов на такой бюджет нет — попробуй другой приём пищи.'
+      : 'На такой бюджет подходящего блюда нет. Попробуй другой приём пищи.') +
+      '</div>';
+    return;
+  }
+  if (data.approximate) {
+    const note = document.createElement('div');
+    note.className = 'empty soft';
+    note.textContent = 'Точного варианта нет — вот что ближе всего.';
+    box.appendChild(note);
+  }
+
+  data.offers.forEach((item, index) => {
+    const row = document.createElement('div');
+    row.className = 'suggestion';
+    row.innerHTML = `
+      <div class="sug-head">
+        <span class="sug-name"></span>
+        <span class="sug-kcal">${Math.round(item.calories)} ккал</span>
+      </div>
+      <div class="sug-macros"></div>
+      <div class="sug-why"></div>
+      <div class="row">
+        <button class="chip sug-recipe">Рецепт</button>
+        <button class="btn narrow sug-eat">Съела это</button>
+      </div>`;
+
+    const name = row.querySelector('.sug-name');
+    name.textContent = item.name;
+    if (item.author) {
+      const mark = document.createElement('span');
+      mark.className = 'author-mark';
+      mark.textContent = ` ${AUTHOR_MARK}`;
+      mark.title = 'Рецепт из меню Анастасии';
+      name.appendChild(mark);
+    }
+
+    row.querySelector('.sug-macros').textContent =
+      `${Math.round(item.weight_g)} г · Б ${Math.round(item.protein_g)} · ` +
+      `Ж ${Math.round(item.fat_g)} · У ${Math.round(item.carbs_g)}` +
+      (item.fiber_g ? ` · 🥦 ${Math.round(item.fiber_g)}` : '') +
+      ` · ⏱ ${item.minutes} мин`;
+    row.querySelector('.sug-why').textContent = item.reason;
+
+    // Что из блюда уже стоит готовым — это её принцип экономии времени.
+    if (item.preps?.length) {
+      const ready = document.createElement('div');
+      ready.className = 'sug-ready';
+      ready.textContent = `🥘 Из заготовок: ${item.preps.join(', ')}`;
+      row.querySelector('.sug-why').after(ready);
+    }
+
+    row.querySelector('.sug-recipe').onclick = () => openRecipe(index);
+    row.querySelector('.sug-eat').onclick = () => eatOffer(item, row);
+    box.appendChild(row);
+  });
+}
+
+async function eatOffer(item, row) {
+  try {
+    await api('/api/meals', { method: 'POST', body: JSON.stringify(item) });
+    haptic('medium');
+    toast(`Записала: ${item.name}`);
+    if (row) row.remove();
+    document.getElementById('recipe-sheet').hidden = true;
+    await refresh();
+  } catch (e) { toast(e.message); }
+}
+
+function openRecipe(index) {
+  const item = menuBoard?.offers?.[index];
+  if (!item) return;
+
+  document.getElementById('recipe-title').textContent =
+    item.name + (item.author ? ` ${AUTHOR_MARK}` : '');
+  document.getElementById('recipe-macros').textContent =
+    `${Math.round(item.calories)} ккал · Б ${Math.round(item.protein_g)} · ` +
+    `Ж ${Math.round(item.fat_g)} · У ${Math.round(item.carbs_g)} г` +
+    (item.fiber_g ? ` · клетчатка ${Math.round(item.fiber_g)} г` : '');
+
+  const parts = document.getElementById('recipe-parts');
+  parts.innerHTML = '';
+  for (const part of item.components || []) {
+    const li = document.createElement('li');
+    // «Соль, перец» без граммов: считать их незачем, но в рецепте они нужны.
+    li.textContent = part.seasoning
+      ? `${part.name} — ${part.raw || 'по вкусу'}`
+      : `${part.name} — ${part.grams} г`;
+    parts.appendChild(li);
+  }
+
+  // Заметку про подобранные порции показываем отдельной строкой ниже, чтобы
+  // она не терялась в шагах приготовления.
+  document.getElementById('recipe-steps').textContent =
+    (item.instructions || '') + (item.notes && !item.estimated ? `\n\n${item.notes}` : '');
+  // Три разные вещи — заготовки, подобранные порции и источник — должны
+  // читаться как три строки, а не как один серый абзац.
+  const footer = document.getElementById('recipe-source');
+  footer.innerHTML = '';
+  const lines = [];
+  if (item.preps?.length) lines.push(`🥘 Из заготовок: ${item.preps.join(', ')}`);
+  // Откуда рецепт — видно по звёздочке у названия. Писать «меню, неделя 2,
+  // день 3» незачем: человеку это ничего не даёт.
+  if (item.estimated) lines.push('⚖️ Порции подобраны — точных граммов в рецепте нет.');
+  for (const line of lines) {
+    const row = document.createElement('div');
+    row.className = 'recipe-note';
+    row.textContent = line;
+    footer.appendChild(row);
+  }
+  document.getElementById('recipe-eat').onclick = () => eatOffer(item, null);
+  document.getElementById('recipe-sheet').hidden = false;
+}
 
 /* --- Заготовки: приготовил один раз — ешь несколько дней --- */
 let preps = null;
 
-async function togglePreps() {
+async function togglePreps(open = false) {
   const box = document.getElementById('preps-list');
   const button = document.getElementById('preps-toggle');
-  if (!box.hidden) {
+  // В режиме «из заготовок» список нужен сразу: человек за этим и пришёл.
+  if (!box.hidden && !open) {
     box.hidden = true;
     button.textContent = 'показать';
     return;
@@ -3132,6 +3342,7 @@ function switchScreen(name) {
     buildShopMode();
     buildBasket().catch(() => {});
     buildShelf();
+    buildFoodModes();
   }
   if (name === 'world') {
     refreshWorld().catch((e) => toast(e.message));
@@ -3178,6 +3389,13 @@ async function init() {
   };
 
   document.getElementById('profile-open').onclick = openProfile;
+  document.getElementById('suggest-btn').onclick = () => loadMenu(mealType);
+  document.getElementById('recipe-close').onclick = () => {
+    document.getElementById('recipe-sheet').hidden = true;
+  };
+  for (const tab of document.querySelectorAll('.meal-tab')) {
+    tab.onclick = () => { mealType = tab.dataset.meal; loadMenu(mealType); };
+  }
   document.getElementById('steps-add').onclick = askSteps;
   document.getElementById('steps-sync').onclick = () => openSync();
   document.getElementById('sync-close').onclick = () => {
