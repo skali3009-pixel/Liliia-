@@ -202,6 +202,78 @@ def rank(picks: list[Pick], *, budget: float, gap: str | None,
     return sorted(picks, key=score)
 
 
+# --- Разнообразие -----------------------------------------------------------
+# В справочнике двадцать смузи из девяноста двух блюд, и среди лёгких
+# перекусов они занимают почти весь список. Подбор по калориям честно
+# выдавал три смузи подряд: формально три разных блюда, а человек видит
+# одно и то же и решает, что бот сломался.
+#
+# Поэтому из трёх предложений два не могут быть одного рода. Род берём по
+# названию, а не по составу: человек говорит «опять смузи», глядя на
+# название, а не на граммы яблока внутри.
+
+# Слова, по которым род виден сразу. Список короткий и покрывает то, что
+# реально повторяется в справочнике; всё остальное разводится по началу
+# первого слова.
+FAMILY_WORDS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("смузи", ("смузи",)),
+    ("салат", ("салат",)),
+    ("творог", ("творог", "творожн", "сырник")),
+    ("йогурт", ("йогурт",)),
+    ("боул", ("боул",)),
+    ("каша", ("каша", "овсян", "гранол")),
+    ("омлет", ("омлет", "фриттат", "яичниц", "яйц")),
+    ("суп", ("суп", "крем-суп", "бульон")),
+    ("бутерброд", ("бутерброд", "тост", "сэндвич")),
+)
+
+# Сколько букв первого слова считаем корнем, когда слово не из списка:
+# «творог» и «творожный» так сходятся, а «салат» и «сырник» — нет.
+STEM = 5
+
+
+def family(name: str) -> str:
+    """Род блюда: то, что человек называет одним словом.
+
+    Смотрим только на первое слово. По всему названию искать нельзя:
+    «Бутерброд с паштетом и яйцом» из-за слова «яйцом» попал бы к омлетам, а
+    «Кордон блю с салатом» — к салатам, хотя это курица с гарниром.
+    """
+    words = name.strip().lower().split()
+    first = words[0].strip(",.;:") if words else ""
+    for label, keys in FAMILY_WORDS:
+        if any(first.startswith(key) for key in keys):
+            return label
+    return first[:STEM]
+
+
+def varied(picks: list[Pick], limit: int) -> list[Pick]:
+    """Взять несколько вариантов так, чтобы они отличались на вид.
+
+    Порядок не ломаем: сначала берём лучшее из каждого рода по очереди
+    сверху, и только если родов не хватило — добираем чем есть. Пустое место
+    хуже похожего варианта.
+    """
+    chosen: list[Pick] = []
+    seen: set[str] = set()
+
+    for pick in picks:
+        kind = family(pick.dish.name)
+        if kind in seen:
+            continue
+        chosen.append(pick)
+        seen.add(kind)
+        if len(chosen) >= limit:
+            return chosen
+
+    for pick in picks:
+        if len(chosen) >= limit:
+            break
+        if pick not in chosen:
+            chosen.append(pick)
+    return chosen
+
+
 def explain(pick: Pick, *, budget: float, gap: str | None,
             have: set[str] | None = None, expiring: set[str] | None = None) -> str:
     """Одна фраза, чем вариант хорош именно сейчас."""
@@ -256,8 +328,8 @@ async def pick_dishes(session: AsyncSession, user: User, *, meal_type: str,
     for pick in fitted:
         pick.preps = await prep_names(session, pick.dish)
 
-    ranked = rank(fitted, budget=budget, gap=gap, recent=recent,
-                  have=have, expiring=expiring)[:limit]
+    ranked = varied(rank(fitted, budget=budget, gap=gap, recent=recent,
+                         have=have, expiring=expiring), limit)
     for pick in ranked:
         pick.reason = explain(pick, budget=budget, gap=gap,
                               have=have, expiring=expiring)
@@ -265,7 +337,7 @@ async def pick_dishes(session: AsyncSession, user: User, *, meal_type: str,
     if ranked:
         return ranked, []
 
-    closest = sorted(near, key=lambda p: abs(p.kcal - budget))[:limit]
+    closest = varied(sorted(near, key=lambda p: abs(p.kcal - budget)), limit)
     for pick in closest:
         pick.preps = await prep_names(session, pick.dish)
         over = pick.kcal - budget
@@ -300,6 +372,6 @@ async def components_of(session: AsyncSession, dish, scale: float = 1.0) -> list
     return out
 
 
-__all__ = ["BUDGET_TOLERANCE", "Pick", "REPEAT_DAYS", "SCALE_MAX", "SCALE_MIN",
-           "candidates", "components_of", "explain", "pick_dishes", "prep_names",
-           "rank", "scale_for"]
+__all__ = ["BUDGET_TOLERANCE", "FAMILY_WORDS", "Pick", "REPEAT_DAYS", "SCALE_MAX",
+           "SCALE_MIN", "candidates", "components_of", "explain", "family",
+           "pick_dishes", "prep_names", "rank", "scale_for", "varied"]

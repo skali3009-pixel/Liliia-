@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -756,3 +757,111 @@ def test_no_seeded_value_is_longer_than_its_column():
                 if isinstance(value, str) and len(value) > cap:
                     too_long.append(f"{row.get('code')}.{field}: {len(value)} > {cap}")
     assert not too_long, too_long
+
+
+# --- Разнообразие ----------------------------------------------------------
+# В справочнике двадцать смузи из девяноста двух блюд, и среди лёгких
+# перекусов они занимают почти весь список. Подбор по калориям выдавал три
+# смузи подряд: формально три разных блюда, а человек видит одно и то же.
+
+def test_family_reads_the_first_word_not_the_whole_name():
+    from services.dish_picker import family
+
+    assert family("Смузи киви — яблоко") == "смузи"
+    assert family("Творожная запеканка") == family("Творог с ягодами")
+    assert family("Сырники с ягодами") == "творог"
+    # По всему названию искать нельзя: тут «яйцом» и «салатом» — гарнир.
+    assert family("Бутерброд с паштетом из скумбрии и яйцом") == "бутерброд"
+    assert family("Кордон блю с салатом") != "салат"
+
+
+def test_three_offers_are_not_three_of_the_same_kind():
+    from services.dish_picker import Pick, varied
+
+    def pick(name: str, kcal: float) -> Pick:
+        dish = SimpleNamespace(name=name, author=False, minutes=5, prep_codes=[])
+        return Pick(dish=dish, scale=1, kcal=kcal, protein_g=5, fat_g=5,
+                    carbs_g=20, fiber_g=2, weight_g=200)
+
+    offers = varied([
+        pick("Смузи киви — яблоко", 250),
+        pick("Смузи груша — имбирь", 249),
+        pick("Смузи яблоко — корица", 248),
+        pick("Творог с ягодами", 240),
+        pick("Сыр с помидорами", 230),
+    ], 3)
+
+    assert [o.dish.name for o in offers] == [
+        "Смузи киви — яблоко", "Творог с ягодами", "Сыр с помидорами"]
+
+
+def test_a_narrow_catalogue_still_fills_the_places():
+    """Пустое место хуже похожего варианта: три смузи лучше одного смузи."""
+    from services.dish_picker import Pick, varied
+
+    def pick(name: str) -> Pick:
+        dish = SimpleNamespace(name=name, author=False, minutes=5, prep_codes=[])
+        return Pick(dish=dish, scale=1, kcal=250, protein_g=5, fat_g=5,
+                    carbs_g=20, fiber_g=2, weight_g=200)
+
+    only_smoothies = [pick(f"Смузи {i}") for i in range(5)]
+    assert len(varied(only_smoothies, 3)) == 3
+
+
+def test_the_snack_offer_really_stops_repeating_itself():
+    """Проверка на настоящем справочнике, а не на выдуманных блюдах."""
+    async def scenario():
+        from services.dish_picker import family, pick_dishes
+
+        async with db() as (session, user):
+            picks, _ = await pick_dishes(session, user, meal_type="snack", budget=250)
+
+            assert len(picks) == 3
+            kinds = [family(p.dish.name) for p in picks]
+            assert len(set(kinds)) == 3, kinds
+    run(scenario)
+
+
+# --- Экран подбора ---------------------------------------------------------
+# Раньше это проверялось через ручку /api/menu. Подбор блюд уехал из
+# приложения в чат целиком, ручку убрали, а проверки остались — просто
+# спрашивают сам сервис, а не HTTP поверх него.
+
+def test_the_board_answers_for_the_asked_meal_with_composition():
+    async def scenario():
+        from services.menu import board
+
+        async with db() as (session, user):
+            data = await board(session, user, meal_type="dinner", allow_build=False)
+
+            assert data.meal_type == "dinner"
+            assert data.meal_name == "ужин"
+            assert data.budget > 0 and data.hint
+            assert data.offers, "ужин должен подбираться"
+
+            first = data.offers[0]
+            assert first.calories > 0
+            assert first.components, "без состава нельзя показать рецепт"
+            assert first.author is True and "Анастасии" in first.source
+    run(scenario)
+
+
+def test_the_board_guesses_the_meal_when_it_is_not_asked():
+    async def scenario():
+        from services.menu import board
+
+        async with db() as (session, user):
+            data = await board(session, user, allow_build=False)
+            assert data.meal_type in ("breakfast", "lunch", "dinner", "snack")
+    run(scenario)
+
+
+def test_the_board_says_what_is_already_cooked():
+    async def scenario():
+        from services.menu import board
+
+        async with db() as (session, user):
+            data = await board(session, user, meal_type="lunch", allow_build=False)
+            assert any(offer.preps for offer in data.offers), \
+                "блюда из заготовок должны попадать в подбор"
+    run(scenario)

@@ -170,42 +170,6 @@ def test_export_sends_the_file_to_the_chat():
     run(scenario)
 
 
-def test_menu_returns_a_board_for_the_asked_meal():
-    """Подбор блюда: экран получает бюджет, подсказку и варианты с составом."""
-    async def scenario():
-        async with webapp_client() as (client, _):
-            response = await call(client, "GET", "/api/menu?meal=dinner&build=0")
-            assert response.status == 200
-            data = await response.json()
-            assert data["meal_type"] == "dinner"
-            assert data["meal_name"] == "ужин"
-            assert data["budget"] > 0
-            assert data["hint"]
-            assert data["offers"], "ужин должен подбираться"
-            first = data["offers"][0]
-            assert first["calories"] > 0
-            assert first["components"], "без состава нельзя показать рецепт"
-            # Рецепты из её меню помечены и подписаны источником.
-            assert first["author"] is True and "Анастасии" in first["source"]
-    run(scenario)
-
-
-def test_menu_guesses_the_meal_when_it_is_not_asked():
-    async def scenario():
-        async with webapp_client() as (client, _):
-            data = await (await call(client, "GET", "/api/menu?build=0")).json()
-            assert data["meal_type"] in ("breakfast", "lunch", "dinner", "snack")
-    run(scenario)
-
-
-def test_menu_needs_a_signature():
-    async def scenario():
-        async with webapp_client() as (client, _):
-            response = await call(client, "GET", "/api/menu", signed=False)
-            assert response.status == 401
-    run(scenario)
-
-
 def test_preps_endpoint_gives_storage_times_and_composition():
     async def scenario():
         async with webapp_client() as (client, _):
@@ -223,10 +187,3 @@ def test_preps_endpoint_gives_storage_times_and_composition():
     run(scenario)
 
 
-def test_menu_offers_say_what_is_already_cooked():
-    async def scenario():
-        async with webapp_client() as (client, _):
-            data = await (await call(client, "GET", "/api/menu?meal=lunch&build=0")).json()
-            assert any(offer["preps"] for offer in data["offers"]), \
-                "блюда из заготовок должны попадать в подбор"
-    run(scenario)
