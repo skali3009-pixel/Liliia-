@@ -8,6 +8,21 @@ from services.artwork import ARTWORK, MIN_BYTES, ensure_artwork, missing
 BIG_ENOUGH = b"x" * (MIN_BYTES + 1)
 
 
+def lay_out(folder, *, sources=True):
+    """Разложить арты по папке так, как это делает настоящее скачивание.
+
+    С запиской о том, откуда каждый взят: без неё файл считается устаревшим,
+    и в этом весь смысл записки.
+    """
+    import json
+
+    for name in ARTWORK:
+        (folder / name).write_bytes(BIG_ENOUGH)
+    if sources:
+        (folder / artwork.MANIFEST).write_text(
+            json.dumps(dict(ARTWORK)), encoding="utf-8")
+
+
 def test_all_art_names_are_known_and_unique():
     """Имена файлов зашиты в CSS — список не должен разъезжаться."""
     assert set(ARTWORK) == {"hero.png", "world.png", "moment.png", "sky.png",
@@ -30,8 +45,38 @@ def test_missing_lists_everything_on_empty_folder(tmp_path):
 
 
 def test_existing_file_is_not_reported_missing(tmp_path):
-    (tmp_path / "hero.png").write_bytes(BIG_ENOUGH)
+    lay_out(tmp_path)
     assert "hero.png" not in missing(tmp_path)
+
+
+def test_a_replaced_picture_is_actually_replaced(tmp_path):
+    """Смена ссылки в коде обязана менять картинку на сервере.
+
+    Раньше не меняла: файл лежит на месте и нужного размера — проверка
+    довольна, и на экране до конца времён оставалась старая картинка.
+    Понять это можно было только глазами, и то если помнишь, как выглядела
+    новая.
+    """
+    lay_out(tmp_path)
+    assert missing(tmp_path) == []
+
+    import json
+
+    записка = json.loads((tmp_path / artwork.MANIFEST).read_text(encoding="utf-8"))
+    записка["gym.png"] = "https://example.test/старая-картинка.png"
+    (tmp_path / artwork.MANIFEST).write_text(json.dumps(записка), encoding="utf-8")
+
+    assert missing(tmp_path) == ["gym.png"]
+
+
+def test_art_from_before_the_manifest_is_refetched_once(tmp_path):
+    """На сервере уже лежат картинки, скачанные до появления записки.
+
+    Про них неизвестно, откуда они, — значит, они могут быть любыми.
+    Перекачиваем один раз, и дальше записка есть.
+    """
+    lay_out(tmp_path, sources=False)
+    assert sorted(missing(tmp_path)) == sorted(ARTWORK)
 
 
 def test_truncated_file_counts_as_missing(tmp_path):
@@ -91,8 +136,7 @@ def test_downloads_everything_into_an_empty_folder(monkeypatch, tmp_path):
 
 
 def test_already_downloaded_art_is_not_fetched_again(monkeypatch, tmp_path):
-    for name in ARTWORK:
-        (tmp_path / name).write_bytes(BIG_ENOUGH)
+    lay_out(tmp_path)
 
     session, downloaded = run_ensure(monkeypatch, tmp_path)
 
@@ -101,8 +145,7 @@ def test_already_downloaded_art_is_not_fetched_again(monkeypatch, tmp_path):
 
 
 def test_force_refetches_everything(monkeypatch, tmp_path):
-    for name in ARTWORK:
-        (tmp_path / name).write_bytes(BIG_ENOUGH)
+    lay_out(tmp_path)
 
     session, downloaded = run_ensure(monkeypatch, tmp_path, force=True)
 
