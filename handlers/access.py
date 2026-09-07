@@ -214,6 +214,53 @@ async def admin_stats(message: Message) -> None:
     )
 
 
+# Telegram обрезает сообщение длиннее этого — режем сами, по строкам.
+STATUS_CHUNK = 3500
+
+
+@router.message(Command("status"))
+async def owner_status(message: Message) -> None:
+    """То же, что показывает bash status.sh, только в чат.
+
+    До сих пор техническую сводку — версию, диск, картинки, приглашения —
+    можно было увидеть только из консоли сервера. Когда консоль перестала
+    открываться, узнать, что с ботом, стало неоткуда: единственный канал
+    диагностики оказался тем самым, который и сломался.
+    """
+    if message.from_user.id not in config.ADMIN_IDS:
+        return
+
+    import asyncio
+
+    # Внутри есть обращение к git через отдельный процесс: в общем цикле
+    # это короткая, но настоящая остановка всего бота. Уводим в поток.
+    text = await asyncio.to_thread(_sync_status)
+    for part in _split(text, STATUS_CHUNK):
+        await message.answer(part)
+
+
+def _sync_status() -> str:
+    """Собрать сводку в отдельном потоке — со своим циклом событий."""
+    import asyncio
+
+    from services import status as status_service
+
+    return asyncio.run(status_service.collect())
+
+
+def _split(text: str, limit: int) -> list[str]:
+    """Разбить по строкам, не разрывая строку посередине."""
+    parts, current = [], ""
+    for line in text.split("\n"):
+        if len(current) + len(line) + 1 > limit and current:
+            parts.append(current.rstrip("\n"))
+            current = ""
+        current += line + "\n"
+    if current.strip():
+        parts.append(current.rstrip("\n"))
+    return parts or [text]
+
+
 @router.message(Command("report"))
 async def owner_report(message: Message) -> None:
     """Сводка не дожидаясь утра. Слово «неделя» — недельный отчёт."""
