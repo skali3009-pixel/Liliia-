@@ -76,6 +76,18 @@ def _art_lines() -> list[str]:
     ]
 
 
+def _invite_lines() -> list[str]:
+    """Работают ли ссылки-приглашения — от них зависят друзья и команда."""
+    if config.BOT_USERNAME:
+        return [f"🔗 Приглашения: работают (@{config.BOT_USERNAME})"]
+    return [
+        "🔗 Приглашения: НЕ РАБОТАЮТ — бот не знает своего имени",
+        "   Кнопки «Позвать друга» и «Позвать в команду» ничего не пришлют.",
+        "   Обычно имя узнаётся само при запуске; если нет — впиши в .env "
+        "строку BOT_USERNAME=имя_бота",
+    ]
+
+
 def _legal_lines() -> list[str]:
     filled = all((config.LEGAL_OWNER, config.LEGAL_EMAIL))
     lines = [f"📄 Документы: редакция {LEGAL_VERSION}, реквизиты заполнены — "
@@ -142,6 +154,8 @@ async def collect() -> str:
         f"свободно {disk.free_gb} ГБ",
         "",
         *_art_lines(),
+        "",
+        *_invite_lines(),
         "",
         *_legal_lines(),
     ]
