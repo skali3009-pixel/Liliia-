@@ -1141,6 +1141,10 @@ select.fact-input { text-align: left; width: 130px; }
 .decide-text { margin: 0 0 16px; font-size: 18px; font-weight: 600;
                line-height: 1.3; letter-spacing: -.015em; }
 .decide .btn { margin: 0; }
+/* Ряд кнопок времени внутри главного блока — без лишнего отступа сверху. */
+.decide .chips { margin-top: 2px; }
+.decide .chips .chip-btn { background: rgba(255, 255, 255, .07); }
+.decide .chips .chip-btn.active { background: var(--accent); color: var(--accent-fg); }
 
 .food-mode {
   flex: none; padding: 10px 15px; border: 1px solid var(--stroke); border-radius: 999px;
@@ -1208,6 +1212,15 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
   border: 1px solid var(--stroke); background: rgba(255, 255, 255, .03);
   cursor: pointer;
 }
+/* Первое подобранное — это и есть ответ, а не первая строка списка. */
+.pick.now {
+  margin-top: 14px; padding: 16px; border-radius: 18px; cursor: default;
+  border-color: rgba(196, 181, 253, .4);
+  background: rgba(139, 92, 246, .12);
+}
+.pick.now .eyebrow { margin-bottom: 8px; }
+.pick.now .pick-title { font-size: 18px; letter-spacing: -.015em; }
+.pick-start { margin-top: 14px; }
 .pick-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .pick-title { font-size: 15px; font-weight: 600; }
 .pick-min { color: var(--lilac); font-size: 13px; white-space: nowrap; }

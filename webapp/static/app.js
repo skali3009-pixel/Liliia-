@@ -3157,7 +3157,7 @@ async function eatCube(item, card) {
 }
 
 /* --- Подбор занятия: два вопроса вместо каталога ------------------------- */
-const PICK_TIMES = [[5, '⚡ 5 минут'], [15, '15 минут'], [30, '30 минут'],
+const PICK_TIMES = [[5, '5 минут'], [15, '15 минут'], [30, '30 минут'],
                     [45, '45 минут']];
 
 function buildPicker() {
@@ -3203,25 +3203,32 @@ function renderPicks(data) {
     return;
   }
 
-  for (const item of items) {
+  // Первое — это и есть ответ: у него своя кнопка «Начать». Остальные
+  // лежат под ним строчками, на случай «не хочу это».
+  items.forEach((item, index) => {
+    const first = index === 0;
     const row = document.createElement('div');
-    row.className = 'pick';
+    row.className = first ? 'pick now' : 'pick';
     const list = data.quick
       ? `<p class="pick-list">${item.exercises.join(' · ')}</p>` : '';
     row.innerHTML = `
+      ${first ? '<div class="eyebrow">Твоя тренировка сейчас</div>' : ''}
       <div class="pick-head">
         <span class="pick-title"></span>
         <span class="pick-min">≈${item.minutes} мин</span>
       </div>
       ${list}
-      <p class="pick-why"></p>`;
+      <p class="pick-why"></p>
+      ${first ? '<button class="btn primary pick-start">Начать</button>' : ''}`;
     row.querySelector('.pick-title').textContent = item.title;
     row.querySelector('.pick-why').textContent = item.why;
     // Нажатие открывает ту же программу в каталоге ниже — второго списка
     // упражнений заводить незачем.
-    row.onclick = () => openProgram(item.code, item.category);
+    const open = () => openProgram(item.code, item.category);
+    if (first) row.querySelector('.pick-start').onclick = open;
+    else row.onclick = open;
     out.appendChild(row);
-  }
+  });
 }
 
 function openProgram(code, itemCategory) {

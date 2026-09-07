@@ -249,6 +249,20 @@ def test_the_food_tab_is_called_by_what_it_holds():
     assert "'Кубик'" in APP_JS
 
 
+def test_the_sport_screen_offers_before_it_lists():
+    """Тринадцать программ и семь форм — это выбор, а не занятие."""
+    gym = INDEX.split('id="screen-gym"')[1].split("</main>")[0]
+    assert gym.index('id="pick-card"') < gym.index('class="stats"')
+    assert gym.index('id="pick-card"') < gym.index('id="category-switch"')
+    # Подобранное первым — ответ, а не строка списка: у него своя кнопка.
+    assert "pick-start" in APP_JS
+    assert "Твоя тренировка сейчас" in APP_JS
+    for minutes in ("5 минут", "15 минут", "30 минут", "45 минут"):
+        assert f"'{minutes}'" in APP_JS, minutes
+    # И каталог никуда не делся — он просто перестал встречать на входе.
+    assert 'id="program-switch"' in gym and 'id="exercises"' in gym
+
+
 def test_the_team_stands_where_it_gets_seen():
     """До команды приходилось листать полэкрана, а это самое живое на вкладке."""
     world = INDEX.split('id="screen-world"')[1].split("</main>")[0]
