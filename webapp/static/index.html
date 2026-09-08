@@ -640,6 +640,22 @@
   </div>
 </div>
 
+  <!-- «Точно?» — тоже своим окном. У системного окна браузера кнопки
+     называются «ОК» и «Отмена»: они не говорят, что именно случится,
+     стоят в разном порядке на разных телефонах, и «ОК» на удаление
+     нажимают не глядя. Здесь на кнопке написано само действие. -->
+<div id="confirm-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="confirm-title">Точно?</h2>
+      <button class="icon-btn" id="confirm-close" aria-label="Закрыть">✕</button>
+    </div>
+    <p class="hint" id="confirm-text" hidden></p>
+    <button class="btn" id="confirm-yes">Да</button>
+    <button class="btn ghost" id="confirm-no">Отмена</button>
+  </div>
+</div>
+
 <div id="rest-overlay" class="overlay" hidden>
     <div class="rest-card">
       <div class="rest-label">Отдых</div>

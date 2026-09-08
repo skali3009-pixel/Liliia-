@@ -866,7 +866,13 @@ function renderPills(supplements) {
       await refresh();
     };
     row.querySelector('.icon-btn').onclick = async () => {
-      if (!confirm(`Убрать «${item.name}» из списка?`)) return;
+      const sure = await askYes({
+        title: 'Убрать добавку?',
+        text: `«${item.name}» пропадёт из списка. Отметки за прошлые дни `
+          + 'останутся.',
+        action: 'Убрать', danger: true,
+      });
+      if (!sure) return;
       await api(`/api/supplements/${item.id}`, { method: 'DELETE' });
       await refresh();
     };
@@ -897,7 +903,12 @@ async function editWeight(meal) {
 }
 
 async function removeMeal(meal) {
-  if (!confirm(`Удалить «${meal.name}»?`)) return;
+  const sure = await askYes({
+    title: 'Удалить запись?',
+    text: `«${meal.name}» уйдёт из дневника, калории за день пересчитаются.`,
+    action: 'Удалить', danger: true,
+  });
+  if (!sure) return;
   await api(`/api/meals/${meal.id}`, { method: 'DELETE' });
   haptic('medium');
   await refresh();
@@ -2168,6 +2179,31 @@ function askMinutes() {
                      unit: 'мин', min: 1, max: 300 });
 }
 
+// Вопрос «точно?» — тоже своим окном. У системного окна браузера кнопки
+// называются «ОК» и «Отмена»: они не говорят, что именно случится, стоят
+// в разном порядке на разных телефонах, и «ОК» на удаление нажимают не
+// глядя. Здесь на кнопке написано действие, отмена — ниже, под большим
+// пальцем, и крестик тоже значит «нет».
+function askYes({ title, text = '', action = 'Да', danger = false }) {
+  return new Promise((resolve) => {
+    const sheet = document.getElementById('confirm-sheet');
+    const note = document.getElementById('confirm-text');
+    const yes = document.getElementById('confirm-yes');
+
+    document.getElementById('confirm-title').textContent = title;
+    note.textContent = text;
+    note.hidden = !text;
+    yes.textContent = action;
+    yes.classList.toggle('danger', danger);
+
+    const close = (answer) => { sheet.hidden = true; resolve(answer); };
+    yes.onclick = () => close(true);
+    document.getElementById('confirm-no').onclick = () => close(false);
+    document.getElementById('confirm-close').onclick = () => close(false);
+    sheet.hidden = false;
+  });
+}
+
 async function finishWorkout() {
   const ids = [...doneExercises];
   if (ids.length === 0) return;
@@ -3118,10 +3154,13 @@ function wireTeam() {
     teamAction({ action: 'create', name: document.getElementById('team-name').value });
   document.getElementById('team-join').onclick = () =>
     teamAction({ action: 'join', code: document.getElementById('team-code').value.trim() });
-  document.getElementById('team-leave').onclick = () => {
-    if (confirm('Выйти из команды? Её таблица без тебя останется.')) {
-      teamAction({ action: 'leave' });
-    }
+  document.getElementById('team-leave').onclick = async () => {
+    const sure = await askYes({
+      title: 'Выйти из команды?',
+      text: 'Её таблица без тебя останется.',
+      action: 'Выйти', danger: true,
+    });
+    if (sure) teamAction({ action: 'leave' });
   };
 }
 
@@ -3787,7 +3826,13 @@ function shareInvite(link) {
 }
 
 async function renewInvite() {
-  if (!confirm('Старая ссылка перестанет работать. Сменить?')) return;
+  const sure = await askYes({
+    title: 'Сменить ссылку?',
+    text: 'Старая перестанет работать: тем, кому ты её уже отправила, '
+      + 'придётся прислать новую.',
+    action: 'Сменить',
+  });
+  if (!sure) return;
   try {
     friends = await api('/api/friends', {
       method: 'POST', body: JSON.stringify({ renew: true }),
@@ -3800,7 +3845,12 @@ async function renewInvite() {
 }
 
 async function dropFriend(friend) {
-  if (!confirm(`Убрать ${friend.name} из друзей?`)) return;
+  const sure = await askYes({
+    title: 'Убрать из друзей?',
+    text: 'Вы исчезнете из недельной таблицы друг друга.',
+    action: 'Убрать', danger: true,
+  });
+  if (!sure) return;
   try {
     friends = await api('/api/friends', {
       method: 'POST', body: JSON.stringify({ remove: friend.user_id }),
@@ -3998,8 +4048,14 @@ async function init() {
   document.getElementById('sync-close').onclick = () => {
     document.getElementById('sync-sheet').hidden = true;
   };
-  document.getElementById('sync-renew').onclick = () => {
-    if (confirm('Старая ссылка перестанет работать. Сменить?')) openSync(true);
+  document.getElementById('sync-renew').onclick = async () => {
+    const sure = await askYes({
+      title: 'Сменить ссылку?',
+      text: 'Старая перестанет работать, и команду на айфоне придётся '
+        + 'настроить заново.',
+      action: 'Сменить',
+    });
+    if (sure) openSync(true);
   };
   wireTeam();
   document.getElementById('profile-close').onclick = closeProfile;

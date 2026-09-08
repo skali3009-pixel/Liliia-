@@ -505,6 +505,37 @@ def test_numbers_are_asked_in_our_own_window():
         assert f"'{element_id}'" in APP_JS, element_id
 
 
+def test_the_are_you_sure_questions_are_ours_too():
+    """«ОК» и «Отмена» системного окна не говорят, что именно случится.
+
+    Поэтому проверяется не только своё окно, но и то, ради чего оно
+    заведено: на кнопке написано действие («Удалить», «Выйти»,
+    «Сменить»), а отказаться можно двумя способами — крестиком и
+    «Отменой», — и оба безопасны.
+    """
+    assert "confirm(" not in APP_JS
+    for element_id in ("confirm-sheet", "confirm-title", "confirm-text",
+                       "confirm-yes", "confirm-no", "confirm-close"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+
+    body = APP_JS.split("function askYes(", 1)[1][:1200]
+    assert body.count("close(false)") == 2, "отказ должен быть и у крестика"
+
+    # Кнопка по умолчанию называется «Да» — это ровно то, чего мы избегали.
+    # Значит, действие обязан назвать каждый, кто спрашивает.
+    asks = APP_JS.split("await askYes({")[1:]
+    assert len(asks) >= 6
+    for piece in asks:
+        head = piece[:400]
+        assert "action:" in head, head[:120]
+        # Заголовок окна набран капсом и вразрядку. Название блюда в нём
+        # разворачивается на три строки и наезжает на крестик — проверено
+        # в браузере на экране 320 точек. Название живёт строкой ниже.
+        title = head.split("title:", 1)[1].split(",", 1)[0]
+        assert "${" not in title, title
+
+
 def test_the_step_window_offers_no_round_numbers():
     """Шаги переписывают с телефона.
 
