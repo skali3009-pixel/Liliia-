@@ -136,8 +136,20 @@ def test_an_afternoon_message_does_not_say_good_morning():
     assert ask(local_hour=15).greeting == ""
 
 
+def test_the_bot_says_nothing_at_all_before_its_earliest_hour():
+    """Тихие часы — это «не буди». А здесь другое: в семь утра ещё ничего
+    не успело случиться, и «воды сегодня не отмечено» — не наблюдение, а
+    будильник по расписанию. Замерено: без этого предела сообщение уходило
+    ровно в 07:00 каждый день."""
+    from services.notifications import EARLIEST_HOUR
+
+    assert ask(local_hour=EARLIEST_HOUR - 1) is None
+    assert ask(local_hour=EARLIEST_HOUR) is not None
+
+
 def test_the_greeting_changes_from_day_to_day():
-    said = {ask(local_hour=8, day_seed=day).greeting for day in range(5)}
+    said = {ask(local_hour=MORNING_FROM, day_seed=day).greeting
+            for day in range(5)}
     assert len(said) > 1
 
 

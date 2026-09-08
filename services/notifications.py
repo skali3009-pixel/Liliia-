@@ -25,7 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import (NotificationLog, NotificationPrefs, NotificationSnooze,
@@ -33,8 +33,12 @@ from models import (NotificationLog, NotificationPrefs, NotificationSnooze,
 from models.notification import (KIND_ACHIEVEMENT, KIND_EVENING, KIND_MEAL,
                                  KIND_MOVEMENT, KIND_TURN, KIND_WATER,
                                  KIND_WORLD, KINDS, PACE_ACTIVE,
-                                 PACE_BALANCED, PACE_MINIMAL, PACES)
+                                 PACE_BALANCED, PACE_MINIMAL, PACES,
+                                 RESULT_ACTED, RESULT_MUTED,
+                                 RESULT_OPENED, RESULT_SNOOZED)
 from services.context import Action
+from utils.events import event_for
+from utils.game import ACHIEVEMENT_BY_CODE
 from utils.timeframe import DEFAULT_TIMEZONE, to_local, today_in
 
 # Какому разделу настроек принадлежит совет. Человек выключает не «совет
@@ -55,6 +59,7 @@ KIND_OF: dict[str, str] = {
     # А близкий уровень — про награду, и выключается вместе с достижениями.
     "level": KIND_ACHIEVEMENT,
     "evening": KIND_EVENING,
+    "world": KIND_WORLD,
 }
 
 # Сколько сообщений в день допустимо. Не «сколько отправить» — сколько
@@ -77,7 +82,7 @@ COOLDOWN_HOURS = {
     KIND_TURN: 4,
     KIND_EVENING: 20,
     KIND_ACHIEVEMENT: 12,
-    KIND_WORLD: 48,
+    KIND_WORLD: 72,
 }
 
 # Человек, который сам открыл приложение только что, всё уже видел своими
@@ -87,19 +92,46 @@ RECENT_OPEN_MINUTES = 45
 # «Позже» — не «никогда»: тема вернётся, но не сегодня же через час.
 SNOOZE_HOURS = 3
 
-# Усталость. Считаем самое простое, что честно: сколько последних сообщений
-# подряд остались без единого ответа. Три подряд — человек не хочет
-# разговаривать, и настаивать бесполезно.
+# Усталость — не «да/нет», а величина. Растёт от молчания в ответ и от
+# просьб отложить, падает от любого ответа и от времени: если бот давно
+# ничего не писал, накопленное перестаёт иметь значение. Иначе один плохой
+# день выключал бы уведомления навсегда.
 FATIGUE_WINDOW = 5
-FATIGUE_LIMIT = 3
+IGNORE_WEIGHT = 0.25
+SNOOZE_WEIGHT = 0.15
+# За сколько часов тишины усталость уменьшается вдвое.
+FATIGUE_HALF_LIFE = 48
+# Выше этого — считаем, что человек устал: бюджет падает до одного.
+TIRED_AT = 0.6
+
+# Обучение на реакциях. Если человек месяцами не отвечает на воду, вода
+# должна звучать реже — но не исчезнуть совсем: два неотвеченных сообщения
+# не значат «никогда больше». Поэтому множитель ограничен снизу.
+ADAPT_WINDOW_DAYS = 21
+ADAPT_MIN_SAMPLE = 4
+ADAPT_FLOOR = 0.65
 
 
-# Утро. Первое за день сообщение в этих часах здоровается — не отдельным
+# Утро. Первое за день сообщение в этих часах здоровается. Нижняя граница
+# совпадает с EARLIEST_HOUR ниже: раньше бот всё равно не пишет, и окно с
+# семи часов было бы обещанием, которого он не выполняет. — не отдельным
 # сообщением «доброе утро, посмотри свой ход», а тем же самым, с которым
 # бот и так пришёл. Отдельный утренний привет тратил бы сообщение из
 # бюджета и не менял бы ничего: человеку всё равно пришлось бы открыть
 # приложение, чтобы узнать, что ему предлагают.
-MORNING_FROM, MORNING_TO = 7, 11
+MORNING_FROM, MORNING_TO = 9, 11
+
+# Час, в который мир может показать событие. Один на весь день.
+WORLD_HOUR = 10
+
+# Раньше этого часа бот не пишет первым, даже если тихие часы уже кончились.
+# Тихие часы — это «не буди», а здесь другое: в семь утра ещё ничего не
+# успело случиться, и «воды сегодня не отмечено» — не наблюдение, а
+# будильник по расписанию. Ровно то, от чего мы уходили. Замерено на двух
+# месяцах: без этого предела сообщение уходило в 07:00 каждый день.
+# На экране подсказка по-прежнему видна с самого утра — она там никого
+# не будит.
+EARLIEST_HOUR = 9
 
 GREETING = (
     "Доброе утро.",
@@ -188,18 +220,98 @@ class Push:
         return f"🐆 {head}Твой ход\n\n{self.text}"
 
 
+# Награды приходят под своими кодами — их десятки, и перечислять каждую
+# в списке категорий бессмысленно.
+AWARD_CODES = frozenset(ACHIEVEMENT_BY_CODE)
+
+
 def kind_of(code: str) -> str:
+    if code in AWARD_CODES:
+        return KIND_ACHIEVEMENT
     return KIND_OF.get(code, KIND_TURN)
 
 
-def tired(history: list[Sent]) -> bool:
-    """Устал ли человек от бота: подряд идущие сообщения без ответа."""
-    ignored = 0
-    for row in sorted(history, key=lambda s: s.sent_at, reverse=True)[:FATIGUE_WINDOW]:
-        if row.result:
-            break
-        ignored += 1
-    return ignored >= FATIGUE_LIMIT
+def _world_action(user_id: int, day, game: dict, hour: int) -> Action | None:
+    """Событие сегодняшнего дня — если оно есть и ещё не случилось.
+
+    Соревноваться весом с обычными подсказками событие не может и не
+    должно. Оно просит ровно того же — закрыть пару заданий, — но не
+    полезнее, а приятнее. У человека с пустым днём всегда найдётся повод
+    весомее («в дневнике пусто»), и событие проиграло бы каждый раз, то
+    есть не пришло бы никогда. Поэтому у него свой момент: одно утро.
+    Реже некуда — события бывают не каждый день, а остывание категории
+    держит их на расстоянии в трое суток.
+
+    Ничего не начисляет и не записывает: награду за событие выдаёт
+    services/events.py, когда человек закроет задания. Здесь только чтение.
+    """
+    if hour != WORLD_HOUR:
+        return None
+
+    event = event_for(user_id, day.isoformat())
+    if event is None:
+        return None
+
+    done = game.get("quests_done", 0)
+    if done >= event.target:
+        return None            # событие уже случилось, звать некуда
+
+    left = event.target - done
+    tail = ("" if done == 0 else
+            f"\n\nОсталось закрыть {left} из {event.target}.")
+    return Action("world", "Мир",
+                  f"{event.icon} {event.title}\n\n{event.text}{tail}",
+                  "Посмотреть мир", "world", score=1.25)
+
+
+def fatigue(history: list[Sent], *, now: datetime | None = None) -> float:
+    """Насколько человек устал от бота: от 0 до 1.
+
+    Молчание в ответ добавляет, просьба отложить добавляет меньше, любой
+    ответ вычитает. Потом накопленное гасится временем: бот, который давно
+    молчит, не должен тащить за собой прошлую неделю.
+    """
+    recent = sorted(history, key=lambda row: row.sent_at, reverse=True)[:FATIGUE_WINDOW]
+    if not recent:
+        return 0.0
+
+    score = 0.0
+    for row in recent:
+        if not row.result:
+            score += IGNORE_WEIGHT
+        elif row.result in {RESULT_SNOOZED, RESULT_MUTED}:
+            score += SNOOZE_WEIGHT
+        else:
+            score -= IGNORE_WEIGHT
+    score = max(0.0, min(1.0, score))
+
+    if now is not None:
+        quiet = (now - _aware(recent[0].sent_at)).total_seconds() / 3600
+        score *= max(0.0, 1 - quiet / (2 * FATIGUE_HALF_LIFE))
+    return round(score, 3)
+
+
+def tired(history: list[Sent], *, now: datetime | None = None) -> bool:
+    """Устал ли настолько, что пора резко убавить громкость."""
+    return fatigue(history, now=now) >= TIRED_AT
+
+
+def appetite(stats: dict, kind: str) -> float:
+    """Множитель веса по прошлым реакциям на эту категорию.
+
+    Меньше единицы — тема звучит реже. Ниже ADAPT_FLOOR не опускается
+    никогда: человек, дважды не нажавший кнопку, не просил замолчать
+    навсегда, а выключить категорию он может сам и явно.
+    """
+    sent, answered = stats.get(kind, (0, 0))
+    if sent < ADAPT_MIN_SAMPLE:
+        return 1.0                      # рано делать выводы
+    rate = answered / sent
+    if rate == 0:
+        return ADAPT_FLOOR
+    if rate < 0.25:
+        return 0.85
+    return 1.0
 
 
 def decide(  # noqa: PLR0911 — каждый выход это отдельная причина промолчать
@@ -214,6 +326,7 @@ def decide(  # noqa: PLR0911 — каждый выход это отдельна
     snoozed: set[str],
     last_seen: datetime | None = None,
     day_seed: int = 0,
+    appetite_for: float = 1.0,
 ) -> Push | None:
     """Отправлять ли, и что именно. Ничего не читает и не пишет — только решает.
 
@@ -227,7 +340,7 @@ def decide(  # noqa: PLR0911 — каждый выход это отдельна
     kind = kind_of(action.code)
     if not prefs.allows(kind):
         return None
-    if prefs.quiet_at(local_hour):
+    if prefs.quiet_at(local_hour) or local_hour < EARLIEST_HOUR:
         return None
     if kind in snoozed:
         return None
@@ -238,11 +351,15 @@ def decide(  # noqa: PLR0911 — каждый выход это отдельна
 
     budget = prefs.budget
     floor = prefs.floor
-    if tired(history):
+    weariness = fatigue(history)
+    if weariness:
+        # Планка поднимается плавно, а не одной ступенькой: чем меньше
+        # человек отвечает, тем весомее должен быть повод.
+        floor += weariness * 0.5
+    if weariness >= TIRED_AT:
         # Не замолкаем навсегда: одно действительно весомое сообщение в день
-        # пройдёт. Ответит — счёт молчания обнулится сам.
+        # пройдёт. Ответит — счёт усталости пойдёт вниз сам.
         budget = min(budget, 1)
-        floor = max(floor, MIN_SCORE[PACE_MINIMAL])
 
     if len(today) >= budget:
         return None
@@ -252,12 +369,21 @@ def decide(  # noqa: PLR0911 — каждый выход это отдельна
         if now - _aware(last) < prefs.gap:
             return None
 
+    # Одна тема — одно сообщение в сутки. Без этого правила самая частая
+    # тема съедает весь дневной бюджет: замеряно на двух месяцах —
+    # старательный человек получал 2,8 сообщения в день, и почти все про
+    # еду. Три раза за день сказать одно и то же — это не три напоминания,
+    # это одно, повторённое трижды.
+    if any(row.kind == kind for row in today):
+        return None
+
     cooldown = timedelta(hours=COOLDOWN_HOURS.get(kind, 6))
     for row in history:
         if row.kind == kind and now - _aware(row.sent_at) < cooldown:
             return None
 
-    if action.score < floor:
+    # Прошлые реакции именно на эту тему. Не запрет, а громкость.
+    if action.score * appetite_for < floor:
         return None
 
     morning = (MORNING_FROM <= local_hour < MORNING_TO and not today
@@ -394,6 +520,76 @@ async def candidates(session: AsyncSession, *,
     return zones_at_minute(moment, 0, zones)
 
 
+# Награда, полученная давнее этого срока, — уже не новость.
+AWARD_FRESH_HOURS = 48
+
+
+async def reactions(session: AsyncSession, user_id: int, *,
+                    now_utc: datetime,
+                    days: int = ADAPT_WINDOW_DAYS) -> dict[str, tuple[int, int]]:
+    """Сколько по каждой теме отправлено и сколько из этого нашло отклик.
+
+    Один сгруппированный запрос, а не строка на сообщение: считается это
+    для каждого человека каждый час.
+    """
+    rows = (await session.execute(
+        select(NotificationLog.kind, NotificationLog.result,
+               func.count().label("n"))
+        .where(NotificationLog.user_id == user_id,
+               NotificationLog.sent_at >= now_utc - timedelta(days=days))
+        .group_by(NotificationLog.kind, NotificationLog.result)
+    )).all()
+
+    stats: dict[str, list[int]] = {}
+    for kind, result, count in rows:
+        pair = stats.setdefault(kind, [0, 0])
+        pair[0] += count
+        # Откликом считаем действие и открытие приложения. «Позже» и
+        # «сегодня не надо» — это ответ человека, но не тот, ради которого
+        # стоило писать.
+        if result in {RESULT_ACTED, RESULT_OPENED}:
+            pair[1] += count
+    return {kind: (sent, answered) for kind, (sent, answered) in stats.items()}
+
+
+async def announced(session: AsyncSession, user_id: int, kind: str) -> set[str]:
+    """Что по этой категории человеку уже говорили. Из истории, не из памяти."""
+    rows = (await session.execute(
+        select(NotificationLog.code)
+        .where(NotificationLog.user_id == user_id, NotificationLog.kind == kind)
+    )).scalars().all()
+    return {code for code in rows if code}
+
+
+async def fresh_award(session: AsyncSession, user_id: int, *,
+                      now_utc: datetime) -> dict | None:
+    """Новая награда, о которой ещё не говорили.
+
+    Читаем таблицу наград, а не «свежие» из игрового пересчёта. Свежесть там
+    живёт ровно один вызов: пересчёт помечает награду новой в тот раз, когда
+    впервые её выдал. Движок уведомлений вызывает пересчёт каждый час — и,
+    возьми он этот признак, съедал бы поздравление до того, как человек
+    откроет приложение. На экране вспышки бы не было.
+    """
+    from models import Achievement
+
+    said = await announced(session, user_id, KIND_ACHIEVEMENT)
+    rows = (await session.execute(
+        select(Achievement.code, Achievement.title)
+        .where(Achievement.user_id == user_id,
+               Achievement.earned_at >= now_utc - timedelta(hours=AWARD_FRESH_HOURS))
+        .order_by(Achievement.earned_at.desc())
+    )).all()
+
+    for code, title in rows:
+        if code in said:
+            continue
+        item = ACHIEVEMENT_BY_CODE.get(code)
+        return {"code": code, "title": title,
+                "icon": item.icon if item else "💎"}
+    return None
+
+
 async def due(session: AsyncSession, *,
               now_utc: datetime | None = None) -> list[tuple[User, Push, object]]:
     """Кому сейчас стоит написать. Возвращает человека, сообщение и его день.
@@ -436,7 +632,7 @@ async def due(session: AsyncSession, *,
         day, hour = local_day_and_hour(user, moment)
 
         prefs = await prefs_for(session, user.id)
-        if prefs.quiet_at(hour):
+        if prefs.quiet_at(hour) or hour < EARLIEST_HOUR:
             continue
         seen = last_seen_of(user)
         if seen is not None and moment - seen < timedelta(minutes=RECENT_OPEN_MINUTES):
@@ -454,19 +650,51 @@ async def due(session: AsyncSession, *,
         # Дорогая часть — только для тех, кто дошёл сюда.
         parts = await turn_service.slice_for(session, user, tz)
 
-        action = None
+        # Все поводы сразу, а не по очереди с запасными вариантами.
+        # Запасной вариант здесь не работал бы: подсказка «что сделать
+        # сейчас» находится почти всегда, и событие мира, стоящее за ней,
+        # не пришло бы никогда.
+        options: list[Action] = []
+
         if hour == evening.EVENING_HOUR:
             summary = evening.render(parts["game"].get("quests") or [],
                                      seed=day.toordinal())
             if summary is not None:
-                action = Action("evening", "Итоги дня", summary.text,
-                                "Посмотреть день", summary.target, score=1.1)
-        if action is None:
-            action = await turn_service.peek_action(session, user, tz, **parts)
+                options.append(Action("evening", "Итоги дня", summary.text,
+                                      "Посмотреть день", summary.target, score=1.1))
+
+        # Награда — единственное сообщение, которое человек рад получить
+        # просто так. Но и оно одно на награду: повторить поздравление
+        # нельзя, поэтому сказанное записано в истории.
+        award = await fresh_award(session, user.id, now_utc=moment)
+        if award is not None:
+            options.append(Action(award["code"], "Награда",
+                                  f"{award['icon']} Новая награда: {award['title']}",
+                                  "Посмотреть", "world", score=1.2))
+
+        advice = await turn_service.peek_action(session, user, tz,
+                                                now=moment, **parts)
+        if advice is not None:
+            options.append(advice)
+
+        world = _world_action(user.id, day, parts["game"], hour)
+        if world is not None:
+            options.append(world)
+
+        if not options:
+            continue
+
+        # Побеждает не тот, кто раньше в списке, а тот, чей повод весомее
+        # именно для этого человека: темы, на которые он не отвечает,
+        # звучат тише.
+        stats = await reactions(session, user.id, now_utc=moment)
+        action = max(options,
+                     key=lambda item: item.score * appetite(stats, kind_of(item.code)))
 
         push = decide(action, user_id=user.id, prefs=prefs, local_hour=hour,
                       today=today, history=history, now=moment, snoozed=snoozed,
-                      last_seen=seen, day_seed=day.toordinal())
+                      last_seen=seen, day_seed=day.toordinal(),
+                      appetite_for=appetite(stats, kind_of(action.code)))
         if push is not None:
             out.append((user, push, day))
 
@@ -495,7 +723,8 @@ __all__ = [
     "GREETING", "MIN_SCORE", "MORNING_FROM", "MORNING_TO",
     "RECENT_OPEN_MINUTES", "SNOOZE_HOURS",
     "Prefs", "Push", "Sent",
-    "candidates", "decide", "due", "last_seen_of", "history_for", "kind_of", "local_day_and_hour",
+    "AWARD_FRESH_HOURS", "announced", "candidates", "decide", "due",
+    "EARLIEST_HOUR", "WORLD_HOUR", "appetite", "fatigue", "fresh_award", "last_seen_of", "reactions", "history_for", "kind_of", "local_day_and_hour",
     "mark", "prefs_for", "remember", "save_prefs", "snooze", "snoozed_kinds",
     "sent_today", "tired",
 ]

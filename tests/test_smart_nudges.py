@@ -9,23 +9,29 @@
 
 import asyncio
 import contextlib
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time, timedelta, timezone
 
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from models import (Base, GenderEnum, GoalEnum, Meal, StepLog, User,
-                    WaterLog)
+from models import (Achievement, Base, GenderEnum, GoalEnum, Meal, StepLog,
+                    User, WaterLog)
+from utils.game import ACHIEVEMENT_BY_CODE
 from models.notification import KIND_WATER
 from services import notifications
-
-# 15:00 в Москве (UTC+3) — начало часа, когда движок и просыпается.
-NOON_MSK = datetime(2026, 9, 8, 12, 0, tzinfo=timezone.utc)
+from utils.timeframe import today_in
+# Момент считается от настоящей сегодняшней даты, а не от записанной в
+# коде. Причина: «сегодня» в запросах к базе берётся по часам машины, а не
+# по переданному моменту, — и тест с датой из прошлого проверял бы пустой
+# день. Такой тест проходит ровно один раз, в день, когда его написали.
+# Час здесь свой, 15:00 по Москве: начало часа, когда движок просыпается.
+NOON_MSK = datetime.combine(today_in("Europe/Moscow"), time(12, 0),
+                            tzinfo=timezone.utc)
 NORM_WATER = 2000
 
 
 @contextlib.asynccontextmanager
-async def db(**overrides):
+async def db(*, seasoned=True, **overrides):
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
     maker = async_sessionmaker(engine, expire_on_commit=False)
     async with engine.begin() as conn:
@@ -44,6 +50,19 @@ async def db(**overrides):
         fields.update(overrides)
         session.add(User(**fields))
         await session.commit()
+
+        if seasoned:
+            # Человек пользуется ботом давно: все награды, которые он мог
+            # заслужить первой записью еды или первыми шагами, у него уже
+            # есть и давно отпразднованы. Иначе каждый здешний тест ловил бы
+            # «Новая награда: Первый шаг» — верное поведение, но не то,
+            # ради чего он написан. Поздравления проверяются отдельно.
+            long_ago = NOON_MSK - timedelta(days=30)
+            for code, item in ACHIEVEMENT_BY_CODE.items():
+                session.add(Achievement(user_id=1, code=code, title=item.title,
+                                        earned_at=long_ago))
+            await session.commit()
+
         yield session
     await engine.dispose()
 
@@ -290,7 +309,7 @@ def test_no_wording_scolds_or_promises_medicine():
 # --- итоги дня целиком ----------------------------------------------------
 
 
-EVENING_MSK = datetime(2026, 9, 8, 18, 0, tzinfo=timezone.utc)   # 21:00 в Москве
+EVENING_MSK = NOON_MSK + timedelta(hours=6)   # 21:00 в Москве
 
 
 def test_the_evening_summary_reaches_someone_who_did_part_of_the_day():

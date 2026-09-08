@@ -34,13 +34,21 @@ from utils.plural import plural
 
 
 def day_context(user: User, tz: str, *, totals, water, meals, state, game,
-                suggested, days_since_measure=None, preps=()):  # noqa: PLR0913
-    """Собрать срез дня. Ничего не требует: чего нет, того нет."""
+                suggested, days_since_measure=None, preps=(),
+                now=None):  # noqa: PLR0913
+    """Собрать срез дня. Ничего не требует: чего нет, того нет.
+
+    Момент передаётся явно, а не берётся у часов. В работе это одно и то
+    же, но тот, кто считает подсказку на заданное время — движок
+    уведомлений или тест, — иначе получал бы правила по настоящему часу.
+    Так, например, «в дневнике пусто, но не раньше десяти» срабатывало в
+    семь утра.
+    """
     return context.DayContext(
-        hour=context.hour_in(tz),
+        hour=context.hour_in(tz, now=now),
         # Номер дня: по нему выбирается формулировка. В течение дня она не
         # меняется, назавтра становится другой.
-        day_seed=today_in(tz).toordinal(),
+        day_seed=today_in(tz, now=now).toordinal(),
         calories=totals.calories, calories_target=user.daily_calories or None,
         protein_g=totals.protein_g, protein_target=user.daily_protein_g or None,
         fiber_g=totals.fiber_g, fiber_target=user.daily_fiber_g or None,
@@ -64,15 +72,17 @@ def day_context(user: User, tz: str, *, totals, water, meals, state, game,
     )
 
 
-async def next_action(session: AsyncSession, user: User, tz: str, **parts):
+async def next_action(session: AsyncSession, user: User, tz: str, *,
+                      now=None, **parts):
     """Одно действие для «Твоего хода» — и отметка, что его показали."""
-    action = await peek_action(session, user, tz, **parts)
+    action = await peek_action(session, user, tz, now=now, **parts)
     if action is not None:
         await remember_suggestion(session, user.id, action.code, timezone_name=tz)
     return action
 
 
-async def peek_action(session: AsyncSession, user: User, tz: str, **parts):
+async def peek_action(session: AsyncSession, user: User, tz: str, *,
+                      now=None, **parts):
     """То же самое, но без отметки о показе.
 
     Нужно тому, кто ещё не решил, показывать ли: движку уведомлений. Он
@@ -81,7 +91,7 @@ async def peek_action(session: AsyncSession, user: User, tz: str, **parts):
     как человек его увидит, и на экране появлялся бы уже другой.
     """
     shown = await suggestions_today(session, user.id, timezone_name=tz)
-    return context.next_action(day_context(user, tz, suggested=shown, **parts))
+    return context.next_action(day_context(user, tz, suggested=shown, now=now, **parts))
 
 
 async def slice_for(session: AsyncSession, user: User, tz: str) -> dict:

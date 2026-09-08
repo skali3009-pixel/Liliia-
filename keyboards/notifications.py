@@ -34,6 +34,7 @@ SCREEN = {
     "steps": "today",
     "checkin": "today",
     "progress": "progress",
+    "world": "world",
 }
 
 
