@@ -2159,7 +2159,7 @@ function renderWorkouts(data) {
   const cardio = document.getElementById('cardio-list');
   cardio.innerHTML = '';
   for (const exercise of data.cardio) {
-    cardio.appendChild(exerciseRow(exercise, { cardio: true }));
+    cardio.appendChild(cardioChip(exercise));
   }
 
   updateFinishButton();
@@ -2219,7 +2219,34 @@ function renderGymWarning(data) {
   };
 }
 
-function exerciseRow(exercise, { cardio = false } = {}) {
+// Занятие — плитка, а не строка.
+//
+// Строками их было двенадцать, каждая с подходами, расходом и ссылкой «как
+// делать» — 1180 точек, половина всей страницы (замерено в браузере), и
+// фильтры из-за них начинались на 1626-й. При этом от человека здесь нужно
+// одно слово: что он делал. Сколько минут — спросим при записи, и это
+// честнее готового «40 мин», которое он не выбирал.
+function cardioChip(exercise) {
+  const done = doneExercises.has(exercise.id);
+  const chip = document.createElement('button');
+  chip.className = `chip-btn${done ? ' active' : ''}`;
+  // Галочка — чтобы отметку не спутали с фильтром: выглядят одинаково,
+  // а значат разное.
+  chip.textContent = done ? `✓ ${exercise.name}` : exercise.name;
+  chip.onclick = () => {
+    if (doneExercises.has(exercise.id)) doneExercises.delete(exercise.id);
+    else {
+      doneExercises.add(exercise.id);
+      haptic();
+    }
+    renderWorkouts(gym);
+  };
+  return chip;
+}
+
+// Упражнение программы. Занятия («я бегала») сюда больше не попадают —
+// у них своя плитка: подходов и отдыха у пробежки нет.
+function exerciseRow(exercise) {
   const done = doneExercises.has(exercise.id);
   const row = document.createElement('div');
   row.className = 'exercise';
@@ -2229,9 +2256,7 @@ function exerciseRow(exercise, { cardio = false } = {}) {
     ? `${exercise.sets} подхода по ${exercise.seconds_per_set} с`
     : `${exercise.sets}×${exercise.reps}`;
   const kcal = gym?.show_calories ? ` · ~${exercise.calories} ккал` : '';
-  const detail = cardio
-    ? `${exercise.minutes} мин${kcal}`
-    : `${load} · отдых ${exercise.rest_seconds} с${kcal}`;
+  const detail = `${load} · отдых ${exercise.rest_seconds} с${kcal}`;
 
   row.innerHTML = `
     <button class="ex-check${done ? ' done' : ''}">✓</button>
@@ -2240,7 +2265,7 @@ function exerciseRow(exercise, { cardio = false } = {}) {
       <div class="ex-sub"></div>
       <div class="ex-actions">
         <a class="ex-link" target="_blank" rel="noopener">как делать →</a>
-        ${cardio ? '' : '<button class="ex-link rest-btn">запустить отдых</button>'}
+        <button class="ex-link rest-btn">запустить отдых</button>
       </div>
     </div>`;
 
@@ -2255,7 +2280,7 @@ function exerciseRow(exercise, { cardio = false } = {}) {
       doneExercises.add(exercise.id);
       haptic();
       // После отметки сразу предлагаем отдых — так и делают между подходами.
-      if (!cardio && exercise.rest_seconds) startRest(exercise.rest_seconds);
+      if (exercise.rest_seconds) startRest(exercise.rest_seconds);
     }
     renderWorkouts(gym);
   };

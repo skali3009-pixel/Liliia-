@@ -581,26 +581,26 @@
       <div id="pick-result"></div>
     </section>
 
-    <section class="stats">
-      <div class="stat"><div id="gym-count" class="stat-value">—</div>
-        <div class="stat-label" id="gym-count-label">тренировок</div></div>
-      <div class="stat"><div id="gym-kcal" class="stat-value">—</div>
-        <div class="stat-label">ккал за неделю</div></div>
-    </section>
-
-    <section class="card" id="cardio-card">
-      <div class="card-head"><h2>Я занималась сама</h2></div>
-      <p class="hint">Бег, бассейн, урок танцев, дорога пешком — отметь, и
-        я посчитаю время и расход.</p>
-      <div id="cardio-list"></div>
-    </section>
-
+    <!-- Кнопки выбора идут сразу за подбором: человек либо отвечает на
+         один вопрос, либо выбирает сам — и второе не должно лежать за
+         экраном. Раньше между ними стоял список занятий в 1180 точек, и
+         фильтры начинались на 1626-й: замерено в браузере. -->
     <div class="filters">
       <div class="chips" id="category-switch"></div>
       <div class="chips" id="style-switch"></div>
     </div>
 
     <div class="chips programs" id="program-switch"></div>
+
+    <!-- Занятия плитками, а не списком. Двенадцать строк с описанием и
+         ссылкой — это половина всей страницы; здесь же нужно одно:
+         отметить, что человек уже сделал. Время спросим при записи. -->
+    <section class="card" id="cardio-card">
+      <div class="card-head"><h2>Я занималась сама</h2></div>
+      <p class="hint">Бег, бассейн, урок танцев, дорога пешком — отметь, и
+        я посчитаю время и расход.</p>
+      <div class="chips wrap" id="cardio-list"></div>
+    </section>
 
     <section class="card">
       <div class="card-head"><h2 id="program-title">Программа</h2>
@@ -614,6 +614,14 @@
       </div>
       <div id="exercises"></div>
       <button id="finish-workout" class="btn" hidden>Записать тренировку</button>
+    </section>
+
+    <!-- Итог недели внизу: он не управляет ничем, а места наверху занимал. -->
+    <section class="stats">
+      <div class="stat"><div id="gym-count" class="stat-value">—</div>
+        <div class="stat-label" id="gym-count-label">тренировок</div></div>
+      <div class="stat"><div id="gym-kcal" class="stat-value">—</div>
+        <div class="stat-label">ккал за неделю</div></div>
     </section>
 
 

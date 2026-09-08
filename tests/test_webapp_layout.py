@@ -535,11 +535,46 @@ def test_the_activity_card_is_above_the_catalogue():
     """Отметить пробежку хотят чаще, чем выбирать программу.
 
     Раньше этот список лежал внизу экрана и показывался только в «Теле» —
-    человек, пришедший за йогой, его просто не видел.
+    человек, пришедший за йогой, его просто не видел. Кнопки выбора теперь
+    стоят выше него, но сам он от этого не опустился: он по-прежнему перед
+    каталогом упражнений.
     """
     gym = INDEX.split('id="screen-gym"', 1)[1].split("</main>", 1)[0]
-    assert gym.index("cardio-card") < gym.index("category-switch")
+    assert gym.index("cardio-card") < gym.index('id="exercises"')
     assert "Я занималась сама" in gym
+
+
+def test_the_choice_buttons_come_right_after_the_picker():
+    """Замерено в браузере: раньше фильтры начинались на 1626-й точке.
+
+    Между подбором и ими лежал список занятий высотой 1180 точек — половина
+    всей страницы, — и человек, который хочет выбрать сам, до кнопок просто
+    не доходил. Теперь порядок такой: подбор, кнопки, занятия, каталог, а
+    итог недели — в конце: он ничем не управляет.
+    """
+    gym = INDEX.split('id="screen-gym"', 1)[1].split("</main>", 1)[0]
+    order = [gym.index(mark) for mark in (
+        'id="pick-card"', 'class="filters"', 'id="program-switch"',
+        'id="cardio-card"', 'id="exercises"', 'class="stats"')]
+    assert order == sorted(order), "порядок блоков «Спорта» изменился"
+
+
+def test_activities_are_marked_by_tiles_not_by_rows():
+    """Двенадцать строк с подходами и ссылкой — это половина страницы.
+
+    От человека здесь нужно одно слово: что он делал. Минуты спросим при
+    записи — и это честнее готового «40 мин», которого он не выбирал.
+    """
+    assert 'id="cardio-list"' in INDEX
+    assert 'class="chips wrap" id="cardio-list"' in INDEX
+    assert ".chips.wrap" in STYLES
+
+    body = APP_JS.split("function renderWorkouts(", 1)[1][:2000]
+    assert "cardio.appendChild(cardioChip(exercise))" in body
+    # Отметка и фильтр выглядят одинаково — значит, отметку надо отличать.
+    chip = APP_JS.split("function cardioChip(", 1)[1][:900]
+    assert "✓" in chip
+    assert "doneExercises.delete" in chip and "doneExercises.add" in chip
 
 
 def test_the_personal_topic_is_hidden_until_it_is_read():

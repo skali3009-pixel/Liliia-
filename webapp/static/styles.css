@@ -305,7 +305,7 @@ button:focus-visible, .tab:focus-visible {
 .photo-strip img.on { opacity: 1; outline: 2px solid var(--accent); }
 
 /* --- Тренировки --- */
-.exercise { display: flex; align-items: flex-start; gap: 11px; padding: 12px 0;
+.exercise { display: flex; align-items: flex-start; gap: 11px; padding: 9px 0;
             border-bottom: 1px solid var(--bg); }
 .exercise:last-of-type { border-bottom: none; }
 .ex-check {
@@ -317,8 +317,8 @@ button:focus-visible, .tab:focus-visible {
 .ex-main { flex: 1; min-width: 0; }
 .ex-name { font-size: 14px; font-weight: 500; }
 .ex-name.done { color: var(--muted); text-decoration: line-through; }
-.ex-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
-.ex-actions { display: flex; gap: 12px; margin-top: 7px; }
+.ex-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.ex-actions { display: flex; gap: 14px; margin-top: 4px; }
 .ex-link {
   font-size: 12px; color: var(--accent); text-decoration: none;
   border: none; background: none; padding: 0; font-family: inherit; cursor: pointer;
@@ -507,6 +507,17 @@ button:focus-visible, .tab:focus-visible {
 /* Направлений и форм занятий много — прокручиваем ряд, а не переносим:
    так первый элемент всегда на месте и высота не скачет. */
 .chips { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+/* Отметки занятий переносятся по строкам, а не уезжают вбок: их двенадцать,
+   и человек должен видеть все сразу, а не искать прокруткой. Лежат они на
+   карточке, а не на фоне страницы, поэтому обычный фон чипа с ней
+   сливается — нужен свой, посветлее, и обводка. */
+.chips.wrap { flex-wrap: wrap; overflow-x: visible; margin-top: 10px; }
+.chips.wrap .chip-btn {
+  background: var(--surface-2); border: 1px solid var(--stroke); color: var(--fg);
+}
+.chips.wrap .chip-btn.active {
+  background: var(--accent); border-color: transparent; color: var(--accent-fg);
+}
 .chips::-webkit-scrollbar { display: none; }
 .chips:empty { display: none; }
 .chips .chip-btn {
