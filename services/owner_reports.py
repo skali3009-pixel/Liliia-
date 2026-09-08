@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 import config
 from services import metrics
+from services import notifications
 from services.subscriptions import stats
 from services.usage import spent_today
 from utils.disk import usage as disk_usage
@@ -135,6 +136,67 @@ def _month_line(money: metrics.Money) -> list[str]:
     return lines
 
 
+KIND_RU = {
+    "turn": "Твой ход",
+    "meal": "Еда",
+    "water": "Вода",
+    "movement": "Движение",
+    "world": "Мир и события",
+    "evening": "Итоги дня",
+    "achievement": "Достижения",
+}
+
+
+def _notification_lines(rows) -> list[str]:
+    """Какие сообщения бота работают, а какие только тратят внимание.
+
+    Главная мера — доля нажатий, а не число отправленных. Сообщение,
+    которое открывают и после которого ничего не делают, успешным не
+    считается. Сначала показываем худшее: чинить надо его.
+    """
+    if not rows:
+        return ["", "🔔 Сообщения бота", "   Пока не о чем говорить: ничего не отправлялось"]
+
+    lines = ["", "🔔 Сообщения бота (за месяц)"]
+    for row in rows:
+        name = KIND_RU.get(row.name, row.name)
+        line = (f"   {name}: {row.sent} шт. · нажали {round(row.action_rate * 100)}%"
+                f" · заглянули {round(row.open_rate * 100)}%")
+        if row.snoozed or row.disabled:
+            line += f" · просили тише {round(row.harm_rate * 100)}%"
+        lines.append(line)
+
+    lines += _verdicts(rows)
+    return lines
+
+
+# Меньше этого числа отправленных выводы не делаем: три сообщения ничего
+# не доказывают.
+ENOUGH = 10
+
+
+def _verdicts(rows) -> list[str]:
+    """Что с этим делать. Два разных случая, и путать их нельзя.
+
+    Сообщение, которое не открывают и не нажимают, — мёртвое: его надо
+    переписать или выключить. А вот сообщение, после которого приложение
+    открывают, но кнопку не жмут, мёртвым не считается: у части из них
+    кнопки действия нет вовсе — например, у вечернего «на сегодня
+    достаточно», где предлагать больше нечего и не надо.
+    """
+    out = []
+    for row in rows:
+        if row.sent < ENOUGH:
+            continue
+        name = KIND_RU.get(row.name, row.name)
+        if row.open_rate < 0.05:
+            out.append(f"   ⚠️ «{name}» не работает совсем — переписать или выключить")
+        elif row.action_rate < 0.05:
+            out.append(f"   💡 «{name}»: заходят, но ничего не делают. "
+                       "Может, там нечего нажимать")
+    return out[:2]
+
+
 async def weekly(session: AsyncSession) -> str:
     """Итоги недели: за чем следить и что решать."""
     people = await metrics.audience(session, days=7)
@@ -180,6 +242,8 @@ async def weekly(session: AsyncSession) -> str:
         f"расходы: {month_money.costs_usd:.2f} $",
     ]
 
+    lines += _notification_lines(await notifications.stats(session, days=30))
+
     breakeven = _breakeven_line(month_money)
     if breakeven:
         lines.append(breakeven)
@@ -189,4 +253,4 @@ async def weekly(session: AsyncSession) -> str:
     return "\n".join(lines)
 
 
-__all__ = ["daily", "weekly"]
+__all__ = ["KIND_RU", "daily", "weekly"]

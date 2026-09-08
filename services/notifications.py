@@ -34,8 +34,9 @@ from models.notification import (KIND_ACHIEVEMENT, KIND_EVENING, KIND_MEAL,
                                  KIND_MOVEMENT, KIND_TURN, KIND_WATER,
                                  KIND_WORLD, KINDS, PACE_ACTIVE,
                                  PACE_BALANCED, PACE_MINIMAL, PACES,
-                                 RESULT_ACTED, RESULT_MUTED,
-                                 RESULT_OPENED, RESULT_SNOOZED)
+                                 RESULT_ACTED, RESULT_DISABLED,
+                                 RESULT_MUTED, RESULT_OPENED,
+                                 RESULT_SNOOZED)
 from services.context import Action
 from utils.events import event_for
 from utils.game import ACHIEVEMENT_BY_CODE
@@ -204,6 +205,7 @@ class Push:
     target: str
     amount: int = 0
     greeting: str = ""
+    variant: str = ""
 
     @property
     def message(self) -> str:
@@ -390,7 +392,8 @@ def decide(  # noqa: PLR0911 — каждый выход это отдельна
                and kind != KIND_EVENING)
     return Push(user_id=user_id, kind=kind, code=action.code, text=action.text,
                 cta=action.cta, target=action.target, amount=action.amount,
-                greeting=GREETING[day_seed % len(GREETING)] if morning else "")
+                greeting=GREETING[day_seed % len(GREETING)] if morning else "",
+                variant=action.wording)
 
 
 def _aware(moment: datetime) -> datetime:
@@ -419,9 +422,17 @@ async def save_prefs(session: AsyncSession, user_id: int, **changes) -> Prefs:
         row = NotificationPrefs(user_id=user_id)
         session.add(row)
 
+    switched_off: list[str] = []
     for field in KINDS:
         if field in changes:
-            setattr(row, field, bool(changes[field]))
+            wanted = bool(changes[field])
+            # У только что созданной строки поля ещё пусты: значения по
+            # умолчанию проставит база при записи. Пусто здесь означает
+            # «было включено» — именно так человек это и видел.
+            was = getattr(row, field, None)
+            if (was is None or was) and not wanted:
+                switched_off.append(field)
+            setattr(row, field, wanted)
     for field in ("quiet_from", "quiet_to"):
         if field in changes and changes[field] is not None:
             setattr(row, field, max(0, min(23, int(changes[field]))))
@@ -429,6 +440,8 @@ async def save_prefs(session: AsyncSession, user_id: int, **changes) -> Prefs:
         row.pace = changes["pace"]
 
     await session.commit()
+    if switched_off:
+        await note_disabled(session, user_id, switched_off)
     return await prefs_for(session, user_id)
 
 
@@ -483,7 +496,8 @@ async def remember(session: AsyncSession, push: Push, *, day,
     """Записать отправленное. Без этой записи не работает ничего: ни бюджет,
     ни остывание, ни усталость, ни ответ на вопрос, помогает ли это вообще."""
     row = NotificationLog(user_id=push.user_id, kind=push.kind, code=push.code,
-                          day=day, sent_at=now_utc or datetime.now(timezone.utc))
+                          variant=push.variant, day=day,
+                          sent_at=now_utc or datetime.now(timezone.utc))
     session.add(row)
     await session.commit()
     return row.id
@@ -524,6 +538,44 @@ async def candidates(session: AsyncSession, *,
 AWARD_FRESH_HOURS = 48
 
 
+# Сколько времени после сообщения открытие приложения ещё засчитывается
+# ему. Дольше — и это уже просто заход, а не ответ.
+OPEN_CREDIT_HOURS = 3
+
+
+async def note_app_open(session: AsyncSession, user_id: int, *,
+                        now_utc: datetime | None = None) -> None:
+    """Человек сам открыл приложение — возможно, в ответ на сообщение.
+
+    Открытие слабее нажатия кнопки: он мог зайти и по своим делам. Поэтому
+    оно засчитывается только недавнему сообщению и только если человек на
+    него ещё никак не ответил.
+    """
+    moment = now_utc or datetime.now(timezone.utc)
+    row = (await session.execute(
+        select(NotificationLog)
+        .where(NotificationLog.user_id == user_id, NotificationLog.result == "",
+               NotificationLog.sent_at >= moment - timedelta(hours=OPEN_CREDIT_HOURS))
+        .order_by(NotificationLog.sent_at.desc()).limit(1)
+    )).scalar_one_or_none()
+    if row is None:
+        return
+    row.result = RESULT_OPENED
+    row.result_at = moment
+    await session.commit()
+
+
+async def note_disabled(session: AsyncSession, user_id: int, kinds, *,
+                        now_utc: datetime | None = None) -> None:
+    """Человек выключил категорию — самый сильный отрицательный ответ.
+
+    Отмечаем им последнее сообщение этой категории: именно после него
+    человек пошёл в настройки. Это и есть то, что надо знать про текст.
+    """
+    for kind in kinds:
+        await mark(session, user_id, kind, RESULT_DISABLED, now_utc=now_utc)
+
+
 async def reactions(session: AsyncSession, user_id: int, *,
                     now_utc: datetime,
                     days: int = ADAPT_WINDOW_DAYS) -> dict[str, tuple[int, int]]:
@@ -550,6 +602,75 @@ async def reactions(session: AsyncSession, user_id: int, *,
         if result in {RESULT_ACTED, RESULT_OPENED}:
             pair[1] += count
     return {kind: (sent, answered) for kind, (sent, answered) in stats.items()}
+
+
+@dataclass(frozen=True)
+class Stat:
+    """Как сработала одна тема или одна формулировка."""
+
+    name: str
+    sent: int
+    acted: int          # нажал кнопку прямо в сообщении
+    opened: int         # открыл приложение вскоре после
+    snoozed: int        # «позже» или «сегодня не надо»
+    disabled: int       # выключил категорию совсем
+
+    @property
+    def ignored(self) -> int:
+        return self.sent - self.acted - self.opened - self.snoozed - self.disabled
+
+    @property
+    def action_rate(self) -> float:
+        """Главная мера. Не «сколько отправили» и даже не «сколько открыли».
+
+        Сообщение, которое открывают и после которого ничего не делают,
+        успешным не считается: оно потратило внимание и ничего не изменило.
+        """
+        return self.acted / self.sent if self.sent else 0.0
+
+    @property
+    def open_rate(self) -> float:
+        return (self.acted + self.opened) / self.sent if self.sent else 0.0
+
+    @property
+    def harm_rate(self) -> float:
+        """Доля сообщений, после которых человек просил замолчать."""
+        return (self.snoozed + self.disabled) / self.sent if self.sent else 0.0
+
+
+def _fold(rows) -> list[Stat]:
+    counted: dict[str, dict[str, int]] = {}
+    for name, result, count in rows:
+        box = counted.setdefault(name or "—", {})
+        box["sent"] = box.get("sent", 0) + count
+        box[result or "ignored"] = box.get(result or "ignored", 0) + count
+
+    out = [
+        Stat(name=name, sent=box["sent"], acted=box.get(RESULT_ACTED, 0),
+             opened=box.get(RESULT_OPENED, 0),
+             snoozed=box.get(RESULT_SNOOZED, 0) + box.get(RESULT_MUTED, 0),
+             disabled=box.get(RESULT_DISABLED, 0))
+        for name, box in counted.items()
+    ]
+    # Сначала то, что работает хуже всего: чинить надо это.
+    return sorted(out, key=lambda item: (item.action_rate, -item.sent))
+
+
+async def stats(session: AsyncSession, *, days: int = 30,
+                by: str = "kind", now_utc: datetime | None = None) -> list[Stat]:
+    """Что сработало за период — по темам или по формулировкам.
+
+    Считается по всем людям сразу: это ответ владельцу на вопрос, какие
+    сообщения работают, а не отчёт по одному человеку.
+    """
+    moment = now_utc or datetime.now(timezone.utc)
+    column = NotificationLog.variant if by == "variant" else NotificationLog.kind
+    rows = (await session.execute(
+        select(column, NotificationLog.result, func.count())
+        .where(NotificationLog.sent_at >= moment - timedelta(days=days))
+        .group_by(column, NotificationLog.result)
+    )).all()
+    return _fold(rows)
 
 
 async def announced(session: AsyncSession, user_id: int, kind: str) -> set[str]:
@@ -722,9 +843,10 @@ __all__ = [
     "BUDGET", "COOLDOWN_HOURS", "FATIGUE_LIMIT", "GAP_HOURS", "KIND_OF",
     "GREETING", "MIN_SCORE", "MORNING_FROM", "MORNING_TO",
     "RECENT_OPEN_MINUTES", "SNOOZE_HOURS",
-    "Prefs", "Push", "Sent",
+    "Prefs", "Push", "Sent", "Stat", "stats",
     "AWARD_FRESH_HOURS", "announced", "candidates", "decide", "due",
-    "EARLIEST_HOUR", "WORLD_HOUR", "appetite", "fatigue", "fresh_award", "last_seen_of", "reactions", "history_for", "kind_of", "local_day_and_hour",
+    "EARLIEST_HOUR", "WORLD_HOUR", "OPEN_CREDIT_HOURS", "appetite", "fatigue", "fresh_award",
+    "note_app_open", "note_disabled", "last_seen_of", "reactions", "history_for", "kind_of", "local_day_and_hour",
     "mark", "prefs_for", "remember", "save_prefs", "snooze", "snoozed_kinds",
     "sent_today", "tired",
 ]

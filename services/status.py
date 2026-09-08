@@ -14,6 +14,8 @@ from sqlalchemy import func, select
 import config
 from db import async_session_maker
 from scheduler import DAILY_REPORT_TIME, WEEKLY_REPORT_TIME
+from services import notifications
+from services.owner_reports import _notification_lines
 from models import Payment, Subscription, SubscriptionStatus, User
 from services.legal import LEGAL_VERSION
 from services.subscriptions import now, stats
@@ -135,6 +137,9 @@ async def collect() -> str:
 
     async with async_session_maker() as session:
         spend = await usage_service.spent_today(session)
+        # Те же цифры, что в недельном отчёте, но по требованию: когда
+        # переписал текст сообщения, ждать пятницы незачем.
+        notes = await notifications.stats(session, days=30)
     disk = disk_usage()
 
     lines = [
@@ -164,6 +169,8 @@ async def collect() -> str:
         "💾 Диск",
         f"   Занято {disk.percent}% — {disk.used_gb} из {disk.total_gb} ГБ, "
         f"свободно {disk.free_gb} ГБ",
+        "",
+        *_notification_lines(notes),
         "",
         *_art_lines(),
         "",

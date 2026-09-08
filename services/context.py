@@ -249,6 +249,12 @@ def say(seed: int, key: str, **values) -> str:
     return options[seed % len(options)].format(**values)
 
 
+def stamp(seed: int, key: str) -> str:
+    """Подпись формулировки: набор и номер варианта. Ложится в историю,
+    чтобы потом можно было сравнить, какие слова работают."""
+    return f"{key}#{seed % len(VARIANTS[key])}"
+
+
 @dataclass(frozen=True)
 class Action:
     """Одно предложение: что сделать и что нажать."""
@@ -260,6 +266,10 @@ class Action:
     target: str          # куда ведёт кнопка: water / cube / workout / checkin / meal
     score: float = 0.0
     amount: int = 0      # для воды — сколько добавить за одно нажатие
+    # Какой формулировкой сказано: имя набора и номер варианта. Без этого
+    # нельзя потом узнать, какие слова работают, а какие нет: в истории
+    # осталось бы «отправили про воду», а какими словами — неизвестно.
+    wording: str = ""
 
     def to_dict(self) -> dict:
         return {"code": self.code, "title": self.title, "text": self.text,
@@ -279,12 +289,13 @@ def _candidates(ctx: DayContext) -> list[Action]:
             step = max(50, min(500, int(round(left / 50.0)) * 50))
             out.append(Action("water", "Вода",
                               say(ctx.day_seed, "water_almost", left=left),
-                              f"+{step} мл", "water", score=1.35, amount=step))
+                              f"+{step} мл", "water", score=1.35, amount=step,
+                              wording=stamp(ctx.day_seed, "water_almost")))
         else:
-            text = (say(ctx.day_seed, "water_empty") if ctx.water_ml == 0
-                    else say(ctx.day_seed, "water_left", left=left))
-            out.append(Action("water", "Вода", text, "+250 мл", "water",
-                              score=water_gap * 1.1, amount=250))
+            key = "water_empty" if ctx.water_ml == 0 else "water_left"
+            out.append(Action("water", "Вода", say(ctx.day_seed, key, left=left),
+                              "+250 мл", "water", score=water_gap * 1.1, amount=250,
+                              wording=stamp(ctx.day_seed, key)))
 
     protein_gap = ctx.gap("protein_g")
     if protein_gap is not None and protein_gap > NOTABLE_GAP and ctx.hour >= 11:
@@ -292,45 +303,51 @@ def _candidates(ctx: DayContext) -> list[Action]:
         out.append(Action("protein", "Белок",
                           say(ctx.day_seed, "protein", have=round(ctx.protein_g),
                               target=round(ctx.protein_target or 0)),
-                          "Подобрать еду", "cube", score=protein_gap))
+                          "Подобрать еду", "cube", score=protein_gap,
+                          wording=stamp(ctx.day_seed, "protein")))
 
     fiber_gap = ctx.gap("fiber_g")
     if fiber_gap is not None and fiber_gap > NOTABLE_GAP and ctx.hour >= 13:
         out.append(Action("fiber", "Клетчатка", say(ctx.day_seed, "fiber"),
-                          "Подобрать еду", "cube", score=fiber_gap * 0.9))
+                          "Подобрать еду", "cube", score=fiber_gap * 0.9,
+                          wording=stamp(ctx.day_seed, "fiber")))
 
     if ctx.meals_logged == 0 and ctx.hour >= 10:
         out.append(Action("meal", "Еда", say(ctx.day_seed, "meal_empty"),
-                          "Записать еду", "meal", score=1.2))
+                          "Записать еду", "meal", score=1.2,
+                          wording=stamp(ctx.day_seed, "meal_empty")))
     elif ctx.calories_left and ctx.calories_left > 400 and ctx.hour >= 17:
         out.append(Action("meal", "Ужин",
                           say(ctx.day_seed, "dinner", left=round(ctx.calories_left)),
-                          "Подобрать еду", "cube", score=0.7))
+                          "Подобрать еду", "cube", score=0.7,
+                          wording=stamp(ctx.day_seed, "dinner")))
 
     # Шаги приложение не считает само — их вносит человек. Поэтому сначала
     # напоминаем внести, и только потом говорим, сколько осталось пройти.
     if ctx.steps_goal and 9 <= ctx.hour < 22:
         if not ctx.steps_logged:
             out.append(Action("steps", "Шаги", say(ctx.day_seed, "steps_empty"),
-                              "Внести шаги", "steps", score=0.65))
+                              "Внести шаги", "steps", score=0.65,
+                              wording=stamp(ctx.day_seed, "steps_empty")))
         elif ctx.steps < ctx.steps_goal:
             left = ctx.steps_goal - ctx.steps
             minutes = max(round(left / 100), 1)
             close = is_almost(left, ctx.steps_goal, ALMOST_STEPS)
+            key = "steps_almost" if close else "steps_left"
             out.append(Action("steps", "Шаги",
-                              say(ctx.day_seed,
-                                  "steps_almost" if close else "steps_left",
-                                  left=left, minutes=minutes),
+                              say(ctx.day_seed, key, left=left, minutes=minutes),
                               "Пройтись", "steps",
                               score=1.3 if close
-                              else 0.5 + 0.4 * (left / ctx.steps_goal)))
+                              else 0.5 + 0.4 * (left / ctx.steps_goal),
+                              wording=stamp(ctx.day_seed, key)))
 
     # Тренировку не предлагаем на пустой батарейке: это не забота, а давление.
     if ctx.workouts_today == 0 and 9 <= ctx.hour < 21:
         tired = (ctx.energy is not None and ctx.energy <= 2) or ctx.stress == "high"
         if tired:
             out.append(Action("rest", "Движение", say(ctx.day_seed, "rest"),
-                              "Лёгкое движение", "workout", score=0.75))
+                              "Лёгкое движение", "workout", score=0.75,
+                              wording=stamp(ctx.day_seed, "rest")))
         else:
             # Самое слабое из всего, что мы предлагаем: это не вывод из
             # данных, а вежливый вопрос в пустоту. Шаги человек вносит
@@ -338,34 +355,40 @@ def _candidates(ctx: DayContext) -> list[Action]:
             # такой совет уместен, а звонить телефоном ради него — нет:
             # вес ниже порога, за которым бот пишет первым.
             out.append(Action("movement", "Движение", say(ctx.day_seed, "movement"),
-                              "Подобрать движение", "workout", score=0.55))
+                              "Подобрать движение", "workout", score=0.55,
+                              wording=stamp(ctx.day_seed, "movement")))
 
     if not ctx.checkin_done and 11 <= ctx.hour < 22:
         out.append(Action("checkin", "Состояние", say(ctx.day_seed, "checkin"),
-                          "Отметить", "checkin", score=0.5))
+                          "Отметить", "checkin", score=0.5,
+                          wording=stamp(ctx.day_seed, "checkin")))
 
     if ctx.days_since_measure is not None and ctx.days_since_measure >= 7:
         out.append(Action("progress", "Замер",
                           say(ctx.day_seed, "progress",
                               days=ctx.days_since_measure),
-                          "Записать замер", "progress", score=0.55))
+                          "Записать замер", "progress", score=0.55,
+                          wording=stamp(ctx.day_seed, "progress")))
 
     # Закрытый день — понятная награда, и до него остаётся одно дело.
     if ctx.quests_total and ctx.quests_left == 1 and 9 <= ctx.hour < 22:
         out.append(Action("day", "День", say(ctx.day_seed, "day_almost"),
-                          "Посмотреть день", "today", score=1.15))
+                          "Посмотреть день", "today", score=1.15,
+                          wording=stamp(ctx.day_seed, "day_almost")))
 
     # Уровень — самый слабый из «остался шаг»: награда приятная, но не
     # сегодняшняя, и торопить с ней некрасиво.
     if 0 < ctx.crystals_left <= ALMOST_CRYSTALS and 10 <= ctx.hour < 22:
         out.append(Action("level", "Уровень",
                           say(ctx.day_seed, "level_almost", left=ctx.crystals_left),
-                          "Посмотреть задания", "today", score=0.9))
+                          "Посмотреть задания", "today", score=0.9,
+                          wording=stamp(ctx.day_seed, "level_almost")))
 
     if ctx.preps_expiring:
         out.append(Action("prep", "Заготовки",
                           say(ctx.day_seed, "prep", name=ctx.preps_expiring[0]),
-                          "Подобрать еду", "cube", score=0.8))
+                          "Подобрать еду", "cube", score=0.8,
+                          wording=stamp(ctx.day_seed, "prep")))
 
     return out
 
@@ -391,7 +414,8 @@ def next_action(ctx: DayContext) -> Action | None:
     ranked.sort(key=lambda pair: -pair[0])
     best_score, best = ranked[0]
     return Action(best.code, best.title, best.text, best.cta, best.target,
-                  score=round(best_score, 3), amount=best.amount)
+                  score=round(best_score, 3), amount=best.amount,
+                  wording=best.wording)
 
 
 def main_quest_codes(ctx: DayContext, quests: list[dict], limit: int = 3) -> list[str]:
@@ -423,4 +447,4 @@ def hour_in(timezone_name: str | None, *, now: datetime | None = None) -> int:
 __all__ = ["Action", "ALMOST_CRYSTALS", "ALMOST_SHARE", "ALMOST_STEPS",
            "ALMOST_WATER_ML", "DayContext", "MAX_REPEATS", "NOTABLE_GAP",
            "VARIANTS", "hour_in", "is_almost", "main_quest_codes",
-           "next_action", "say"]
+           "next_action", "say", "stamp"]

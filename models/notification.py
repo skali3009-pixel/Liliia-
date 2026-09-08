@@ -48,6 +48,9 @@ RESULT_ACTED = "acted"          # нажал кнопку прямо в сооб
 RESULT_OPENED = "opened"        # открыл приложение вскоре после
 RESULT_SNOOZED = "snoozed"      # «позже»
 RESULT_MUTED = "muted"          # «сегодня не надо»
+# Самый сильный отрицательный ответ: после этого сообщения человек
+# выключил категорию целиком.
+RESULT_DISABLED = "disabled"
 
 
 class NotificationPrefs(Base):
@@ -107,6 +110,12 @@ class NotificationLog(Base):
     )
     day: Mapped[date] = mapped_column(Date, index=True, nullable=False)
 
+    # Какими словами сказано: имя набора формулировок и номер варианта,
+    # например «water_almost#2». Без этого нельзя узнать, какие слова
+    # работают: в истории осталось бы «писали про воду», а как именно —
+    # неизвестно, и сравнивать нечего.
+    variant: Mapped[str] = mapped_column(String(40), default="", nullable=False)
+
     # Пусто, пока человек ничего не сделал. «Ничего» — тоже ответ, и по нему
     # считается усталость: сообщения, на которые не реагируют, должны
     # становиться реже сами.
@@ -134,6 +143,7 @@ __all__ = [
     "KINDS", "KIND_ACHIEVEMENT", "KIND_EVENING", "KIND_MEAL", "KIND_MOVEMENT",
     "KIND_TURN", "KIND_WATER", "KIND_WORLD",
     "PACES", "PACE_ACTIVE", "PACE_BALANCED", "PACE_MINIMAL",
-    "RESULT_ACTED", "RESULT_MUTED", "RESULT_OPENED", "RESULT_SNOOZED",
+    "RESULT_ACTED", "RESULT_DISABLED", "RESULT_MUTED", "RESULT_OPENED",
+    "RESULT_SNOOZED",
     "NotificationLog", "NotificationPrefs", "NotificationSnooze",
 ]

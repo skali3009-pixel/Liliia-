@@ -195,8 +195,11 @@ async def get_today(request: web.Request) -> web.Response:
         user = await session.get(User, user_id)
         # Отметка «человек сам открыл приложение». По ней движок уведомлений
         # молчит: подсказка вдогонку открытому экрану только раздражает.
+        # Заодно это ответ на недавнее сообщение — слабее нажатой кнопки,
+        # но тоже ответ, и без него непонятно, работает ли текст вообще.
         if user is not None:
             user.last_app_open = datetime.now(timezone.utc)
+            await notifications.note_app_open(session, user_id)
         totals = await get_today_totals(session, user_id, timezone_name=tz)
         meals = await list_today_meals(session, user_id, timezone_name=tz)
         water = await today_total_ml(session, user_id, timezone_name=tz)
