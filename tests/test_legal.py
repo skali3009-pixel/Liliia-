@@ -80,3 +80,50 @@ def test_document_links_point_to_the_public_address():
 def test_links_are_not_offered_without_a_public_address(monkeypatch):
     monkeypatch.setattr(config, "WEBAPP_URL", "")
     assert links_ready() is False
+
+
+def test_the_owner_name_never_stands_where_it_would_need_declining():
+    """Имя владельца — одна строка, а русский язык склоняет.
+
+    В документах было «является публичной офертой Индивидуальный
+    предприниматель Иванова» и «рекламного характера от Индивидуальный
+    предприниматель Иванова»: обе фразы требуют родительного падежа, а
+    подставляется всегда именительный. Склонять строку нельзя — она бывает
+    и фамилией, и «ООО «Аура»».
+
+    Поэтому правило простое: {{OWNER}} стоит либо сразу после тега (то есть
+    первым в строке или абзаце), либо после тире. И то и другое в русском
+    требует именительного падежа, и подстановка читается при любой форме
+    владельца — хоть фамилией, хоть «ООО «Аура»».
+    """
+    import re
+    from pathlib import Path
+
+    from services.legal import LEGAL_DIR
+
+    allowed = re.compile(r"(?:>|—)\s*$")
+    for path in sorted(Path(LEGAL_DIR).glob("*.html")):
+        text = path.read_text(encoding="utf-8")
+        for match in re.finditer(r"\{\{OWNER\}\}", text):
+            before = text[:match.start()]
+            assert allowed.search(before), (
+                f"{path.name}: имя владельца стоит в позиции, где его надо было бы "
+                f"склонять — «…{before[-60:].strip()} {{{{OWNER}}}}»"
+            )
+
+
+@pytest.mark.parametrize("owner", [
+    "Иванова Лилия Сергеевна",
+    "Индивидуальный предприниматель Иванова Лилия Сергеевна",
+    "Общество с ограниченной ответственностью «Аура»",
+])
+def test_documents_read_correctly_for_any_form_of_owner(monkeypatch, owner):
+    """Самозанятая, ИП и общество — три разные строки, и все должны читаться."""
+    monkeypatch.setattr(config, "LEGAL_OWNER", owner)
+    for slug in ("offer", "marketing"):
+        page = render(slug)
+        assert owner in page
+        # Ровно то, что было сломано: предлог или творительный падеж вплотную
+        # перед именем владельца.
+        assert f"офертой {owner}" not in page
+        assert f"от {owner}" not in page
