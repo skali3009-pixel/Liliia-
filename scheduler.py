@@ -13,6 +13,7 @@ from db import get_session
 from keyboards.notifications import comeback_keyboard, nudge_keyboard
 from keyboards.supplements import reminder_keyboard
 from services.reminders import collect_due_reminders
+from services import fsm_storage
 from services import notifications
 from services import comeback, guard, metrics
 from services.gamification import remember_suggestion
@@ -60,9 +61,16 @@ async def send_due_reminders(bot: Bot) -> None:
             logger.exception("Не удалось отправить напоминание пользователю %s", reminder.user_id)
 
 
-def clear_sent_marks() -> None:
-    """Сбрасываем отметки об отправке — вызывается раз в сутки."""
+async def clear_sent_marks() -> None:
+    """Раз в сутки: забыть отметки об отправке и брошенные разговоры."""
     _already_sent.clear()
+    try:
+        forgotten = await fsm_storage.forget_stale()
+    except Exception:
+        logger.exception("Не удалось убрать брошенные разговоры")
+        return
+    if forgotten:
+        logger.info("Убрано брошенных разговоров: %s", forgotten)
 
 
 async def send_smart_nudges(bot: Bot) -> None:

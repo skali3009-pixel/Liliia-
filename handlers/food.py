@@ -45,6 +45,7 @@ from services.water import today_total_ml
 from services import usage
 from utils.disk import usage as disk_usage
 from states.food import FoodStates
+from states.onboarding import OnboardingStates
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
 from utils.parsing import parse_float
 from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, adjust_weight, scale_nutrition
@@ -69,6 +70,26 @@ def _num(value: float) -> str:
     return f"{round(value):g}"
 
 
+# Совет даём там, где он нужен, — после неудачи. Показывать его каждому
+# заранее бессмысленно: инструкцию читают, только когда что-то не вышло,
+# а до этого она лишь удлиняет первое сообщение.
+PHOTO_TIPS = (
+    "\n\nЧтобы вышло с первого раза:\n"
+    "• снимай сверху, всю тарелку целиком\n"
+    "• при обычном свете, без вспышки в упор\n"
+    "• одно блюдо в кадре — если их несколько, лучше по очереди\n"
+    "• рядом что-то знакомое по размеру: вилка, стакан\n\n"
+    "И всегда можно просто словами: «тарелка борща и два куска хлеба»."
+)
+
+# Когда модель сама сомневается, человеку надо сказать, что делать. Иначе
+# он либо поверит неточной цифре, либо не запишет ничего.
+LOW_CONFIDENCE_HINT = (
+    "Похоже не очень уверенно. Если не сходится — «✏️ не то блюдо» "
+    "или «⚖️ вес», пересчитаю."
+)
+
+
 def _render_card(analysis: FoodAnalysis, meal_type_label: str) -> str:
     confidence = CONFIDENCE_RU.get(analysis.confidence, analysis.confidence)
     lines = [
@@ -83,6 +104,8 @@ def _render_card(analysis: FoodAnalysis, meal_type_label: str) -> str:
     if analysis.comment:
         lines += ["", f"💬 {analysis.comment}"]
     lines += [f"Уверенность: {confidence}"]
+    if analysis.confidence == "low":
+        lines += ["", LOW_CONFIDENCE_HINT]
     return "\n".join(lines)
 
 
@@ -212,15 +235,26 @@ async def _photo_allowed(message: Message, user_id: int) -> bool:
     return True
 
 
-@router.message(StateFilter(None, FoodStates), F.photo)
+@router.message(~StateFilter(OnboardingStates), F.photo)
 async def handle_food_photo(message: Message, state: FSMContext) -> None:
-    """Фото вне сценариев (или на любом шаге добавления еды) — это еда.
+    """Фото — это всегда еда, в каком бы разговоре человек ни находился.
 
-    Во время онбординга состояние принадлежит другой группе, поэтому анкету
-    этот хендлер не перехватывает.
+    Раньше сюда попадало только фото, присланное вне сценариев. Стоило
+    человеку нажать «Шаги» и не ввести число, начать править рост в профиле
+    или открыть «что-то не так» — и следующее фото не обрабатывал никто.
+    Ни ответа, ни ошибки: бот просто молчал, а человек делал вывод, что
+    сначала надо нажать «Добавить еду». Так и было: кнопка сбрасывала
+    незаконченный сценарий, и фото наконец доходило.
+
+    Исключение одно — анкета: там фото не еда, а сбитый набор ответов.
     """
     if await _ensure_onboarded(message) is None:
         return
+
+    # Незаконченный чужой сценарий фото отменяет: человек занят другим.
+    current = await state.get_state()
+    if current is not None and not str(current).startswith("FoodStates"):
+        await state.clear()
 
     photo = message.photo[-1]  # последний размер — самый крупный
     if photo.file_size and photo.file_size > MAX_IMAGE_BYTES:
@@ -246,7 +280,13 @@ async def handle_food_photo(message: Message, state: FSMContext) -> None:
         if buffer is None:
             raise FoodRecognitionError("Не удалось скачать фото из Telegram")
         analysis = await analyze_photo(buffer.read(), on_usage=spent.append)
-    except FoodRecognitionError as e:  # включая «нет ключа» и «не видно еды»
+    except FoodNotRecognized as e:
+        # Единственный случай, который человек может исправить сам, — и
+        # только здесь совет уместен. При поломке ключа или сети он
+        # бесполезен и выглядит издевательством.
+        await status.edit_text(f"{e}{PHOTO_TIPS}")
+        return
+    except FoodRecognitionError as e:  # нет ключа, сеть, лимит у модели
         await status.edit_text(str(e))
         return
     except Exception:
@@ -306,11 +346,19 @@ async def _record_spend(user_id: int, kind: str, spent: list) -> None:
         logger.exception("Не записался расход на распознавание")
 
 
-@router.message(StateFilter(None, FoodStates), F.voice)
+@router.message(~StateFilter(OnboardingStates), F.voice)
 async def handle_food_voice(message: Message, state: FSMContext) -> None:
-    """Голосовое сообщение: расшифровываем и считаем КБЖУ по тексту."""
+    """Голосовое сообщение: расшифровываем и считаем КБЖУ по тексту.
+
+    Как и фото, работает в любом разговоре, кроме анкеты: голосовое — это
+    всегда рассказ о еде, а не ответ на «сколько шагов».
+    """
     if await _ensure_onboarded(message) is None:
         return
+
+    current = await state.get_state()
+    if current is not None and not str(current).startswith("FoodStates"):
+        await state.clear()
 
     status = await message.answer("🎤 Слушаю…")
     await message.bot.send_chat_action(message.chat.id, "typing")
@@ -525,19 +573,35 @@ async def apply_correct_dish(message: Message, state: FSMContext) -> None:
 
 @router.callback_query(FoodStates.confirming, F.data == CB_SAVE)
 async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
+    # Отвечаем Telegram сразу, до всякой работы с базой. Иначе кнопка
+    # крутится всё время, пока считаются итоги дня и игровой пересчёт, а
+    # через десять секунд Telegram перестаёт ждать — и снаружи это
+    # выглядит как «нажала, и ничего не произошло».
+    await callback.answer("Записываю…")
+
     analysis = await _load_analysis(state)
     if analysis is None:
-        await callback.answer("Карточка устарела, пришли фото заново", show_alert=True)
+        await state.clear()
+        await callback.message.edit_reply_markup(reply_markup=None)
+        await callback.message.answer(
+            "Не могу найти эту карточку — похоже, она из прошлой версии бота.\n"
+            "Пришли фото ещё раз, я посчитаю заново."
+        )
         return
 
     data = await state.get_data()
     photo_file_id = data.get("photo_file_id")
     meal_type = guess_meal_type(datetime.now(get_zone(DEFAULT_TIMEZONE)))
 
+    # Пока считаются итоги, человек может нажать «Сохранить» ещё раз —
+    # кнопка ведь на месте. Забываем карточку сразу: второе нажатие
+    # запишет то же блюдо второй раз.
+    await state.set_data({})
+
     async with get_session() as session:
         user = await session.get(User, callback.from_user.id)
         if user is None or not user.onboarding_completed:
-            await callback.answer("Сначала настрой профиль: /start", show_alert=True)
+            await callback.message.answer("Сначала настрой профиль: /start")
             return
 
         await save_meal(
@@ -587,7 +651,6 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
                             cheetah=cheetah),
         reply_markup=main_menu_keyboard(),
     )
-    await callback.answer("Сохранено ✅")
 
 
 def _render_day_summary(analysis, meal_type_label, totals, norms, game=None,

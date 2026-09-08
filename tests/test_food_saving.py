@@ -136,12 +136,20 @@ def test_pressing_save_actually_writes_the_meal(state_data, expected_source):
             assert meals[0].name == ANALYSIS.name
             assert meals[0].calories == ANALYSIS.calories
             assert meals[0].source == expected_source
-            assert "Сохранено" in " ".join(callback.answers)
+            # Подтверждение человек читает в сообщении, а не во всплывашке.
+            assert "Записал" in " ".join(callback.message.said)
             assert state.cleared, "карточка осталась висеть после сохранения"
     run(scenario)
 
 
-def test_an_expired_card_says_so_instead_of_failing():
+def test_a_card_from_a_previous_version_explains_itself():
+    """Раньше такая карточка просто молчала.
+
+    Состояние жило в памяти, бот обновлялся сам раз в полчаса — и нажатие
+    «Сохранить» после обновления не находило обработчика. Кнопка крутилась,
+    пока Telegram не сдавался. Теперь состояние в базе, но старые карточки
+    ещё встретятся, и они обязаны объяснить себя словами.
+    """
     async def scenario():
         from handlers.food import save_food
 
@@ -151,7 +159,48 @@ def test_an_expired_card_says_so_instead_of_failing():
 
             async with maker() as session:
                 assert (await session.execute(select(Meal))).first() is None
-            assert "устарела" in " ".join(callback.answers)
+            assert "Пришли фото ещё раз" in " ".join(callback.message.said)
+    run(scenario)
+
+
+def test_the_button_stops_spinning_before_the_slow_part():
+    """Пока считаются итоги дня и игровой пересчёт, кнопка не должна крутиться.
+
+    Telegram ждёт ответа десять секунд. Не дождавшись, он перестаёт
+    показывать нажатие — и снаружи это выглядит как «нажала, и ничего».
+    """
+    async def scenario():
+        from handlers.food import save_food
+
+        async with database():
+            callback = FakeCallback()
+            await save_food(callback, FakeState({"analysis": ANALYSIS.to_dict()}))
+            assert callback.answers, "Telegram не получил ответа вовсе"
+            assert callback.answers[0] == "Записываю…"
+    run(scenario)
+
+
+def test_pressing_save_twice_in_a_row_does_not_write_the_meal_twice():
+    """Второе нажатие, пока считается первое, — обычное человеческое дело.
+
+    Кнопка остаётся на месте всё время, пока идут итоги дня и игровой
+    пересчёт. Нажатия проверяются именно одновременными: по очереди они и
+    так безопасны, потому что карточка к тому времени уже забыта, — и
+    тест, написанный по очереди, ничего бы не доказал.
+    """
+    async def scenario():
+        from handlers.food import save_food
+
+        async with database() as maker:
+            state = FakeState({"analysis": ANALYSIS.to_dict()})
+            await asyncio.gather(
+                save_food(FakeCallback(), state),
+                save_food(FakeCallback(), state),
+            )
+
+            async with maker() as session:
+                meals = (await session.execute(select(Meal))).scalars().all()
+            assert len(meals) == 1, "блюдо записалось дважды"
     run(scenario)
 
 
@@ -165,7 +214,7 @@ def test_a_stranger_without_a_profile_is_sent_to_start():
 
             async with maker() as session:
                 assert (await session.execute(select(Meal))).first() is None
-            assert "профиль" in " ".join(callback.answers)
+            assert "профиль" in " ".join(callback.message.said)
     run(scenario)
 
 

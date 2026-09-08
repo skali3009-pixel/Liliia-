@@ -13,9 +13,10 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 import config
 from db import init_models
 from services.artwork import ensure_artwork
+from services.fsm_storage import DatabaseStorage
 from services import commands as bot_commands
 from services import identity
-from handlers import (access, diary, errors, feedback, food, legal,
+from handlers import (access, diary, errors, fallback, feedback, food, legal,
                       notifications, onboarding, profile, progress, steps,
                       suggestions, supplements, turn, water, workouts)
 from middlewares.access import AccessMiddleware
@@ -27,7 +28,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 bot = Bot(token=config.BOT_TOKEN)
-dp = Dispatcher()
+# Состояние разговоров хранится в базе, а не в памяти: бот обновляется
+# сам раз в полчаса, и с памятью каждый такой перезапуск стирал
+# незаконченные карточки еды и недописанные анкеты.
+dp = Dispatcher(storage=DatabaseStorage())
 
 # Проверка доступа стоит до всех обработчиков: без подписки бот отвечает
 # только про оплату.
@@ -63,6 +67,10 @@ dp.include_router(supplements.router)
 dp.include_router(progress.router)
 dp.include_router(workouts.router)
 dp.include_router(suggestions.router)
+# Последним: сюда попадает только то, что не разобрал никто выше.
+# До него бот на непонятое просто молчал, и человек не знал, дошло
+# ли сообщение вообще.
+dp.include_router(fallback.router)
 
 # Падение любого обработчика: человеку — честный ответ, владельцу — место
 # поломки. Без этого ошибка уходила только в лог, куда никто не смотрит.

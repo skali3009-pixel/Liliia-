@@ -14,6 +14,7 @@ from models.usage import ApiUsage
 from models.day_stat import DayStat
 from models.meal import Meal, MealSourceEnum, MealTypeEnum
 from models.friendship import Friendship, Invite
+from models.fsm import FsmState
 from models.steps import StepLog
 from models.team import Team, TeamMember
 from models.user_prep import UserPrep
@@ -36,6 +37,7 @@ from models.workout import LevelEnum, LocationEnum, Workout, WorkoutLog, Workout
 
 __all__ = [
     "Base",
+    "FsmState",
     "NotificationLog",
     "NotificationPrefs",
     "NotificationSnooze",
