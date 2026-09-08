@@ -496,6 +496,23 @@
       <div id="chart-table" hidden></div>
     </section>
 
+    <!-- Женский календарь. Стоит рядом с весом намеренно: он здесь не ради
+         самого календаря, а чтобы объяснить прибавку перед месячными в ту
+         минуту, когда человек смотрит на график. -->
+    <section class="card" id="cycle-card" hidden>
+      <div class="card-head">
+        <h2>Цикл</h2>
+        <span id="cycle-day" class="muted"></span>
+      </div>
+      <p id="cycle-phase" class="cycle-phase"></p>
+      <p id="cycle-note" class="hint"></p>
+      <p id="cycle-weight" class="cycle-weight" hidden></p>
+      <div id="cycle-strip" class="cycle-strip"></div>
+      <button id="cycle-mark" class="btn">Отметить начало месячных</button>
+      <p id="cycle-next" class="hint"></p>
+      <p class="hint" id="cycle-disclaimer"></p>
+    </section>
+
     <!-- Дошла до цели. Показывается один раз: приложение обязано это
          заметить, а заодно спросить, что дальше — иначе оно продолжит
          держать в дефиците того, кому худеть уже некуда. -->
@@ -844,6 +861,14 @@
     </label>
     <p class="hint">Это не медицинская норма, а договорённость с собой. Лучше
       взять то число, которое точно получится каждый день.</p>
+
+    <div class="eyebrow ruled">Женский календарь</div>
+    <div class="prof-row switch" id="prof-cycle-row">
+      <span>Показывать цикл</span>
+      <button class="chip" id="prof-cycle">включён</button>
+    </div>
+    <p class="hint">Живёт на «Прогрессе», рядом с весом. Нужен затем, чтобы
+      объяснять прибавку перед месячными, а не пугать ею.</p>
 
     <div class="eyebrow ruled">Аллергии и что не ешь</div>
     <input class="input" id="prof-allergies" type="text" maxlength="200"

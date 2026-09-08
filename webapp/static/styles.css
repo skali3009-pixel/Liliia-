@@ -1561,3 +1561,34 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
   #pick-result .pick:nth-child(2) { animation-delay: .07s; }
   #pick-result .pick:nth-child(3) { animation-delay: .14s; }
 }
+
+/* Женский календарь. Своим цветом — тёплой охрой из палитры, а не
+   привычным для таких приложений розовым: приложение одно, и календарь
+   не должен выглядеть вставленным из другого. */
+.cycle-phase {
+  font-size: 17px; font-weight: 600; margin: 0 0 4px;
+}
+.cycle-weight {
+  margin: 10px 0 0; padding: 12px 14px; border-radius: 14px;
+  background: rgba(201, 169, 97, .12); border: 1px solid rgba(201, 169, 97, .35);
+  color: var(--fg); font-size: 14px; line-height: 1.45;
+}
+/* Полоса дней прокручивается вбок: месяц целиком в ширину экрана не
+   поместится, а переносить дни на вторую строку — значит потерять
+   ощущение ленты времени. */
+.cycle-strip {
+  display: flex; gap: 6px; overflow-x: auto; margin: 14px 0 12px;
+  padding-bottom: 4px; scrollbar-width: none;
+}
+.cycle-strip::-webkit-scrollbar { display: none; }
+.cycle-day {
+  flex: 0 0 auto; width: 34px; height: 34px; border-radius: 10px;
+  border: 1px solid var(--stroke); background: var(--surface-2);
+  color: var(--muted); font: inherit; font-size: 13px;
+}
+.cycle-day.on {
+  border-color: var(--gold); background: rgba(201, 169, 97, .22); color: var(--fg);
+  font-weight: 600;
+}
+.cycle-day.today { border-color: var(--lilac); color: var(--fg); }
+.cycle-day:active { transform: scale(.94); }

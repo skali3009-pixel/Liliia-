@@ -3,16 +3,18 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from datetime import time as dt_time
 
 from aiohttp import web
 
 import config
 from db import get_session
-from models import (Meal, MealSourceEnum, Prep, PrepComponent, Product, ProgressPhoto,
+from models import (GenderEnum, Meal, MealSourceEnum, Prep, PrepComponent,
+                    Product, ProgressPhoto,
                     ScheduleTypeEnum, Supplement, User, WorkoutTypeEnum)
 from services import events as event_service
+from services import cycle
 from services import notifications
 from services import preps as prep_service
 from services.checkins import save_checkin, today_state
@@ -475,6 +477,35 @@ def _body_block(user: User, measures: dict[str, float], *, weight_kg: float | No
     }
 
 
+def _usual_weight(points, today) -> float | None:
+    """Обычный вес человека: середина замеров от десяти до тридцати пяти
+    дней назад.
+
+    Не среднее за месяц: в него попадёт и сегодняшний день, а он-то и
+    проверяется. И не один замер: весы врут на полкило от времени суток.
+    Середина ряда устойчива и к тому, и к другому.
+    """
+    window = [p.value for p in points
+              if p.value is not None and 10 <= (today - p.day).days <= 35]
+    if not window:
+        return None
+    window.sort()
+    middle = len(window) // 2
+    if len(window) % 2:
+        return window[middle]
+    return round((window[middle - 1] + window[middle]) / 2, 1)
+
+
+def _cycle_shown(user: User | None) -> bool:
+    """Календарь — только тем, кому он нужен, и кто его не выключил.
+
+    Мужчине он бессмыслен, а женщине может быть просто не нужен: показывать
+    его всем подряд — значит навязывать разговор о теле, которого человек
+    не начинал.
+    """
+    return bool(user and user.gender == GenderEnum.FEMALE and user.cycle_enabled)
+
+
 async def get_progress(request: web.Request) -> web.Response:
     """Данные для экрана прогресса: график, сводка, стрик, фото."""
     user_id, tz = request["user_id"], request["timezone"]
@@ -502,9 +533,22 @@ async def get_progress(request: web.Request) -> web.Response:
         photos = await list_photos(session, user_id)
         awards = await awards_summary(session, user_id)
         measures = await latest_measures(session, user_id)
+        cycle_state = (await cycle.state(session, user_id, today_in(tz))
+                       if _cycle_shown(user) else None)
 
     first_weight = all_weight[0].value if all_weight else user.current_weight_kg
     last_weight = all_weight[-1].value if all_weight else user.current_weight_kg
+
+    cycle_json = None
+    if cycle_state is not None:
+        cycle_json = cycle_state.to_dict()
+        # Тот самый вывод, ради которого календарь и нужен: объяснить
+        # прибавку перед месячными в ту минуту, когда человек смотрит
+        # на график и решает, что всё зря.
+        cycle_json["weight_note"] = cycle.weight_note(
+            cycle_state, latest_kg=last_weight,
+            usual_kg=_usual_weight(all_weight, today_in(tz)),
+        )
 
     return web.json_response(
         {
@@ -512,6 +556,7 @@ async def get_progress(request: web.Request) -> web.Response:
             "title": title,
             "unit": unit,
             "goal": user.target_weight_kg if metric == "weight" else None,
+            "cycle": cycle_json,
             "points": [{"day": p.day.isoformat(), "value": p.value} for p in points],
             "summary": {
                 "current_weight": last_weight,
@@ -993,6 +1038,7 @@ def _profile_json(user: User, prefs=None) -> dict:
             "diet": user.diet_type.value if user.diet_type else None,
             "allergies": user.allergies or "",
             "reminders": bool(user.reminders_enabled),
+            "cycle": bool(user.cycle_enabled),
             "steps_goal": user.daily_steps or 0,
         },
         "norms": {
@@ -1039,6 +1085,9 @@ async def patch_profile(request: web.Request) -> web.Response:
     # таблице: смешивать их с анкетой значило бы пересчитывать нормы при
     # каждом снятии галочки.
     notify = changes.pop("notifications", None)
+    # Женский календарь живёт в самом профиле, а не в настройках
+    # уведомлений: это не про сообщения, а про то, что видно на экране.
+    show_cycle = changes.pop("cycle", None)
 
     async with get_session() as session:
         user = await session.get(User, request["user_id"])
@@ -1046,6 +1095,9 @@ async def patch_profile(request: web.Request) -> web.Response:
             recalculated = await apply_profile(session, user, changes) if changes else False
         except ProfileError as error:
             return web.json_response({"error": str(error)}, status=400)
+        if show_cycle is not None:
+            user.cycle_enabled = bool(show_cycle)
+            await session.commit()
         if isinstance(notify, dict):
             await notifications.save_prefs(session, request["user_id"], **notify)
         prefs = await notifications.prefs_for(session, request["user_id"])
@@ -1746,6 +1798,41 @@ async def push_steps(request: web.Request) -> web.Response:
     })
 
 
+async def get_cycle(request: web.Request) -> web.Response:
+    """Состояние цикла на сегодня. Только для тех, кому он нужен."""
+    user_id, tz = request["user_id"], request["timezone"]
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        if not _cycle_shown(user):
+            return web.json_response({"available": False})
+        state = await cycle.state(session, user_id, today_in(tz))
+    return web.json_response({"available": True, **state.to_dict()})
+
+
+async def post_cycle(request: web.Request) -> web.Response:
+    """Отметить или снять начало месячных. Повторное нажатие снимает."""
+    user_id, tz = request["user_id"], request["timezone"]
+    body = await request.json()
+    raw = (body or {}).get("day")
+
+    try:
+        day = date.fromisoformat(raw) if raw else today_in(tz)
+    except ValueError:
+        return web.json_response({"error": "Не разобрал дату"}, status=400)
+
+    if day > today_in(tz):
+        return web.json_response({"error": "Будущее отметить нельзя"}, status=400)
+
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        if not _cycle_shown(user):
+            return web.json_response({"error": "Календарь выключен"}, status=400)
+        marked = await cycle.mark(session, user_id, day)
+        state = await cycle.state(session, user_id, today_in(tz))
+    return web.json_response({"available": True, "marked": marked,
+                             **state.to_dict()})
+
+
 def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
@@ -1756,6 +1843,8 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/supplements/{supplement_id}/mark", mark_supplement)
     app.router.add_delete("/api/supplements/{supplement_id}", delete_supplement)
     app.router.add_get("/api/progress", get_progress)
+    app.router.add_get("/api/cycle", get_cycle)
+    app.router.add_post("/api/cycle", post_cycle)
     app.router.add_post("/api/measurements", post_measurement)
     app.router.add_post("/api/photos", post_photo)
     app.router.add_get("/api/photos/{photo_id}", get_photo)

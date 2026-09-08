@@ -12,6 +12,7 @@ from models.notification import (NotificationLog, NotificationPrefs,
                                  NotificationSnooze)
 from models.nutrition import Dish, DishComponent, Prep, PrepComponent, Product
 from models.usage import ApiUsage
+from models.cycle import CycleLog
 from models.day_stat import DayStat
 from models.meal import Meal, MealSourceEnum, MealTypeEnum
 from models.friendship import Friendship, Invite
@@ -38,6 +39,7 @@ from models.workout import LevelEnum, LocationEnum, Workout, WorkoutLog, Workout
 
 __all__ = [
     "Base",
+    "CycleLog",
     "ButtonPress",
     "FsmState",
     "NotificationLog",

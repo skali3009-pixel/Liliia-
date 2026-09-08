@@ -1796,6 +1796,7 @@ function setMetric(next) {
 
 async function refreshProgress() {
   progress = await api(`/api/progress?metric=${metric}&period=${period}`);
+  renderCycle(progress.cycle);
 
   const s = progress.summary;
   document.getElementById('stat-weight').textContent = s.current_weight ? fmt(s.current_weight) : '—';
@@ -2784,6 +2785,14 @@ function renderProfile(data) {
   reminders.classList.toggle('on', p.reminders);
 
   renderNotify(data.notifications, p.reminders);
+
+  // Календарь показываем только женщинам: мужчине он бессмыслен, и строка
+  // настройки у него была бы просто непонятной.
+  const cycleRow = document.getElementById('prof-cycle-row');
+  cycleRow.hidden = p.gender !== 'female';
+  const cycleButton = document.getElementById('prof-cycle');
+  cycleButton.textContent = p.cycle ? 'включён' : 'выключен';
+  cycleButton.classList.toggle('on', !!p.cycle);
 }
 
 /** Настройки уведомлений: галочки, частота и тихие часы. */
@@ -3699,6 +3708,99 @@ function openRequestedScreen() {
   if (asked && SCREENS.includes(asked) && asked !== 'today') switchScreen(asked);
 }
 
+// --- Женский календарь ---------------------------------------------------
+// Он стоит на «Прогрессе» не случайно: его задача — объяснить прибавку
+// перед месячными ровно там, где человек смотрит на вес и решает, что всё
+// зря. Календарь сам по себе тут был бы лишним.
+
+const CYCLE_STRIP_DAYS = 35;
+
+function renderCycle(cycle) {
+  const card = document.getElementById('cycle-card');
+  if (!cycle || cycle.available === false) { card.hidden = true; return; }
+  card.hidden = false;
+
+  document.getElementById('cycle-day').textContent =
+    cycle.day ? `день ${cycle.day}` : '';
+  document.getElementById('cycle-phase').textContent = cycle.title || 'Пока не отмечено';
+  document.getElementById('cycle-note').textContent =
+    cycle.note || 'Отметь день, когда начались месячные — дальше я посчитаю сама.';
+
+  // Главная строка карточки. Показывается только когда есть что сказать.
+  const weight = document.getElementById('cycle-weight');
+  weight.hidden = !cycle.weight_note;
+  weight.textContent = cycle.weight_note || '';
+
+  renderCycleStrip(cycle);
+
+  const next = document.getElementById('cycle-next');
+  if (cycle.next_start && cycle.days_to_next !== null) {
+    const days = cycle.days_to_next;
+    next.textContent = days === 0
+      ? 'Следующие, скорее всего, начнутся сегодня. Цикл сдвигается — это нормально.'
+      : `Следующие примерно через ${days} ${plural(days, 'день', 'дня', 'дней')}. `
+        + 'Это оценка, а не расписание.';
+  } else {
+    next.textContent = cycle.average_length
+      ? `Твой обычный цикл — ${cycle.average_length} дней.`
+      : 'Отметь ещё пару раз, и я смогу оценивать следующие.';
+  }
+
+  document.getElementById('cycle-disclaimer').textContent = cycle.disclaimer || '';
+  document.getElementById('cycle-mark').textContent =
+    (cycle.starts || []).includes(todayISO())
+      ? 'Убрать отметку за сегодня'
+      : 'Отметить начало месячных';
+}
+
+/** Полоса последних дней: отмеченные начала видно и можно поправить. */
+function renderCycleStrip(cycle) {
+  const box = document.getElementById('cycle-strip');
+  box.innerHTML = '';
+  const starts = new Set(cycle.starts || []);
+  const now = new Date();
+
+  for (let back = CYCLE_STRIP_DAYS - 1; back >= 0; back -= 1) {
+    const moment = new Date(now);
+    moment.setDate(now.getDate() - back);
+    const iso = isoOf(moment);
+    const cell = document.createElement('button');
+    cell.className = 'cycle-day';
+    if (starts.has(iso)) cell.classList.add('on');
+    if (back === 0) cell.classList.add('today');
+    cell.textContent = moment.getDate();
+    cell.title = iso;
+    cell.onclick = () => markCycle(iso);
+    box.appendChild(cell);
+  }
+  // Полоса открывается на сегодняшнем дне, а не на дне месячной давности:
+  // человек пришёл отметить сегодня, а не листать назад.
+  box.scrollLeft = box.scrollWidth;
+}
+
+function isoOf(moment) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${moment.getFullYear()}-${pad(moment.getMonth() + 1)}-${pad(moment.getDate())}`;
+}
+
+function todayISO() {
+  return isoOf(new Date());
+}
+
+async function markCycle(day) {
+  try {
+    const fresh = await api('/api/cycle', {
+      method: 'POST', body: JSON.stringify({ day }),
+    });
+    haptic('medium');
+    renderCycle({ ...fresh, weight_note: null });
+    // Вывод про вес считается на сервере вместе с графиком — перезапросим.
+    refreshProgress().catch(() => {});
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 function switchScreen(name) {
   for (const tab of document.querySelectorAll('.tab')) {
     tab.classList.toggle('active', tab.dataset.screen === name);
@@ -3783,6 +3885,11 @@ async function init() {
   };
   wireTeam();
   document.getElementById('profile-close').onclick = closeProfile;
+  document.getElementById('prof-cycle').onclick = () => {
+    const on = document.getElementById('prof-cycle').classList.contains('on');
+    saveProfile({ cycle: !on });
+  };
+  document.getElementById('cycle-mark').onclick = () => markCycle(todayISO());
   document.getElementById('notif-toggle').onclick = () => {
     const box = document.getElementById('notif-box');
     box.hidden = !box.hidden;

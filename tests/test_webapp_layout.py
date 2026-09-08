@@ -432,3 +432,33 @@ def test_the_categories_the_app_shows_are_the_ones_the_engine_knows():
     block = api.split("NOTIFY_LABELS = (", 1)[1].split(")\n", 1)[0]
     shown = set(_re.findall(r'\("(\w+)",', block))
     assert shown == set(KINDS)
+
+
+def test_the_cycle_calendar_is_wired_in_the_app():
+    """Календарь стоит на «Прогрессе» рядом с весом — там, где он и нужен.
+
+    Он не про календарь, а про то, чтобы объяснить прибавку перед
+    месячными в ту минуту, когда человек смотрит на график и решает, что
+    всё зря.
+    """
+    for element_id in ("cycle-card", "cycle-phase", "cycle-weight",
+                       "cycle-strip", "cycle-mark", "cycle-disclaimer"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+
+    # Именно на «Прогрессе», а не где придётся.
+    progress = INDEX.split('id="screen-progress"', 1)[1].split("</main>", 1)[0]
+    assert 'id="cycle-card"' in progress
+
+
+def test_the_cycle_can_be_switched_off_from_the_profile():
+    """Женщине он может быть просто не нужен, а мужчине бессмыслен."""
+    assert 'id="prof-cycle"' in INDEX
+    assert "prof-cycle-row" in APP_JS
+    assert "'female'" in APP_JS      # строка настройки скрыта не для всех
+
+
+def test_the_cycle_strip_opens_on_today():
+    """Человек пришёл отметить сегодня, а не листать месяц назад."""
+    body = APP_JS.split("function renderCycleStrip(", 1)[1][:1400]
+    assert "scrollLeft" in body

@@ -122,6 +122,11 @@ class User(Base):
         DateTime(timezone=True), nullable=True
     )
 
+    # Женский календарь. Показывается только женщинам и только пока не
+    # выключен: человеку, который его не заводил, разговор о теле никто
+    # не начинал.
+    cycle_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     streak_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
