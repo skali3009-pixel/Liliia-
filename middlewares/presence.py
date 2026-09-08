@@ -1,5 +1,9 @@
 """Отметка о том, что человек прямо сейчас разговаривает с ботом.
 
+Здесь же считаются нажатия кнопок меню: обе отметки ставятся на одно и то
+же событие, и разносить их по двум мидлварам значило бы дважды пройти
+один и тот же путь ради одной записи.
+
 Нужна ровно для одного: не писать первым тому, кто и так здесь. Подсказка
 «запиши еду», прилетевшая через минуту после того, как человек эту еду
 записал, — самый быстрый способ научить его выключать уведомления.
@@ -17,8 +21,11 @@ from typing import Any, Awaitable, Callable
 from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
+import config
 from db import get_session
+from keyboards.main_menu import MENU_TEXTS
 from models import User
+from services import buttons
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +51,24 @@ class PresenceMiddleware(BaseMiddleware):
                 # Отметка присутствия не стоит того, чтобы из-за неё
                 # человеку не ответили.
                 logger.debug("Не удалось отметить присутствие", exc_info=True)
+
+        text = getattr(event, "text", None)
+        if config.BUTTON_STATS and text in MENU_TEXTS and event.from_user:
+            try:
+                await self._count(event.from_user.id, text)
+            except Exception:
+                logger.debug("Не удалось записать нажатие", exc_info=True)
+
         return await handler(event, data)
+
+    @staticmethod
+    async def _count(user_id: int, text: str) -> None:
+        async with get_session() as session:
+            user = await session.get(User, user_id)
+            if user is None:
+                return
+            await buttons.note(session, user_id, text,
+                               timezone_name=user.timezone or "Europe/Moscow")
 
     @staticmethod
     async def _touch(user_id: int) -> None:

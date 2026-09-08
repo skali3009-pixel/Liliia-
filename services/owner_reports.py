@@ -8,14 +8,18 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import config
+from services import buttons
 from services import metrics
 from services import notifications
 from services.subscriptions import stats
 from services.usage import spent_today
 from utils.disk import usage as disk_usage
+from utils.plural import plural
 
 
 def _money_lines(money: metrics.Money) -> list[str]:
@@ -197,6 +201,35 @@ def _verdicts(rows) -> list[str]:
     return out[:2]
 
 
+def _button_lines(rows, since) -> list[str]:
+    """Чем в чате пользуются — и напоминание, что счёт временный.
+
+    Забытый счётчик тихо растит таблицу и остаётся в коде навсегда.
+    Поэтому отчёт сам говорит, сколько дней он работает и как его убрать.
+    """
+    if not config.BUTTON_STATS:
+        return []
+    if not rows:
+        return ["", "🎛 Кнопки в чате", "   Пока ни одного нажатия"]
+
+    lines = ["", "🎛 Кнопки в чате (за месяц)"]
+    for row in rows:
+        people = plural(row.people, "человек", "человека", "человек")
+        presses = plural(row.presses, "нажатие", "нажатия", "нажатий")
+        lines.append(f"   {row.button}: {row.presses} {presses} · "
+                     f"{row.people} {people}")
+
+    dead = [row.button for row in rows if row.people <= 1]
+    if dead:
+        lines.append(f"   ⚠️ Почти никому не нужны: {', '.join(dead)}")
+
+    if since is not None:
+        days = max((date.today() - since).days, 0)
+        lines.append(f"   Счёт идёт {days} дн. Он временный — выключить: "
+                     "bash set-buttons.sh off")
+    return lines
+
+
 async def weekly(session: AsyncSession) -> str:
     """Итоги недели: за чем следить и что решать."""
     people = await metrics.audience(session, days=7)
@@ -243,6 +276,8 @@ async def weekly(session: AsyncSession) -> str:
     ]
 
     lines += _notification_lines(await notifications.stats(session, days=30))
+    lines += _button_lines(await buttons.usage(session),
+                           await buttons.counting_since(session))
 
     breakeven = _breakeven_line(month_money)
     if breakeven:

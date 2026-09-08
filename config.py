@@ -112,6 +112,11 @@ FIXED_COSTS_USD = float(os.getenv("FIXED_COSTS_USD", "0"))
 # Налог с выручки, проценты. 0 — пока не оформлено.
 TAX_PERCENT = float(os.getenv("TAX_PERCENT", "0"))
 
+# Счёт нажатий кнопок меню в чате. Заведён на время испытаний: без него
+# «этой кнопкой не пользуются» — догадка одного человека, а не факт.
+# Выключается: bash set-buttons.sh off
+BUTTON_STATS = os.getenv("BUTTON_STATS", "1") not in {"0", "false", "no", "off"}
+
 # Бот сам подтягивает обновления из git. Выключается AUTO_UPDATE=0.
 AUTO_UPDATE = os.getenv("AUTO_UPDATE", "1") not in {"0", "false", "no"}
 WEBAPP_HOST = os.getenv("WEBAPP_HOST", "127.0.0.1")

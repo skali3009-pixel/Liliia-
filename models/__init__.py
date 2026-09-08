@@ -6,6 +6,7 @@ workout_log, body_measurements, progress_photos, achievements)."""
 from models.achievement import Achievement
 from models.base import Base
 from models.body import BodyMeasurement, ProgressPhoto
+from models.button import ButtonPress
 from models.checkin import Checkin
 from models.notification import (NotificationLog, NotificationPrefs,
                                  NotificationSnooze)
@@ -37,6 +38,7 @@ from models.workout import LevelEnum, LocationEnum, Workout, WorkoutLog, Workout
 
 __all__ = [
     "Base",
+    "ButtonPress",
     "FsmState",
     "NotificationLog",
     "NotificationPrefs",
