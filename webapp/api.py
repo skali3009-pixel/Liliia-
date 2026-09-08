@@ -1742,13 +1742,42 @@ async def get_steps_sync(request: web.Request) -> web.Response:
     return web.json_response({
         "link": step_sync.link_for(token),
         "why": step_sync.WHY,
-        "iphone": step_sync.IPHONE,
+        "cards": [card.to_dict() for card in step_sync.CARDS],
+        "shortcut": step_sync.SHORTCUT_NAME,
         "android": step_sync.ANDROID,
         "safety": step_sync.SAFETY,
         "no_site": step_sync.NO_SITE,
         "last": to_local(synced, request["timezone"]).strftime("%d.%m в %H:%M")
                 if synced else "",
     })
+
+
+async def get_steps_check(request: web.Request) -> web.Response:
+    """«Проверить подключение»: дошло ли число с телефона и когда.
+
+    Настройка длинная, и её итог человек должен узнать от нас, а не гадать
+    до полуночи. Молчание здесь — худший ответ: непонятно, сломалась связь
+    или день просто ещё не начался.
+    """
+    from services import step_sync
+    from services import steps as step_service
+
+    tz = request["timezone"]
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        synced = await step_service.last_sync(session, user.id)
+        state = await step_service.state(session, user, timezone_name=tz)
+
+    now = datetime.now(timezone.utc)
+    minutes = None
+    if synced is not None:
+        moment = synced if synced.tzinfo else synced.replace(tzinfo=timezone.utc)
+        minutes = max(int((now - moment).total_seconds() // 60), 0)
+
+    result = step_sync.check(minutes_since=minutes, today_steps=state.today,
+                             local_hour=to_local(now, tz).hour)
+    return web.json_response(dict(result.to_dict(), steps=state.today,
+                                  minutes=minutes))
 
 
 async def push_steps(request: web.Request) -> web.Response:
@@ -1876,6 +1905,7 @@ def add_routes(app: web.Application) -> None:
     app.router.add_route("*", "/hook/steps/{token}", push_steps)
     app.router.add_get("/api/steps/board", get_steps_board)
     app.router.add_get("/api/steps/sync", get_steps_sync)
+    app.router.add_get("/api/steps/check", get_steps_check)
     app.router.add_post("/api/steps/sync", get_steps_sync)
     app.router.add_post("/api/team", post_team)
     app.router.add_post("/api/workouts/pick", post_workout_pick)

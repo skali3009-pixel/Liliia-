@@ -226,10 +226,54 @@ def test_the_person_is_told_that_steps_are_entered_by_hand():
 def test_the_automatic_sync_is_offered_in_the_app():
     """Вбивать шаги руками каждый день не будет почти никто."""
     for element_id in ("steps-sync", "sync-sheet", "sync-link", "sync-copy",
-                       "sync-iphone", "sync-android", "sync-renew", "steps-synced"):
+                       "sync-android", "sync-renew", "steps-synced"):
         assert f'id="{element_id}"' in INDEX, element_id
         assert f"'{element_id}'" in APP_JS, element_id
     assert "'/api/steps/sync'" in APP_JS
+
+
+def test_the_setup_is_shown_one_step_at_a_time():
+    """Полотном инструкцию не читают.
+
+    В ней десять непривычных названий подряд («Найти данные Здоровья»,
+    «Подсчитать статистику»), и человек теряет место после третьего — это
+    и случилось с первой версией. Поэтому карточка, счётчик и две кнопки.
+    """
+    for element_id in ("guide-sheet", "guide-title", "guide-lead", "guide-steps",
+                       "guide-note", "guide-back", "guide-next", "guide-count"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+
+    body = APP_JS.split("function renderGuide(", 1)[1][:1200]
+    assert "Шаг ${guideAt + 1} из ${cards.length}" in body, "человек должен видеть, сколько осталось"
+    # Непроверенное на живом телефоне обязано выглядеть иначе, чем проверенное.
+    assert "card.unverified" in body
+    assert '[data-unverified="1"]' in STYLES
+
+
+def test_the_connection_can_be_checked_from_the_app():
+    """Настройка длинная, и её итог человек должен узнать от нас.
+
+    Иначе остаётся ждать до полуночи и гадать, собралась связь или нет.
+    """
+    assert "'/api/steps/check'" in APP_JS
+    for element_id in ("sync-check", "sync-state", "sync-state-title",
+                       "sync-state-note"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+
+
+def test_the_personal_link_is_hidden_until_asked():
+    """Ссылку фотографируют и пересылают, не думая, что это ключ.
+
+    Копировать её можно и не видя — значит, по умолчанию на экране её быть
+    не должно.
+    """
+    assert 'id="sync-show"' in INDEX
+    body = APP_JS.split("function maskLink(", 1)[1][:300]
+    assert "••••••" in body
+    opened = APP_JS.split("async function openSync(", 1)[1][:2500]
+    assert "maskLink(data.link)" in opened
 
 
 def test_the_phone_hook_lives_outside_the_signed_api():

@@ -239,7 +239,7 @@
         сюда не отдаёт.</p>
       <!-- Вбивать руками каждый день не будет почти никто — и тогда всё, что
            стоит на шагах, не работает. Телефон умеет присылать их сам. -->
-      <button class="btn ghost" id="steps-sync">Чтобы приходили сами</button>
+      <button class="btn ghost" id="steps-sync">Шаги с телефона</button>
       <p class="hint" id="steps-synced" hidden></p>
     </section>
 
@@ -986,21 +986,60 @@
 </div>
 
 <!-- Присылка шагов с телефона: единственный способ не вбивать их руками. -->
+<!-- Шаги с телефона. Первая версия была полотном мелкого текста с
+     неверными названиями действий iOS — по ней не собралось ни у кого.
+     Теперь три действия на виду (скопировать, инструкция, проверить), а
+     сама инструкция — карточками по одному шагу. -->
 <div id="sync-sheet" class="sheet" hidden>
   <div class="sheet-card">
     <div class="sheet-head">
-      <h2>Шаги сами</h2>
+      <h2>Шаги с телефона</h2>
       <button class="icon-btn" id="sync-close" aria-label="Закрыть">✕</button>
     </div>
     <p class="hint" id="sync-why"></p>
+
+    <button class="btn" id="sync-copy">Скопировать личную ссылку</button>
+    <p class="hint" id="sync-warn">Ссылка твоя. Не пересылай её другим и не
+      показывай на скриншотах.</p>
+
+    <button class="btn ghost" id="sync-guide">Пошаговая инструкция</button>
+    <button class="btn ghost" id="sync-check">Проверить подключение</button>
+    <button class="btn ghost" id="sync-now" hidden>Обновить шаги сейчас</button>
+
+    <div class="sync-state" id="sync-state" hidden>
+      <div class="sync-state-title" id="sync-state-title"></div>
+      <p class="hint" id="sync-state-note"></p>
+    </div>
+
+    <!-- Ссылка спрятана нарочно: её показывают на скриншотах, не думая, что
+         это ключ. Копировать можно и не видя. -->
     <div class="eyebrow ruled">Твоя ссылка</div>
     <p class="sync-link" id="sync-link"></p>
-    <button class="btn" id="sync-copy">Скопировать ссылку</button>
-    <div class="eyebrow ruled">Как настроить</div>
-    <pre class="sync-steps" id="sync-iphone"></pre>
+    <button class="btn ghost" id="sync-show">Показать ссылку</button>
+
+    <div class="eyebrow ruled">Android</div>
     <pre class="sync-steps" id="sync-android"></pre>
     <p class="hint" id="sync-safety"></p>
     <button class="btn ghost" id="sync-renew">Сменить ссылку</button>
+  </div>
+</div>
+
+<!-- Инструкция по одному шагу за раз. Полотном её не читают: там десять
+     непривычных названий подряд, и человек теряет место после третьего. -->
+<div id="guide-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="guide-title">Шаг</h2>
+      <button class="icon-btn" id="guide-close" aria-label="Закрыть">✕</button>
+    </div>
+    <p class="hint" id="guide-lead"></p>
+    <ol class="guide-steps" id="guide-steps"></ol>
+    <p class="guide-note" id="guide-note" hidden></p>
+    <div class="guide-nav">
+      <button class="btn ghost" id="guide-back">Назад</button>
+      <button class="btn" id="guide-next">Дальше</button>
+    </div>
+    <div class="guide-count" id="guide-count"></div>
   </div>
 </div>
 

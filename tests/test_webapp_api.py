@@ -1129,6 +1129,48 @@ async def token_of(client, user_id=USER_ID) -> str:
         return user.steps_token
 
 
+def test_the_connection_check_answers_before_and_after_the_phone_writes():
+    """Кнопка «Проверить подключение» — единственный способ узнать итог.
+
+    Настройка длинная; без ответа человеку остаётся ждать до полуночи и
+    гадать, собралась связь или он что-то нажал не так.
+    """
+    async def scenario():
+        async with webapp_client() as (client, _):
+            before = await (await call(client, "GET", "/api/steps/check")).json()
+            assert before["code"] == "never" and before["minutes"] is None
+
+            token = await token_of(client)
+            assert (await hook(client, token, steps=4210)).status == 200
+
+            after = await (await call(client, "GET", "/api/steps/check")).json()
+            assert after["ok"] is True
+            assert after["steps"] == 4210
+            assert after["minutes"] == 0
+            assert "4210" in after["title"]
+    run(scenario)
+
+
+def test_the_check_is_signed_like_everything_else():
+    """Состояние чужой связи — не то, что можно спрашивать без подписи."""
+    async def scenario():
+        async with webapp_client() as (client, _):
+            assert (await call(client, "GET", "/api/steps/check",
+                               signed=False)).status == 401
+    run(scenario)
+
+
+def test_the_app_gets_the_instruction_as_cards_not_as_a_wall_of_text():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            data = await (await call(client, "GET", "/api/steps/sync")).json()
+            assert len(data["cards"]) >= 8
+            first = data["cards"][0]
+            assert first["title"] and first["lead"] and first["steps"]
+            assert data["shortcut"] == "AURA Sync"
+    run(scenario)
+
+
 def test_the_phone_writes_steps_by_the_link_without_any_telegram_signature():
     async def scenario():
         async with webapp_client() as (client, _):

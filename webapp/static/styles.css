@@ -1113,6 +1113,40 @@ select.fact-input { text-align: left; width: 130px; }
   font-size: 13px; color: var(--muted); line-height: 1.5;
 }
 
+/* Ответ проверки связи. Цветом отмечено только «работает» — остальные
+   состояния не поломка человека, а обычный ход дела: ночь, тишина, ноль. */
+.sync-state {
+  margin: 12px 0 4px; padding: 12px 14px; border-radius: 14px;
+  background: var(--surface-2); border: 1px solid var(--stroke);
+}
+.sync-state[data-code="ok"], .sync-state[data-code="early"] {
+  border-color: rgba(45, 212, 191, .45);
+}
+.sync-state-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+.sync-state[data-code="ok"] .sync-state-title,
+.sync-state[data-code="early"] .sync-state-title { color: var(--teal); }
+.sync-state .hint { margin: 0; }
+
+/* Инструкция по одной карточке: полотном её не читают. */
+.guide-steps { margin: 0 0 14px; padding-left: 22px; }
+.guide-steps li { margin-bottom: 10px; font-size: 15px; line-height: 1.4; }
+.guide-note {
+  margin: 0 0 14px; padding: 12px 14px; border-radius: 14px;
+  background: rgba(139, 92, 246, .14); font-size: 13px; line-height: 1.5;
+  color: var(--lilac);
+}
+/* Непроверенное на живом телефоне выглядит иначе, чем проверенное. */
+.guide-note[data-unverified="1"] {
+  background: rgba(245, 181, 68, .14); color: var(--warn);
+}
+.guide-nav { display: flex; gap: 10px; }
+.guide-nav .btn { margin-top: 0; }
+.guide-nav .btn:first-child { flex: 0 0 38%; }
+.guide-count {
+  margin-top: 10px; text-align: center; font-size: 12px; color: var(--muted);
+  letter-spacing: .08em; text-transform: uppercase;
+}
+
 /* --- Команда и рейтинг ---------------------------------------------------- */
 .team-name { margin: 0 0 10px; font-size: 17px; }
 .board-row {

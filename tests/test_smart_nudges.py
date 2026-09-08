@@ -136,7 +136,14 @@ def test_someone_who_is_doing_fine_hears_nothing():
 
 def test_unentered_steps_are_asked_for_not_assumed():
     """Шаги вносит человек. Молчать про них нельзя, а делать вывод «ты мало
-    двигалась» — тем более: этих данных у бота просто нет."""
+    двигалась» — тем более: этих данных у бота просто нет.
+
+    Проверяются все формулировки, а не сегодняшняя. Раньше здесь стояло
+    условие на текст одного варианта — а вариант выбирает день (`day_seed`),
+    и четыре дня из пяти тест проходил, на пятый падал, ничего не поймав.
+    Требование же относится ко всему набору: любая формулировка обязана
+    просить число и ни одна — судить о том, сколько человек прошёл.
+    """
     async def scenario():
         async with db() as session:
             session.add(WaterLog(user_id=1, amount_ml=NORM_WATER, logged_at=NOON_MSK))
@@ -145,8 +152,18 @@ def test_unentered_steps_are_asked_for_not_assumed():
             await session.commit()
             _, push, _ = (await planned(session))[0]
             assert push.code == "steps"
-            assert "Здоровь" in push.text or "внес" in push.text.lower()
     run(scenario)
+
+    from services.context import VARIANTS
+
+    asks = ("впиш", "внес", "внош", "запис", "отмеч", "здоровь", "посмотри")
+    verdicts = ("мало", "недостаточно", "лениш", "почти не ходил",
+                "мало двигал", "плохо")
+    for text in VARIANTS["steps_empty"]:
+        low = text.lower()
+        assert any(word in low for word in asks), text
+        for verdict in verdicts:
+            assert verdict not in low, text
 
 
 def test_without_a_calculated_norm_water_is_not_advised():

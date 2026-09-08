@@ -351,18 +351,44 @@ async function switchToMaintain() {
 // ничего вокруг них. Читать «Здоровье» из Telegram нельзя — но телефон умеет
 // присылать шаги сам, по расписанию. Здесь ссылка и инструкция к ней.
 
+// Шаги с телефона: ссылка, инструкция, проверка связи.
+//
+// Приложение внутри Telegram не может прочитать «Здоровье» — такого доступа
+// у веб-страницы нет ни на одном телефоне. Присылает телефон, и вся работа
+// здесь — сделать эту настройку выполнимой.
+
+let syncData = null;      // ответ сервера: ссылка, карточки, тексты
+let guideAt = 0;          // на какой карточке инструкции человек стоит
+
 async function openSync(renew = false) {
   const sheet = document.getElementById('sync-sheet');
   sheet.hidden = false;
   try {
-    const data = await api('/api/steps/sync',
+    syncData = await api('/api/steps/sync',
       renew ? { method: 'POST', body: JSON.stringify({ renew: true }) } : {});
-    const link = document.getElementById('sync-link');
-    link.textContent = data.link || data.no_site;
+    const data = syncData;
+
     document.getElementById('sync-why').textContent = data.why;
-    document.getElementById('sync-iphone').textContent = data.iphone;
     document.getElementById('sync-android').textContent = data.android;
     document.getElementById('sync-safety').textContent = data.safety;
+
+    // Ссылку показываем только по просьбе: её фотографируют и пересылают,
+    // не думая, что это ключ. Копировать можно и не видя её.
+    const link = document.getElementById('sync-link');
+    const show = document.getElementById('sync-show');
+    const hide = () => {
+      link.textContent = data.link ? maskLink(data.link) : data.no_site;
+      show.textContent = 'Показать ссылку';
+      show.dataset.open = '';
+    };
+    show.hidden = !data.link;
+    show.onclick = () => {
+      if (show.dataset.open) return hide();
+      link.textContent = data.link;
+      show.textContent = 'Скрыть';
+      show.dataset.open = '1';
+    };
+    hide();
 
     const copy = document.getElementById('sync-copy');
     copy.hidden = !data.link;
@@ -371,8 +397,13 @@ async function openSync(renew = false) {
       copy.textContent = 'Скопировано';
       haptic('medium');
     };
-    copy.textContent = 'Скопировать ссылку';
+    copy.textContent = 'Скопировать личную ссылку';
+    document.getElementById('sync-warn').hidden = !data.link;
+    document.getElementById('sync-guide').hidden = !data.link;
+    document.getElementById('sync-check').hidden = !data.link;
     document.getElementById('sync-renew').hidden = !data.link;
+    document.getElementById('sync-state').hidden = true;
+    document.getElementById('sync-now').hidden = true;
 
     const synced = document.getElementById('steps-synced');
     synced.hidden = !data.last;
@@ -382,6 +413,135 @@ async function openSync(renew = false) {
   }
 }
 
+// Ссылка на экране: видно, что она есть и что она наша, но не видно ключа.
+function maskLink(link) {
+  return link.replace(/\/hook\/steps\/[^?]+/, '/hook/steps/••••••');
+}
+
+// «Проверить подключение». Настройка длинная, и её итог человек должен
+// узнать от нас, а не гадать до полуночи: молчание не отличить от поломки.
+async function checkSync() {
+  const box = document.getElementById('sync-state');
+  const title = document.getElementById('sync-state-title');
+  const note = document.getElementById('sync-state-note');
+  title.textContent = 'Смотрю…';
+  note.textContent = '';
+  box.hidden = false;
+  box.dataset.code = '';
+
+  try {
+    const state = await api('/api/steps/check');
+    title.textContent = state.title;
+    note.textContent = state.note;
+    box.dataset.code = state.code;
+    // Кнопку ручного запуска показываем только тому, у кого связь уже была:
+    // остальным она предложила бы запустить несуществующую команду.
+    document.getElementById('sync-now').hidden = state.code === 'never';
+    if (state.ok) haptic('medium');
+  } catch (error) {
+    title.textContent = 'Не получилось проверить';
+    note.textContent = error.message;
+  }
+}
+
+// «Обновить шаги сейчас». Пытаемся запустить команду на телефоне по её
+// имени. Сработает это или нет — зависит от телефона и от того, что
+// разрешает Telegram, поэтому обещать ничего нельзя: через несколько
+// секунд просто смотрим, изменилось ли число, и если нет — предлагаем
+// вписать его руками.
+const SYNC_WAIT_MS = 3500;
+
+async function syncNow() {
+  const name = encodeURIComponent((syncData && syncData.shortcut) || 'AURA Sync');
+  const before = await api('/api/steps/check').catch(() => null);
+
+  try {
+    window.location.href = `shortcuts://run-shortcut?name=${name}`;
+  } catch (error) {
+    // Схему может не пустить сам webview — это не повод падать.
+  }
+
+  const button = document.getElementById('sync-now');
+  button.disabled = true;
+  button.textContent = 'Жду телефон…';
+  await new Promise((resolve) => setTimeout(resolve, SYNC_WAIT_MS));
+  button.disabled = false;
+  button.textContent = 'Обновить шаги сейчас';
+
+  const after = await api('/api/steps/check').catch(() => null);
+  // «Пришло новое» — это либо более свежая отметка, либо другое число.
+  // Отдельно считаем свежим ответ моложе минуты: два нажатия подряд дают
+  // одинаковые «0 минут назад», и объявлять это молчанием телефона нельзя.
+  const moved = after && before && after.minutes !== null
+    && (before.minutes === null || after.minutes < before.minutes
+        || after.steps !== before.steps);
+  const fresh = after && after.minutes !== null && after.minutes <= 1;
+
+  if (moved || fresh) {
+    await checkSync();
+    await refresh();
+    toast('Шаги обновились');
+    return;
+  }
+
+  document.getElementById('sync-state').hidden = false;
+  document.getElementById('sync-state').dataset.code = 'zero';
+  document.getElementById('sync-state-title').textContent = 'Телефон не ответил';
+  document.getElementById('sync-state-note').textContent =
+    'Такое бывает: запуск команд из Telegram работает не на всех телефонах. '
+    + 'Запусти «' + ((syncData && syncData.shortcut) || 'AURA Sync')
+    + '» в «Командах» — или впиши шаги руками.';
+}
+
+/* --- инструкция по одной карточке -------------------------------------- */
+
+function openGuide() {
+  guideAt = 0;
+  document.getElementById('guide-sheet').hidden = false;
+  renderGuide();
+}
+
+function renderGuide() {
+  const cards = (syncData && syncData.cards) || [];
+  const card = cards[guideAt];
+  if (!card) return;
+
+  document.getElementById('guide-title').textContent = card.title;
+  document.getElementById('guide-lead').textContent = card.lead;
+
+  const list = document.getElementById('guide-steps');
+  list.innerHTML = '';
+  for (const step of card.steps) {
+    const item = document.createElement('li');
+    item.textContent = step;
+    list.appendChild(item);
+  }
+
+  const note = document.getElementById('guide-note');
+  note.textContent = card.note || '';
+  note.hidden = !card.note;
+  // Непроверенное на живом телефоне помечаем — обещать то, чего не пробовали,
+  // нельзя, а промолчать значит соврать.
+  note.dataset.unverified = card.unverified ? '1' : '';
+
+  document.getElementById('guide-count').textContent =
+    `Шаг ${guideAt + 1} из ${cards.length}`;
+  document.getElementById('guide-back').disabled = guideAt === 0;
+  document.getElementById('guide-next').textContent =
+    guideAt === cards.length - 1 ? 'Готово' : 'Дальше';
+}
+
+function guideStep(delta) {
+  const cards = (syncData && syncData.cards) || [];
+  if (guideAt + delta >= cards.length) {
+    document.getElementById('guide-sheet').hidden = true;
+    checkSync();
+    return;
+  }
+  guideAt = Math.max(0, Math.min(guideAt + delta, cards.length - 1));
+  haptic();
+  renderGuide();
+}
 
 async function askSteps() {
   const current = document.getElementById('steps-value').textContent;
@@ -4048,6 +4208,14 @@ async function init() {
   document.getElementById('sync-close').onclick = () => {
     document.getElementById('sync-sheet').hidden = true;
   };
+  document.getElementById('sync-guide').onclick = openGuide;
+  document.getElementById('sync-check').onclick = checkSync;
+  document.getElementById('sync-now').onclick = syncNow;
+  document.getElementById('guide-close').onclick = () => {
+    document.getElementById('guide-sheet').hidden = true;
+  };
+  document.getElementById('guide-back').onclick = () => guideStep(-1);
+  document.getElementById('guide-next').onclick = () => guideStep(1);
   document.getElementById('sync-renew').onclick = async () => {
     const sure = await askYes({
       title: 'Сменить ссылку?',
