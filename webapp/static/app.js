@@ -385,8 +385,16 @@ async function openSync(renew = false) {
 
 async function askSteps() {
   const current = document.getElementById('steps-value').textContent;
-  const answer = prompt('Сколько шагов сегодня? Число из «Здоровья» на телефоне.',
-                        current === '—' ? '' : current);
+  // Кнопок с круглыми числами здесь нет намеренно: шаги переписывают с
+  // телефона, и «8000» вместо 7412 — не удобство, а неправда в дневнике.
+  const answer = await askNumber({
+    title: 'Сколько шагов сегодня?',
+    hint: 'Число из «Здоровья» на телефоне.',
+    label: 'Шаги',
+    value: current === '—' ? null : Number(current.replace(/\D/g, '')) || null,
+    min: 0,
+    max: 60000,
+  });
   if (answer === null) return;
   try {
     const steps = await api('/api/steps', {
@@ -868,8 +876,16 @@ function renderPills(supplements) {
 
 /* --- действия --- */
 async function editWeight(meal) {
-  const value = prompt(`Сколько граммов в порции «${meal.name}»?`, meal.weight_g);
-  if (!value) return;
+  const value = await askNumber({
+    title: 'Сколько граммов?',
+    hint: `Порция «${meal.name}»`,
+    choices: GRAM_CHOICES,
+    unit: 'г',
+    value: meal.weight_g,
+    min: 5,
+    max: 3000,
+  });
+  if (value === null) return;
   try {
     await api(`/api/meals/${meal.id}`, {
       method: 'PATCH',
@@ -2094,33 +2110,62 @@ async function refreshWorkouts() {
   renderWorkouts(gym);
 }
 
-// Сколько минут занималась. Привычные варианты кнопками, своё — полем.
+// Числа, которые приложение спрашивает у человека: минуты занятия, шаги
+// за день, граммы в порции. Одно окно на все три — своё, а не системное
+// окно браузера: то выглядит чужим, обрезает длинный вопрос на телефоне,
+// не умеет подсказать привычные варианты и открывает обычную клавиатуру
+// вместо цифровой.
 const MINUTE_CHOICES = [15, 30, 45, 60, 90];
+const GRAM_CHOICES = [50, 100, 150, 200, 300];
 
-function askMinutes() {
+function askNumber({ title, hint = '', label = 'Своё число', choices = [],
+                     unit = '', value = null, min = 1, max = 100000 }) {
   return new Promise((resolve) => {
-    const sheet = document.getElementById('minutes-sheet');
-    const box = document.getElementById('minutes-choices');
-    const own = document.getElementById('minutes-own');
+    const sheet = document.getElementById('number-sheet');
+    const box = document.getElementById('number-choices');
+    const own = document.getElementById('number-own');
+    const note = document.getElementById('number-hint');
+
+    document.getElementById('number-title').textContent = title;
+    document.getElementById('number-label').textContent = label;
+    note.textContent = hint;
+    note.hidden = !hint;
     box.innerHTML = '';
-    own.value = '';
+    box.hidden = choices.length === 0;
+    own.value = value === null ? '' : String(value);
+    own.min = min;
+    own.max = max;
 
-    const close = (value) => { sheet.hidden = true; resolve(value); };
+    const close = (result) => { sheet.hidden = true; resolve(result); };
 
-    for (const value of MINUTE_CHOICES) {
+    for (const item of choices) {
       const button = document.createElement('button');
       button.className = 'state-opt wide';
-      button.textContent = `${value} мин`;
-      button.onclick = () => close(value);
+      button.textContent = unit ? `${item} ${unit}` : String(item);
+      button.onclick = () => close(item);
       box.appendChild(button);
     }
-    document.getElementById('minutes-save').onclick = () => {
-      const value = Number(own.value);
-      close(value >= 1 && value <= 300 ? value : null);
+
+    const save = () => {
+      const entered = Number(own.value);
+      const ok = own.value !== '' && Number.isFinite(entered)
+        && entered >= min && entered <= max;
+      close(ok ? entered : null);
     };
-    document.getElementById('minutes-close').onclick = () => close(null);
+    document.getElementById('number-save').onclick = save;
+    document.getElementById('number-close').onclick = () => close(null);
+    own.onkeydown = (event) => { if (event.key === 'Enter') save(); };
+
     sheet.hidden = false;
+    // Клавиатуру открываем только там, где поле и есть ответ. Когда есть
+    // кнопки с привычными значениями, выехавшая клавиатура закрыла бы их.
+    if (choices.length === 0) own.focus();
   });
+}
+
+function askMinutes() {
+  return askNumber({ title: 'Сколько минут?', choices: MINUTE_CHOICES,
+                     unit: 'мин', min: 1, max: 300 });
 }
 
 async function finishWorkout() {

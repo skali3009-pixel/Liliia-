@@ -828,6 +828,11 @@ button:focus-visible, .tab:focus-visible {
 .sheet-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .sheet-head h2 { font-size: 15px; letter-spacing: .12em; text-transform: uppercase;
                  font-weight: 600; }
+/* Стрелки браузера у числового поля наезжают на само число, а на телефоне
+   ещё и бесполезны: там своя цифровая клавиатура. */
+#number-own::-webkit-outer-spin-button,
+#number-own::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+#number-own { -moz-appearance: textfield; }
 .input.area { resize: none; line-height: 1.4; font-family: inherit; }
 
 .quote {

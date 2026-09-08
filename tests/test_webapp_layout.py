@@ -488,15 +488,29 @@ def test_the_personal_topic_is_hidden_until_it_is_read():
     assert "list.hidden = !!needed" in body
 
 
-def test_minutes_are_asked_in_our_own_window():
+def test_numbers_are_asked_in_our_own_window():
     """Системное окно браузера выглядит чужим и обрезает текст на телефоне.
 
-    Проверяется запись занятия — то, что переделано. Системные окна пока
-    остались при вводе шагов и веса порции; их надо будет заменить так же.
+    Спрашиваем числа три раза: минуты занятия, шаги за день, граммы в
+    порции. Проверка общая — по всему файлу, потому что заменены все три:
+    проверка «в этой функции нет prompt» пропустила бы четвёртое окно,
+    добавленное завтра рядом.
     """
-    body = APP_JS.split("async function finishWorkout(", 1)[1][:900]
-    assert "prompt(" not in body
-    assert "askMinutes()" in body
-    for element_id in ("minutes-sheet", "minutes-choices", "minutes-own"):
+    assert "prompt(" not in APP_JS
+    for name in ("askMinutes()", "askNumber({"):
+        assert name in APP_JS, name
+    for element_id in ("number-sheet", "number-choices", "number-own",
+                       "number-title", "number-hint", "number-label"):
         assert f'id="{element_id}"' in INDEX, element_id
         assert f"'{element_id}'" in APP_JS, element_id
+
+
+def test_the_step_window_offers_no_round_numbers():
+    """Шаги переписывают с телефона.
+
+    Кнопка «8000» вместо пройденных 7412 — это не удобство, а неправда в
+    дневнике: она попадёт и в неделю, и в рейтинг команды.
+    """
+    body = APP_JS.split("async function askSteps(", 1)[1][:700]
+    assert "choices" not in body
+    assert "askNumber({" in body

@@ -619,21 +619,24 @@
 
   </main>
 
-  <!-- Сколько минут занималась. Раньше это спрашивало системное окно
-     браузера: чужое на вид, обрезает текст на телефоне и не умеет
-     подсказать привычные варианты. -->
-<div id="minutes-sheet" class="sheet" hidden>
+  <!-- Одно окно на все числа, которые спрашивает приложение: минуты
+     занятия, шаги за день, граммы в порции. Раньше каждое из них
+     спрашивало системное окно браузера: чужое на вид, обрезает текст на
+     телефоне, не умеет подсказать привычные варианты и открывает обычную
+     клавиатуру вместо цифровой. -->
+<div id="number-sheet" class="sheet" hidden>
   <div class="sheet-card">
     <div class="sheet-head">
-      <h2>Сколько минут?</h2>
-      <button class="icon-btn" id="minutes-close" aria-label="Закрыть">✕</button>
+      <h2 id="number-title">Сколько?</h2>
+      <button class="icon-btn" id="number-close" aria-label="Закрыть">✕</button>
     </div>
-    <div class="state-options" id="minutes-choices"></div>
+    <p class="hint" id="number-hint" hidden></p>
+    <div class="state-options" id="number-choices"></div>
     <label class="prof-row">
-      <span>Своё число</span>
-      <input class="input tight" id="minutes-own" type="number" min="1" max="300">
+      <span id="number-label">Своё число</span>
+      <input class="input tight" id="number-own" type="number" inputmode="numeric">
     </label>
-    <button class="btn" id="minutes-save">Записать</button>
+    <button class="btn" id="number-save">Записать</button>
   </div>
 </div>
 
