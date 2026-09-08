@@ -248,9 +248,27 @@ def test_the_optional_night_run_avoids_midnight():
 
 
 def test_without_a_ready_shortcut_nothing_changes():
-    """Пока готовой команды нет, инструкция та же, что и была."""
+    """Без готовой команды инструкция та же, что и была.
+
+    Это не мёртвая ветка: ссылка живёт в чужом облаке, и если она однажды
+    перестанет открываться, ручная сборка — единственный оставшийся путь.
+    """
     assert step_sync.deck(False) == step_sync.CARDS
     assert len(step_sync.CARDS) == 10
+
+
+def test_the_ready_shortcut_is_switched_on():
+    """Лилия проверила: команда спрашивает личную ссылку, её данных внутри нет."""
+    import config
+
+    assert config.SHORTCUT_URL.startswith("https://www.icloud.com/shortcuts/")
+
+
+def test_only_the_ready_card_offers_the_way_back_to_manual():
+    """Выход к ручной сборке нужен ровно там, где человек мог застрять."""
+    marked = [card for card in step_sync.deck(True) if card.ready]
+    assert marked == [step_sync.READY]
+    assert not any(card.ready for card in step_sync.CARDS)
 
 
 def test_the_ready_shortcut_removes_exactly_the_building():

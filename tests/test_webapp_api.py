@@ -1164,9 +1164,17 @@ def test_the_app_gets_the_instruction_as_cards_not_as_a_wall_of_text():
     async def scenario():
         async with webapp_client() as (client, _):
             data = await (await call(client, "GET", "/api/steps/sync")).json()
-            assert len(data["cards"]) >= 8
-            first = data["cards"][0]
-            assert first["title"] and first["lead"] and first["steps"]
+            # Сколько карточек — зависит от того, включена ли готовая
+            # команда, и держаться за это число незачем: проверяется, что
+            # инструкция приходит карточками и каждая из них пригодна к
+            # показу. Прежняя проверка «не меньше восьми» падала ровно
+            # тогда, когда инструкция становилась короче — то есть лучше.
+            assert len(data["cards"]) > 1
+            for card in data["cards"]:
+                assert card["title"] and card["lead"] and card["steps"], card
+            # Полный набор приходит всегда: он нужен, если готовая команда
+            # не откроется.
+            assert len(data["all_cards"]) == 10
             assert data["shortcut"] == "AURA Sync"
     run(scenario)
 

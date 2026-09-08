@@ -259,6 +259,21 @@ def test_the_ready_shortcut_button_is_hidden_until_the_server_offers_one():
     assert "tg?.openLink" in body
 
 
+def test_a_dead_shortcut_link_still_leaves_a_way_to_set_steps_up():
+    """Ссылка живёт в чужом облаке и однажды может перестать открываться.
+
+    В короткой инструкции карточек сборки нет — значит, без выхода к ней
+    человек остался бы совсем без шагов. Поэтому сервер всегда присылает и
+    полный набор, а на карточке готовой команды есть кнопка к нему.
+    """
+    assert 'id="guide-manual" hidden' in INDEX
+    body = APP_JS.split("function guideManual(", 1)[1][:600]
+    assert "syncData.cards = syncData.all_cards" in body
+
+    shown = APP_JS.split("function renderGuide(", 1)[1][:1400]
+    assert "guide-manual').hidden = !card.ready" in shown
+
+
 def test_the_connection_can_be_checked_from_the_app():
     """Настройка длинная, и её итог человек должен узнать от нас.
 

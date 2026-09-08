@@ -1744,6 +1744,10 @@ async def get_steps_sync(request: web.Request) -> web.Response:
         "why": step_sync.WHY,
         "cards": [card.to_dict()
                   for card in step_sync.deck(bool(config.SHORTCUT_URL))],
+        # Полный набор — на случай, если готовая команда не открылась.
+        # Ссылка в iCloud живёт не вечно, а без пути к ручной сборке
+        # человек остался бы совсем без шагов.
+        "all_cards": [card.to_dict() for card in step_sync.CARDS],
         "shortcut": step_sync.SHORTCUT_NAME,
         "ready": config.SHORTCUT_URL,
         "android": step_sync.ANDROID,

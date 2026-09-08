@@ -77,10 +77,15 @@ class Card:
     # Сборка команды по действиям. Эти карточки заменяет готовая команда,
     # если она у нас есть.
     build: bool = False
+    # Карточка про установку готовой команды. Клиент показывает на ней
+    # выход к ручной сборке: ссылка в iCloud живёт не вечно, а без выхода
+    # человек остался бы вообще без пути.
+    ready: bool = False
 
     def to_dict(self) -> dict:
         return {"title": self.title, "lead": self.lead, "steps": list(self.steps),
-                "note": self.note, "unverified": self.unverified}
+                "note": self.note, "unverified": self.unverified,
+                "ready": self.ready}
 
 
 CARDS: tuple[Card, ...] = (
@@ -233,6 +238,7 @@ READY = Card(
     note="Если ссылку он не спросил, а команда добавилась — открой её и "
          "проверь действие «URL»: там должна стоять твоя ссылка, а не "
          "чужая. Чужая означала бы, что твои шаги уходят другому человеку.",
+    ready=True,
 )
 
 

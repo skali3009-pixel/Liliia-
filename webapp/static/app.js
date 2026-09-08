@@ -533,11 +533,29 @@ function renderGuide() {
   // нельзя, а промолчать значит соврать.
   note.dataset.unverified = card.unverified ? '1' : '';
 
+  // Выход к ручной сборке — только на карточке про готовую команду.
+  document.getElementById('guide-manual').hidden = !card.ready;
+
   document.getElementById('guide-count').textContent =
     `Шаг ${guideAt + 1} из ${cards.length}`;
   document.getElementById('guide-back').disabled = guideAt === 0;
   document.getElementById('guide-next').textContent =
     guideAt === cards.length - 1 ? 'Готово' : 'Дальше';
+}
+
+// Готовая команда не открылась — показываем полную сборку с того места,
+// где человек стоит. Иначе короткая инструкция оставляет его без пути.
+function guideManual() {
+  if (!syncData || !syncData.all_cards) return;
+  const at = syncData.cards[guideAt];
+  syncData.cards = syncData.all_cards;
+  guideAt = Math.max(syncData.all_cards.indexOf(at), 0);
+  if (at && at.ready) {
+    guideAt = syncData.all_cards.findIndex((card) => card.title.includes('Создай'));
+    if (guideAt < 0) guideAt = 0;
+  }
+  haptic();
+  renderGuide();
 }
 
 function guideStep(delta) {
@@ -4223,6 +4241,7 @@ async function init() {
   document.getElementById('guide-close').onclick = () => {
     document.getElementById('guide-sheet').hidden = true;
   };
+  document.getElementById('guide-manual').onclick = guideManual;
   document.getElementById('guide-back').onclick = () => guideStep(-1);
   document.getElementById('guide-next').onclick = () => guideStep(1);
   document.getElementById('sync-renew').onclick = async () => {
