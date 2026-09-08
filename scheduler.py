@@ -10,17 +10,17 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import config
 from db import get_session
+from keyboards.notifications import nudge_keyboard
 from keyboards.supplements import reminder_keyboard
-from services.meal_reminders import users_without_meals_today
 from services.reminders import collect_due_reminders
+from services import notifications
 from services import comeback, guard, metrics
+from services.gamification import remember_suggestion
 from services import step_results
 from services import owner_reports as owner_reports_text
 from services import usage
 from services.selfupdate import run_update
 from services.subscriptions import expire_overdue, expiring_soon, mark_warned
-from services.water_reminders import render as render_water
-from services.water_reminders import users_behind_on_water
 from services.weekly import build_summary, render, users_for_summary
 
 logger = logging.getLogger(__name__)
@@ -65,49 +65,45 @@ def clear_sent_marks() -> None:
     _already_sent.clear()
 
 
-async def send_meal_nudges(bot: Bot) -> None:
-    """Вечером — тем, кто ничего не занёс за день."""
+async def send_smart_nudges(bot: Bot) -> None:
+    """Одно полезное сообщение — или, чаще всего, ни одного.
+
+    Пришло на смену двум напоминаниям по часам: вода в 16:00 и дневник в
+    20:00, одним и тем же текстом каждый день. Такое сообщение перестают
+    читать примерно на третий день, а заодно перестают читать все
+    остальные. Теперь бот раз в час спрашивает себя, есть ли что сказать
+    именно этому человеку именно сейчас, и почти всегда отвечает «нет».
+
+    Все правила — в services/notifications.py. Здесь только отправка.
+    """
     try:
         async with get_session() as session:
-            nudges = await users_without_meals_today(session)
+            planned = await notifications.due(session)
     except Exception:
-        logger.exception("Не удалось собрать напоминания о дневнике")
+        logger.exception("Не удалось собрать умные подсказки")
         return
 
-    for nudge in nudges:
-        key = (nudge.user_id, "meal_nudge")
-        if key in _already_sent:
-            continue
+    for user, push, day in planned:
         try:
             await bot.send_message(
-                nudge.user_id,
-                "🍽 Сегодня ещё нет ни одной записи о еде.\n\n"
-                "Не страшно, если день был не по плану — просто занеси, что "
-                "успела съесть, дневник от этого не сломается.",
+                user.id,
+                f"🐆 Твой ход\n\n{push.text}",
+                reply_markup=nudge_keyboard(target=push.target, cta=push.cta,
+                                            kind=push.kind, amount=push.amount),
             )
-            _already_sent.add(key)
         except Exception:
-            logger.info("Не получилось напомнить про дневник %s", nudge.user_id)
-
-
-async def send_water_nudges(bot: Bot) -> None:
-    """Днём — тем, кто к середине дня выпил меньше половины нормы."""
-    try:
-        async with get_session() as session:
-            nudges = await users_behind_on_water(session)
-    except Exception:
-        logger.exception("Не удалось собрать напоминания о воде")
-        return
-
-    for nudge in nudges:
-        key = (nudge.user_id, "water_nudge")
-        if key in _already_sent:
+            logger.info("Не получилось отправить подсказку %s", user.id)
             continue
+
+        # Записываем только доставленное. Иначе бюджет съедали бы сообщения,
+        # которых человек не видел, — например, у заблокировавших бота.
         try:
-            await bot.send_message(nudge.user_id, render_water(nudge))
-            _already_sent.add(key)
+            async with get_session() as session:
+                await notifications.remember(session, push, day=day)
+                await remember_suggestion(session, user.id, push.code,
+                                          timezone_name=user.timezone)
         except Exception:
-            logger.info("Не получилось напомнить про воду %s", nudge.user_id)
+            logger.exception("Подсказка ушла, но не записалась: %s", user.id)
 
 
 async def send_comebacks(bot: Bot) -> None:
@@ -272,8 +268,11 @@ async def watch_health(bot: Bot) -> None:
 def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(send_due_reminders, "cron", minute="*", args=[bot], id="supplements")
-    scheduler.add_job(send_meal_nudges, "cron", minute="*", args=[bot], id="meal_nudges")
-    scheduler.add_job(send_water_nudges, "cron", minute="*", args=[bot], id="water_nudges")
+    # Умные подсказки: раз в час по местному времени человека. Проверяем
+    # каждую минуту, но работа начинается только в тех поясах, где сейчас
+    # ровно начало часа, — так же, как у всех остальных заданий.
+    scheduler.add_job(send_smart_nudges, "cron", minute="*", args=[bot],
+                      id="smart_nudges")
     scheduler.add_job(send_weekly_summaries, "cron", minute="*", args=[bot], id="weekly")
     # Письмо тем, кто пропал. Тоже по местному времени — раз в минуту.
     scheduler.add_job(send_comebacks, "cron", minute="*", args=[bot], id="comeback")

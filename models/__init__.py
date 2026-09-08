@@ -7,6 +7,8 @@ from models.achievement import Achievement
 from models.base import Base
 from models.body import BodyMeasurement, ProgressPhoto
 from models.checkin import Checkin
+from models.notification import (NotificationLog, NotificationPrefs,
+                                 NotificationSnooze)
 from models.nutrition import Dish, DishComponent, Prep, PrepComponent, Product
 from models.usage import ApiUsage
 from models.day_stat import DayStat
@@ -34,6 +36,9 @@ from models.workout import LevelEnum, LocationEnum, Workout, WorkoutLog, Workout
 
 __all__ = [
     "Base",
+    "NotificationLog",
+    "NotificationPrefs",
+    "NotificationSnooze",
     "StepLog",
     "Team",
     "TeamMember",

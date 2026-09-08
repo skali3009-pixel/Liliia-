@@ -59,6 +59,10 @@ class DayContext:
     quests_left: int = 0
     preps_expiring: tuple[str, ...] = ()
     already_suggested: tuple[str, ...] = ()
+    # Номер дня. По нему выбирается вариант формулировки: в течение дня
+    # текст не меняется (прыгающая карточка сбивает с толку), а назавтра
+    # становится другим.
+    day_seed: int = 0
 
     @property
     def quiet_hours(self) -> bool:
@@ -85,6 +89,112 @@ class DayContext:
         return self.already_suggested.count(code)
 
 
+# Одно и то же предложение, сказанное одними и теми же словами каждый день,
+# перестают читать примерно на третий раз — а вместе с ним перестают читать
+# и все остальные. Поэтому у каждого повода несколько формулировок. Смысл и
+# действие в них одинаковые: разное здесь — слова, а не суть.
+VARIANTS: dict[str, tuple[str, ...]] = {
+    "water_empty": (
+        "Сегодня вода ещё не отмечена. Начнём с одного стакана?",
+        "Воды пока ни глотка. Стакан прямо сейчас?",
+        "День идёт, а вода не отмечена. Начнём с малого?",
+        "Про воду сегодня ещё ничего. Один стакан?",
+        "Воды за сегодня нет. Начать можно со стакана.",
+    ),
+    "water_left": (
+        "До нормы воды осталось {left} мл. Стакан?",
+        "Ещё {left} мл — и вода на сегодня закрыта.",
+        "Воды не хватает {left} мл. Это пара стаканов.",
+        "{left} мл до нормы. Догоним?",
+        "Осталось {left} мл воды. Начнём со стакана?",
+    ),
+    "protein": (
+        "Белка сегодня {have} из {target} г. Подберу что-нибудь с белком?",
+        "По белку пока {have} из {target} г. Собрать вариант?",
+        "Белок сегодня отстаёт: {have} из {target} г. Подобрать еду?",
+        "{have} из {target} г белка. Найти что-нибудь подходящее?",
+        "До белка ещё далеко: {have} из {target} г. Подобрать?",
+    ),
+    "fiber": (
+        "До клетчатки сегодня далеко. Подберу что-нибудь простое?",
+        "Клетчатки сегодня маловато. Найти лёгкий вариант?",
+        "По клетчатке день пока пустой. Подобрать что-нибудь?",
+        "Овощей сегодня почти не было. Подберу вариант?",
+        "Клетчатка отстаёт. Собрать что-то простое?",
+    ),
+    "meal_empty": (
+        "В дневнике сегодня пусто. Запишем хотя бы один приём?",
+        "За сегодня ни одной записи о еде. Начнём с любой?",
+        "Дневник сегодня пока пустой. Одна запись — уже картина.",
+        "Про еду сегодня ещё ничего. Запишем, что было?",
+        "Ни одной записи о еде за день. Подойдёт любое фото.",
+    ),
+    "dinner": (
+        "На сегодня осталось ещё {left} ккал. Подобрать ужин?",
+        "До нормы ещё {left} ккал. Собрать ужин?",
+        "Осталось {left} ккал — как раз на ужин. Подобрать?",
+        "{left} ккал в запасе. Найти что-нибудь на вечер?",
+        "На вечер есть ещё {left} ккал. Подберу ужин?",
+    ),
+    "steps_empty": (
+        "Шаги за сегодня ещё не отмечены. Загляни в «Здоровье» на телефоне "
+        "и впиши число — это пара секунд.",
+        "Шаги сегодня не внесены. Число есть в «Здоровье» на телефоне.",
+        "Про шаги сегодня ещё ничего. Впишешь число из «Здоровья»?",
+        "Шаги пока не отмечены — их вношу не я, а ты. Пара секунд.",
+        "Сегодняшние шаги ещё не записаны. Посмотри в «Здоровье».",
+    ),
+    "steps_left": (
+        "До цели осталось {left} шагов — это примерно {minutes} минут пешком.",
+        "Ещё {left} шагов до цели. Минут {minutes} прогулки.",
+        "{left} шагов — и цель взята. Это {minutes} минут.",
+        "Осталось пройти {left} шагов, примерно {minutes} минут.",
+        "До нормы шагов {left}. Хватит {minutes} минут пешком.",
+    ),
+    "rest": (
+        "День выдался тяжёлый. Может, просто пройтись десять минут?",
+        "Сегодня непросто. Тренировку отложим — может, короткая прогулка?",
+        "Сил немного. Десять минут неспешно — этого достаточно.",
+        "Тяжёлый день. Никаких нагрузок, но пройтись можно.",
+        "Батарейка на нуле. Пусть будет просто прогулка.",
+    ),
+    "movement": (
+        "Есть 10 минут? Можно закрыть задание движения.",
+        "Десять минут найдётся? Задание движения закроется.",
+        "Короткое движение — 10 минут. Подобрать?",
+        "Есть время на десять минут движения?",
+        "Задание движения ещё открыто. Хватит десяти минут.",
+    ),
+    "checkin": (
+        "Как ты сегодня? Одна отметка — и подсказки станут точнее.",
+        "Отметишь самочувствие? Это меняет то, что я предлагаю.",
+        "Как сегодня по силам? Одно нажатие.",
+        "Расскажешь, как день? Подсказки станут ближе к делу.",
+        "Одна отметка о самочувствии — и советы будут точнее.",
+    ),
+    "progress": (
+        "Последний замер был {days} дн. назад. Взвесимся?",
+        "Замера не было {days} дн. Запишем новый?",
+        "Прошло {days} дн. с последнего замера. Пора?",
+        "{days} дн. без замера — график скучает.",
+        "Последняя цифра была {days} дн. назад. Обновим?",
+    ),
+    "prep": (
+        "«{name}» лучше доесть сегодня.",
+        "«{name}» стоит съесть сегодня — потом будет поздно.",
+        "У «{name}» заканчивается срок. Сегодня в самый раз.",
+        "«{name}» ждёт в холодильнике и долго не пролежит.",
+        "Сегодня хороший день доесть «{name}».",
+    ),
+}
+
+
+def say(seed: int, key: str, **values) -> str:
+    """Одна из формулировок. В течение дня — всегда одна и та же."""
+    options = VARIANTS[key]
+    return options[seed % len(options)].format(**values)
+
+
 @dataclass(frozen=True)
 class Action:
     """Одно предложение: что сделать и что нажать."""
@@ -109,9 +219,8 @@ def _candidates(ctx: DayContext) -> list[Action]:
     water_gap = ctx.gap("water_ml")
     if water_gap is not None and water_gap > 0.05 and 7 <= ctx.hour < 22:
         left = round((ctx.water_target or 0) - ctx.water_ml)
-        text = ("Сегодня вода ещё не отмечена. Начнём с одного стакана?"
-                if ctx.water_ml == 0 else
-                f"До нормы воды осталось {left} мл. Стакан?")
+        text = (say(ctx.day_seed, "water_empty") if ctx.water_ml == 0
+                else say(ctx.day_seed, "water_left", left=left))
         out.append(Action("water", "Вода", text, "+250 мл", "water",
                           score=water_gap * 1.1, amount=250))
 
@@ -119,41 +228,35 @@ def _candidates(ctx: DayContext) -> list[Action]:
     if protein_gap is not None and protein_gap > NOTABLE_GAP and ctx.hour >= 11:
         left = round((ctx.protein_target or 0) - ctx.protein_g)
         out.append(Action("protein", "Белок",
-                          f"Белка сегодня {round(ctx.protein_g)} из "
-                          f"{round(ctx.protein_target or 0)} г. Подберу что-нибудь "
-                          f"с белком?",
+                          say(ctx.day_seed, "protein", have=round(ctx.protein_g),
+                              target=round(ctx.protein_target or 0)),
                           "Подобрать еду", "cube", score=protein_gap))
 
     fiber_gap = ctx.gap("fiber_g")
     if fiber_gap is not None and fiber_gap > NOTABLE_GAP and ctx.hour >= 13:
-        out.append(Action("fiber", "Клетчатка",
-                          "До клетчатки сегодня далеко. Подберу что-нибудь простое?",
+        out.append(Action("fiber", "Клетчатка", say(ctx.day_seed, "fiber"),
                           "Подобрать еду", "cube", score=fiber_gap * 0.9))
 
     if ctx.meals_logged == 0 and ctx.hour >= 10:
-        out.append(Action("meal", "Еда",
-                          "В дневнике сегодня пусто. Запишем хотя бы один приём?",
+        out.append(Action("meal", "Еда", say(ctx.day_seed, "meal_empty"),
                           "Записать еду", "meal", score=1.2))
     elif ctx.calories_left and ctx.calories_left > 400 and ctx.hour >= 17:
         out.append(Action("meal", "Ужин",
-                          f"На сегодня осталось ещё {round(ctx.calories_left)} ккал. "
-                          "Подобрать ужин?",
+                          say(ctx.day_seed, "dinner", left=round(ctx.calories_left)),
                           "Подобрать еду", "cube", score=0.7))
 
     # Шаги приложение не считает само — их вносит человек. Поэтому сначала
     # напоминаем внести, и только потом говорим, сколько осталось пройти.
     if ctx.steps_goal and 9 <= ctx.hour < 22:
         if not ctx.steps_logged:
-            out.append(Action("steps", "Шаги",
-                              "Шаги за сегодня ещё не отмечены. Загляни в «Здоровье» "
-                              "на телефоне и впиши число — это пара секунд.",
+            out.append(Action("steps", "Шаги", say(ctx.day_seed, "steps_empty"),
                               "Внести шаги", "steps", score=0.65))
         elif ctx.steps < ctx.steps_goal:
             left = ctx.steps_goal - ctx.steps
             minutes = max(round(left / 100), 1)
             out.append(Action("steps", "Шаги",
-                              f"До цели осталось {left} шагов — это примерно "
-                              f"{minutes} минут пешком.",
+                              say(ctx.day_seed, "steps_left", left=left,
+                                  minutes=minutes),
                               "Пройтись", "steps",
                               score=0.5 + 0.4 * (left / ctx.steps_goal)))
 
@@ -161,29 +264,30 @@ def _candidates(ctx: DayContext) -> list[Action]:
     if ctx.workouts_today == 0 and 9 <= ctx.hour < 21:
         tired = (ctx.energy is not None and ctx.energy <= 2) or ctx.stress == "high"
         if tired:
-            out.append(Action("rest", "Движение",
-                              "День выдался тяжёлый. Может, просто пройтись "
-                              "десять минут?",
+            out.append(Action("rest", "Движение", say(ctx.day_seed, "rest"),
                               "Лёгкое движение", "workout", score=0.75))
         else:
-            out.append(Action("movement", "Движение",
-                              "Есть 10 минут? Можно закрыть задание движения.",
-                              "Подобрать движение", "workout", score=0.6))
+            # Самое слабое из всего, что мы предлагаем: это не вывод из
+            # данных, а вежливый вопрос в пустоту. Шаги человек вносит
+            # руками, и «ты мало двигалась» мы сказать не вправе. На экране
+            # такой совет уместен, а звонить телефоном ради него — нет:
+            # вес ниже порога, за которым бот пишет первым.
+            out.append(Action("movement", "Движение", say(ctx.day_seed, "movement"),
+                              "Подобрать движение", "workout", score=0.55))
 
     if not ctx.checkin_done and 11 <= ctx.hour < 22:
-        out.append(Action("checkin", "Состояние",
-                          "Как ты сегодня? Одна отметка — и подсказки станут точнее.",
+        out.append(Action("checkin", "Состояние", say(ctx.day_seed, "checkin"),
                           "Отметить", "checkin", score=0.5))
 
     if ctx.days_since_measure is not None and ctx.days_since_measure >= 7:
         out.append(Action("progress", "Замер",
-                          f"Последний замер был {ctx.days_since_measure} дн. назад. "
-                          "Взвесимся?",
+                          say(ctx.day_seed, "progress",
+                              days=ctx.days_since_measure),
                           "Записать замер", "progress", score=0.55))
 
     if ctx.preps_expiring:
         out.append(Action("prep", "Заготовки",
-                          f"«{ctx.preps_expiring[0]}» лучше доесть сегодня.",
+                          say(ctx.day_seed, "prep", name=ctx.preps_expiring[0]),
                           "Подобрать еду", "cube", score=0.8))
 
     return out
@@ -239,5 +343,5 @@ def hour_in(timezone_name: str | None, *, now: datetime | None = None) -> int:
     return (now.astimezone(zone) if now else datetime.now(zone)).hour
 
 
-__all__ = ["Action", "DayContext", "MAX_REPEATS", "NOTABLE_GAP", "hour_in",
-           "main_quest_codes", "next_action"]
+__all__ = ["Action", "DayContext", "MAX_REPEATS", "NOTABLE_GAP", "VARIANTS",
+           "hour_in", "main_quest_codes", "next_action", "say"]

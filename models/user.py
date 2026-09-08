@@ -106,9 +106,21 @@ class User(Base):
     steps_token: Mapped[str | None] = mapped_column(String(32), unique=True,
                                                     index=True, nullable=True)
 
-    # Мягкие напоминания бота (дневник, вода, итоги недели). Напоминания о
-    # препаратах человек ставит сам поштучно, они этим флагом не выключаются.
+    # Общий рубильник: бот пишет первым или не пишет вовсе. Подробности —
+    # по каким поводам и как часто — лежат в notification_prefs; здесь
+    # только «да» или «нет» на всё сразу. Напоминания о препаратах человек
+    # ставит сам поштучно, на своё время, и этим флагом не выключаются.
     reminders_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    # Когда человек последний раз сам открыл приложение и сам нажал что-то
+    # в боте. Нужно, чтобы не писать тому, кто прямо сейчас и так здесь:
+    # уведомление вдогонку открытому экрану — самый раздражающий вид спама.
+    last_app_open: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    last_bot_action: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
     onboarding_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     streak_days: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

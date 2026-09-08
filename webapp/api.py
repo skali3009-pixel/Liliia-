@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from datetime import time as dt_time
 
 from aiohttp import web
@@ -13,6 +13,7 @@ from db import get_session
 from models import (Meal, MealSourceEnum, Prep, PrepComponent, Product, ProgressPhoto,
                     ScheduleTypeEnum, Supplement, User, WorkoutTypeEnum)
 from services import events as event_service
+from services import notifications
 from services import preps as prep_service
 from services.checkins import save_checkin, today_state
 from services.preps import expiring_names
@@ -192,6 +193,10 @@ async def get_today(request: web.Request) -> web.Response:
 
     async with get_session() as session:
         user = await session.get(User, user_id)
+        # Отметка «человек сам открыл приложение». По ней движок уведомлений
+        # молчит: подсказка вдогонку открытому экрану только раздражает.
+        if user is not None:
+            user.last_app_open = datetime.now(timezone.utc)
         totals = await get_today_totals(session, user_id, timezone_name=tz)
         meals = await list_today_meals(session, user_id, timezone_name=tz)
         water = await today_total_ml(session, user_id, timezone_name=tz)
@@ -941,8 +946,37 @@ from services.steps import GOAL_CHOICES as _STEP_CHOICES
 from services.steps import goal_for as _steps_goal
 
 
-def _profile_json(user: User) -> dict:
+NOTIFY_LABELS = (
+    ("turn", "Твой ход"),
+    ("meal", "Еда"),
+    ("water", "Вода"),
+    ("movement", "Движение"),
+    ("world", "Мир и события"),
+    ("evening", "Итоги дня"),
+    ("achievement", "Достижения"),
+)
+
+PACE_LABELS = (
+    ("minimal", "Минимум"),
+    ("balanced", "Сбалансированно"),
+    ("active", "Активно"),
+)
+
+
+def _notify_json(prefs) -> dict:
     return {
+        "kinds": [{"code": code, "label": label, "on": prefs.allows(code)}
+                  for code, label in NOTIFY_LABELS],
+        "pace": prefs.pace,
+        "paces": [{"code": code, "label": label} for code, label in PACE_LABELS],
+        "quiet_from": prefs.quiet_from,
+        "quiet_to": prefs.quiet_to,
+    }
+
+
+def _profile_json(user: User, prefs=None) -> dict:
+    return {
+        "notifications": _notify_json(prefs) if prefs is not None else None,
         "profile": {
             "name": (user.full_name or "").split(" ")[0],
             "gender": user.gender.value if user.gender else None,
@@ -988,7 +1022,8 @@ def _profile_json(user: User) -> dict:
 async def get_profile(request: web.Request) -> web.Response:
     async with get_session() as session:
         user = await session.get(User, request["user_id"])
-    return web.json_response(_profile_json(user))
+        prefs = await notifications.prefs_for(session, request["user_id"])
+    return web.json_response(_profile_json(user, prefs))
 
 
 async def patch_profile(request: web.Request) -> web.Response:
@@ -997,14 +1032,22 @@ async def patch_profile(request: web.Request) -> web.Response:
     if not isinstance(changes, dict) or not changes:
         return web.json_response({"error": "Нечего менять"}, status=400)
 
+    # Настройки уведомлений приходят тем же запросом, но живут в своей
+    # таблице: смешивать их с анкетой значило бы пересчитывать нормы при
+    # каждом снятии галочки.
+    notify = changes.pop("notifications", None)
+
     async with get_session() as session:
         user = await session.get(User, request["user_id"])
         try:
-            recalculated = await apply_profile(session, user, changes)
+            recalculated = await apply_profile(session, user, changes) if changes else False
         except ProfileError as error:
             return web.json_response({"error": str(error)}, status=400)
+        if isinstance(notify, dict):
+            await notifications.save_prefs(session, request["user_id"], **notify)
+        prefs = await notifications.prefs_for(session, request["user_id"])
 
-    data = _profile_json(user)
+    data = _profile_json(user, prefs)
     # Приложение показывает новую норму сразу: смена цели без видимой цифры
     # выглядит так, будто ничего не произошло.
     data["recalculated"] = recalculated

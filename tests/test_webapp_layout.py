@@ -402,3 +402,33 @@ def test_one_header_shows_one_cheetah():
     for rule in re.findall(r"background-image:[^;]*;", STYLES):
         pictures = re.findall(r"url\(", rule)
         assert len(pictures) <= 1, f"две картинки в одной шапке: {' '.join(rule.split())}"
+
+
+def test_notification_settings_are_wired_in_the_app():
+    """Семь галочек, частота и тихие часы — и всё это связано с кодом.
+
+    Настройки, которые видно, но которые ничего не меняют, хуже отсутствия
+    настроек: человек считает, что выключил, и продолжает получать.
+    """
+    for element_id in ("notif-toggle", "notif-box", "notif-kinds", "notif-pace",
+                       "notif-from", "notif-to"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+    # Настройки уходят на сервер тем же запросом, что и профиль.
+    assert "notifications:" in APP_JS
+
+
+def test_the_categories_the_app_shows_are_the_ones_the_engine_knows():
+    """Галочка «Вода» обязана выключать именно воду.
+
+    Список для экрана и список, по которому движок решает, — разные места.
+    Разойдутся — человек снимет галочку, а сообщения останутся.
+    """
+    import re as _re
+    from models.notification import KINDS
+
+    api = (Path(__file__).resolve().parents[1] / "webapp" / "api.py").read_text(
+        encoding="utf-8")
+    block = api.split("NOTIFY_LABELS = (", 1)[1].split(")\n", 1)[0]
+    shown = set(_re.findall(r'\("(\w+)",', block))
+    assert shown == set(KINDS)

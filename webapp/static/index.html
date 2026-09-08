@@ -854,8 +854,31 @@
       <span id="prof-reminders-label">Мягкие напоминания</span>
       <button class="chip" id="prof-reminders">включены</button>
     </div>
-    <p class="hint">Приходят в чат: про еду, про воду днём и итоги недели
-      в воскресенье.</p>
+    <p class="hint">Бот пишет сам, только когда есть что предложить: обычно одно
+      сообщение в день, часто ни одного. Ночью молчит.</p>
+
+    <!-- Настройки разворачиваются по кнопке: семь галочек, показанные всем
+         сразу, превращают профиль в анкету. -->
+    <button class="btn ghost" id="notif-toggle">Настроить подробнее</button>
+    <div id="notif-box" hidden>
+      <div class="eyebrow ruled">О чём писать</div>
+      <div class="state-options" id="notif-kinds"></div>
+
+      <div class="eyebrow ruled">Как часто</div>
+      <div class="state-options" id="notif-pace"></div>
+
+      <div class="eyebrow ruled">Тихие часы</div>
+      <label class="prof-row">
+        <span>Не писать с</span>
+        <select class="input tight" id="notif-from"></select>
+      </label>
+      <label class="prof-row">
+        <span>до</span>
+        <select class="input tight" id="notif-to"></select>
+      </label>
+      <p class="hint">Ночью бот молчит. Напоминания о добавках это не трогает —
+        их время ты назначаешь сама.</p>
+    </div>
 
     <div class="eyebrow ruled">Мои данные</div>
     <button class="btn" id="prof-export">📦 Выгрузить всё одним файлом</button>

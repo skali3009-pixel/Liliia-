@@ -71,6 +71,17 @@ def matching_zones(moment: datetime, target: time, zones: Iterable[str | None]) 
     return ready
 
 
+def zones_at_minute(moment: datetime, minute: int,
+                    zones: Iterable[str | None]) -> list[str]:
+    """Часовые пояса, в которых сейчас нужная минута — любого часа.
+
+    То же, что matching_zones, но без привязки к часу: нужно тому, кто сам
+    решает, в какой час писать, и поэтому должен просыпаться каждый час, а
+    не в один заранее назначенный.
+    """
+    return [zone for zone in zones if to_local(moment, zone).minute == minute]
+
+
 def day_bounds(
     timezone_name: str | None, *, day: date | None = None, now: datetime | None = None
 ) -> tuple[datetime, datetime]:

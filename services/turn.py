@@ -29,7 +29,7 @@ from services.preps import expiring_names
 from services.water import today_total_ml
 from utils.cheetah import Mood
 from utils.cheetah import mood as cheetah_mood
-from utils.timeframe import DEFAULT_TIMEZONE
+from utils.timeframe import DEFAULT_TIMEZONE, today_in
 from utils.plural import plural
 
 
@@ -38,6 +38,9 @@ def day_context(user: User, tz: str, *, totals, water, meals, state, game,
     """Собрать срез дня. Ничего не требует: чего нет, того нет."""
     return context.DayContext(
         hour=context.hour_in(tz),
+        # Номер дня: по нему выбирается формулировка. В течение дня она не
+        # меняется, назавтра становится другой.
+        day_seed=today_in(tz).toordinal(),
         calories=totals.calories, calories_target=user.daily_calories or None,
         protein_g=totals.protein_g, protein_target=user.daily_protein_g or None,
         fiber_g=totals.fiber_g, fiber_target=user.daily_fiber_g or None,
@@ -59,11 +62,38 @@ def day_context(user: User, tz: str, *, totals, water, meals, state, game,
 
 async def next_action(session: AsyncSession, user: User, tz: str, **parts):
     """Одно действие для «Твоего хода» — и отметка, что его показали."""
-    shown = await suggestions_today(session, user.id, timezone_name=tz)
-    action = context.next_action(day_context(user, tz, suggested=shown, **parts))
+    action = await peek_action(session, user, tz, **parts)
     if action is not None:
         await remember_suggestion(session, user.id, action.code, timezone_name=tz)
     return action
+
+
+async def peek_action(session: AsyncSession, user: User, tz: str, **parts):
+    """То же самое, но без отметки о показе.
+
+    Нужно тому, кто ещё не решил, показывать ли: движку уведомлений. Он
+    спрашивает совет, а потом почти всегда решает промолчать — и если бы
+    сам вопрос считался показом, совет успевал бы «истратиться» до того,
+    как человек его увидит, и на экране появлялся бы уже другой.
+    """
+    shown = await suggestions_today(session, user.id, timezone_name=tz)
+    return context.next_action(day_context(user, tz, suggested=shown, **parts))
+
+
+async def slice_for(session: AsyncSession, user: User, tz: str) -> dict:
+    """Срез дня одним куском: то, из чего собирается и подсказка, и гепард."""
+    totals = await get_today_totals(session, user.id, timezone_name=tz)
+    meals = await list_today_meals(session, user.id, timezone_name=tz)
+    water = await today_total_ml(session, user.id, timezone_name=tz)
+    state = await today_state(session, user.id, timezone_name=tz)
+    game = await sync_today(
+        session, user, meals_count=len(meals), calories=totals.calories,
+        fiber_g=totals.fiber_g, water_ml=water, timezone_name=tz,
+        stress_marked=state.stress is not None,
+    )
+    return dict(totals=totals, water=water, meals=len(meals), state=state, game=game,
+                days_since_measure=game.get("days_since_measure"),
+                preps=await expiring_names(session, user.id, timezone_name=tz))
 
 
 async def cheetah_for(session: AsyncSession, user: User, tz: str, *,
@@ -108,19 +138,9 @@ async def build(session: AsyncSession, user: User, *,
     """Собрать «твой ход» для чата: те же данные, что видит приложение."""
     tz = timezone_name or user.timezone or DEFAULT_TIMEZONE
 
-    totals = await get_today_totals(session, user.id, timezone_name=tz)
-    meals = await list_today_meals(session, user.id, timezone_name=tz)
-    water = await today_total_ml(session, user.id, timezone_name=tz)
-    state = await today_state(session, user.id, timezone_name=tz)
-    game = await sync_today(
-        session, user, meals_count=len(meals), calories=totals.calories,
-        fiber_g=totals.fiber_g, water_ml=water, timezone_name=tz,
-        stress_marked=state.stress is not None,
-    )
-
-    parts = dict(totals=totals, water=water, meals=len(meals), state=state, game=game,
-                 days_since_measure=game.get("days_since_measure"),
-                 preps=await expiring_names(session, user.id, timezone_name=tz))
+    parts = await slice_for(session, user, tz)
+    totals, water, game, state = (parts["totals"], parts["water"],
+                                  parts["game"], parts["state"])
     action = await next_action(session, user, tz, **parts)
 
     return Turn(
@@ -223,4 +243,5 @@ def render(turn: Turn) -> str:
 
 
 __all__ = ["CHAT_BUTTON", "Turn", "build", "chat_hint", "cheetah_for",
-           "day_context", "game_lines", "next_action", "render"]
+           "day_context", "game_lines", "next_action", "peek_action",
+           "render", "slice_for"]

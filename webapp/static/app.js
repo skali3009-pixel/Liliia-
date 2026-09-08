@@ -2782,6 +2782,50 @@ function renderProfile(data) {
   const reminders = document.getElementById('prof-reminders');
   reminders.textContent = p.reminders ? 'включены' : 'выключены';
   reminders.classList.toggle('on', p.reminders);
+
+  renderNotify(data.notifications, p.reminders);
+}
+
+/** Настройки уведомлений: галочки, частота и тихие часы. */
+function renderNotify(notify, remindersOn) {
+  const toggle = document.getElementById('notif-toggle');
+  const box = document.getElementById('notif-box');
+  // Выключенные напоминания нечего настраивать: подробности под общим
+  // рубильником только сбивают с толку.
+  toggle.hidden = !notify || !remindersOn;
+  if (toggle.hidden) { box.hidden = true; return; }
+  if (!notify) return;
+
+  const kinds = document.getElementById('notif-kinds');
+  kinds.innerHTML = '';
+  for (const kind of notify.kinds) {
+    const button = document.createElement('button');
+    button.className = `state-opt wide${kind.on ? ' on' : ''}`;
+    button.textContent = kind.label;
+    button.onclick = () => saveProfile({ notifications: { [kind.code]: !kind.on } });
+    kinds.appendChild(button);
+  }
+
+  optionButtons('notif-pace', notify.paces, notify.pace,
+    (code) => saveProfile({ notifications: { pace: code } }));
+
+  hourSelect('notif-from', notify.quiet_from,
+    (hour) => saveProfile({ notifications: { quiet_from: hour } }));
+  hourSelect('notif-to', notify.quiet_to,
+    (hour) => saveProfile({ notifications: { quiet_to: hour } }));
+}
+
+function hourSelect(id, current, onPick) {
+  const box = document.getElementById(id);
+  box.innerHTML = '';
+  for (let hour = 0; hour < 24; hour += 1) {
+    const option = document.createElement('option');
+    option.value = String(hour);
+    option.textContent = `${String(hour).padStart(2, '0')}:00`;
+    if (hour === current) option.selected = true;
+    box.appendChild(option);
+  }
+  box.onchange = () => onPick(Number(box.value));
 }
 
 async function saveProfile(changes) {
@@ -3640,6 +3684,21 @@ async function dropFriend(friend) {
   }
 }
 
+// Приложение, открытое из подсказки бота, должно открыться там, где
+// действие делается, а не на «Сегодня». Иначе человек, нажавший «подобрать
+// еду», попадает на главный экран и ищет нужную вкладку сам.
+const SCREENS = ['today', 'world', 'gym', 'cube', 'progress'];
+
+function openRequestedScreen() {
+  let asked = null;
+  try {
+    asked = new URLSearchParams(window.location.search).get('screen');
+  } catch (error) {
+    return;                       // адрес без параметров — обычный запуск
+  }
+  if (asked && SCREENS.includes(asked) && asked !== 'today') switchScreen(asked);
+}
+
 function switchScreen(name) {
   for (const tab of document.querySelectorAll('.tab')) {
     tab.classList.toggle('active', tab.dataset.screen === name);
@@ -3724,6 +3783,12 @@ async function init() {
   };
   wireTeam();
   document.getElementById('profile-close').onclick = closeProfile;
+  document.getElementById('notif-toggle').onclick = () => {
+    const box = document.getElementById('notif-box');
+    box.hidden = !box.hidden;
+    document.getElementById('notif-toggle').textContent =
+      box.hidden ? 'Настроить подробнее' : 'Свернуть';
+  };
   document.getElementById('prof-export').onclick = requestExport;
   document.getElementById('prof-reminders').onclick = () => {
     if (profileData) saveProfile({ reminders: !profileData.profile.reminders });
@@ -3821,6 +3886,7 @@ async function init() {
     // Каскад играет после того, как экран стал видимым: до этого браузер
     // анимировал бы то, чего на экране нет.
     playEntrance('today');
+    openRequestedScreen();
   } catch (e) {
     if (e.message.includes('Подписка')) return;   // экран оплаты уже показан
     document.getElementById('loading').textContent =

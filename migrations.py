@@ -55,6 +55,8 @@ COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
     ("nutrition_dishes", "estimated", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("nutrition_dishes", "no_cook", "BOOLEAN NOT NULL DEFAULT FALSE"),
     ("users", "timezone", "VARCHAR(64) NOT NULL DEFAULT 'Europe/Moscow'"),
+    ("users", "last_app_open", "TIMESTAMP WITH TIME ZONE"),
+    ("users", "last_bot_action", "TIMESTAMP WITH TIME ZONE"),
     ("progress_photos", "file_name", "VARCHAR(255)"),
     ("workouts", "program_code", "VARCHAR(50)"),
     ("workouts", "position", "INTEGER NOT NULL DEFAULT 0"),

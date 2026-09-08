@@ -15,10 +15,11 @@ from db import init_models
 from services.artwork import ensure_artwork
 from services import commands as bot_commands
 from services import identity
-from handlers import (access, diary, errors, feedback, food, legal, onboarding,
-                      profile, progress, steps, suggestions, supplements, turn,
-                      water, workouts)
+from handlers import (access, diary, errors, feedback, food, legal,
+                      notifications, onboarding, profile, progress, steps,
+                      suggestions, supplements, turn, water, workouts)
 from middlewares.access import AccessMiddleware
+from middlewares.presence import PresenceMiddleware
 from scheduler import start_scheduler
 from webapp.server import start_webapp
 
@@ -33,6 +34,11 @@ dp = Dispatcher()
 dp.message.outer_middleware(AccessMiddleware())
 dp.callback_query.outer_middleware(AccessMiddleware())
 
+# Отметка «человек сейчас здесь»: по ней движок уведомлений не пишет
+# первым тому, кто и так разговаривает с ботом.
+dp.message.outer_middleware(PresenceMiddleware())
+dp.callback_query.outer_middleware(PresenceMiddleware())
+
 dp.include_router(legal.router)
 dp.include_router(access.router)
 dp.include_router(onboarding.router)
@@ -45,6 +51,8 @@ dp.include_router(feedback.router)
 # «Мой ход» тоже раньше еды: нажатый посреди добавления блюда, он иначе
 # уедет в распознавание как название.
 dp.include_router(turn.router)
+# Кнопки под подсказками бота: вода в одно нажатие, «позже», «не сегодня».
+dp.include_router(notifications.router)
 # Шаги тоже раньше еды: число «8500», присланное в ответ, иначе уедет в
 # распознавание как название блюда.
 dp.include_router(steps.router)
