@@ -1742,8 +1742,10 @@ async def get_steps_sync(request: web.Request) -> web.Response:
     return web.json_response({
         "link": step_sync.link_for(token),
         "why": step_sync.WHY,
-        "cards": [card.to_dict() for card in step_sync.CARDS],
+        "cards": [card.to_dict()
+                  for card in step_sync.deck(bool(config.SHORTCUT_URL))],
         "shortcut": step_sync.SHORTCUT_NAME,
+        "ready": config.SHORTCUT_URL,
         "android": step_sync.ANDROID,
         "safety": step_sync.SAFETY,
         "no_site": step_sync.NO_SITE,

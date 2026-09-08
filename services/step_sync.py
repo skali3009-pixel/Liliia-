@@ -74,6 +74,9 @@ class Card:
     note: str = ""
     # Отмечено, если этого мы своими руками на айфоне не проверяли.
     unverified: bool = False
+    # Сборка команды по действиям. Эти карточки заменяет готовая команда,
+    # если она у нас есть.
+    build: bool = False
 
     def to_dict(self) -> dict:
         return {"title": self.title, "lead": self.lead, "steps": list(self.steps),
@@ -119,6 +122,7 @@ CARDS: tuple[Card, ...] = (
         ),
         note="В «Автоматизацию» пока не ходи: сначала соберём и проверим "
              "саму команду.",
+        build=True,
     ),
     Card(
         title="Найди шаги за сегодня",
@@ -130,6 +134,7 @@ CARDS: tuple[Card, ...] = (
         ),
         note="Проверь, что стоит именно «сегодня», а не «последние 7 дней»: "
              "нужен только текущий день.",
+        build=True,
     ),
     Card(
         title="Посчитай именно сумму",
@@ -142,6 +147,7 @@ CARDS: tuple[Card, ...] = (
         ),
         note="Правильно — «Сумма». «Среднее» пришлёт что-то вроде сорока "
              "шагов: это средняя запись, а не день.",
+        build=True,
     ),
     Card(
         title="Добавь личную ссылку",
@@ -154,6 +160,7 @@ CARDS: tuple[Card, ...] = (
         ),
         note="Между знаком «=» и «Суммой» не должно быть ни пробела, ни "
              "переноса строки — иначе число не дойдёт.",
+        build=True,
     ),
     Card(
         title="Отправь данные в AURA",
@@ -164,6 +171,7 @@ CARDS: tuple[Card, ...] = (
             "Метод → GET",
         ),
         note="Поле «Заголовки» оставь пустым, остальные настройки не трогай.",
+        build=True,
     ),
     Card(
         title="Проверь и разреши всегда",
@@ -211,6 +219,41 @@ CARDS: tuple[Card, ...] = (
              "сумма будет пустой.",
     ),
 )
+
+# Готовая команда: та же работа, но установленная по ссылке. Заменяет
+# карточки сборки — с третьей по седьмую.
+READY = Card(
+    title=f"Установи готовую {SHORTCUT_NAME}",
+    lead="Вся команда уже собрана. Тебе останется вставить свою ссылку.",
+    steps=(
+        "Нажми «Готовая команда для айфона»",
+        "В «Командах» нажми «Добавить быструю команду»",
+        "Телефон спросит личную ссылку — вставь скопированную",
+    ),
+    note="Если ссылку он не спросил, а команда добавилась — открой её и "
+         "проверь действие «URL»: там должна стоять твоя ссылка, а не "
+         "чужая. Чужая означала бы, что твои шаги уходят другому человеку.",
+)
+
+
+def deck(ready: bool) -> tuple[Card, ...]:
+    """Какие карточки показывать.
+
+    С готовой командой человек не собирает её по действиям — значит, и
+    читать про них ему незачем: пять карточек из десяти просто исчезают, а
+    счётчик «Шаг N из…» пересчитывается сам.
+    """
+    if not ready:
+        return CARDS
+    out = []
+    for card in CARDS:
+        if card.build:
+            if READY not in out:
+                out.append(READY)
+            continue
+        out.append(card)
+    return tuple(out)
+
 
 ANDROID = (
     "🤖 Android — сложнее и зависит от производителя\n"
@@ -365,6 +408,7 @@ def instructions(link: str) -> str:
     ])
 
 
-__all__ = ["ANDROID", "CARDS", "EARLY_HOUR", "IPHONE", "NO_SITE", "SAFETY",
-           "SHORTCUT_NAME", "SILENT_HOURS", "WHY", "Card", "Check", "ago",
-           "as_text", "check", "instructions", "link_for", "plural"]
+__all__ = ["ANDROID", "CARDS", "EARLY_HOUR", "IPHONE", "NO_SITE", "READY",
+           "SAFETY", "SHORTCUT_NAME", "SILENT_HOURS", "WHY", "Card", "Check",
+           "ago", "as_text", "check", "deck", "instructions", "link_for",
+           "plural"]

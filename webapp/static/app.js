@@ -399,6 +399,15 @@ async function openSync(renew = false) {
     };
     copy.textContent = 'Скопировать личную ссылку';
     document.getElementById('sync-warn').hidden = !data.link;
+    // Готовая команда: ссылка приходит с сервера и обычно пуста — тогда
+    // человек собирает команду руками, как и раньше.
+    const ready = document.getElementById('sync-ready');
+    ready.hidden = !(data.link && data.ready);
+    ready.onclick = () => {
+      haptic('medium');
+      if (tg?.openLink) tg.openLink(data.ready);
+      else window.open(data.ready, '_blank');
+    };
     document.getElementById('sync-guide').hidden = !data.link;
     document.getElementById('sync-check').hidden = !data.link;
     document.getElementById('sync-renew').hidden = !data.link;

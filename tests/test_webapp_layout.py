@@ -251,6 +251,14 @@ def test_the_setup_is_shown_one_step_at_a_time():
     assert '[data-unverified="1"]' in STYLES
 
 
+def test_the_ready_shortcut_button_is_hidden_until_the_server_offers_one():
+    """Кнопка в никуда хуже, чем её отсутствие."""
+    assert 'id="sync-ready" hidden' in INDEX
+    body = APP_JS.split("async function openSync(", 1)[1][:3000]
+    assert "ready.hidden = !(data.link && data.ready)" in body
+    assert "tg?.openLink" in body
+
+
 def test_the_connection_can_be_checked_from_the_app():
     """Настройка длинная, и её итог человек должен узнать от нас.
 

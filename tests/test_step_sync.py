@@ -244,6 +244,51 @@ def test_the_optional_night_run_avoids_midnight():
     assert "Не ставь 00:00" in notes
 
 
+# --- Готовая команда по ссылке ---------------------------------------------
+
+
+def test_without_a_ready_shortcut_nothing_changes():
+    """Пока готовой команды нет, инструкция та же, что и была."""
+    assert step_sync.deck(False) == step_sync.CARDS
+    assert len(step_sync.CARDS) == 10
+
+
+def test_the_ready_shortcut_removes_exactly_the_building():
+    """Собранную команду не собирают заново.
+
+    Значит, исчезают ровно карточки сборки — и ни одна другая: ни
+    разрешения, ни автоматизация от готовой команды не появляются сами.
+    """
+    short = step_sync.deck(True)
+    assert step_sync.READY in short
+    assert len(short) == 6
+
+    gone = {card.title for card in step_sync.CARDS} - {c.title for c in short}
+    assert gone == {card.title for card in step_sync.CARDS if card.build}
+
+    tail = " ".join(" ".join(card.steps) + " " + card.note for card in short)
+    assert "Разрешать всегда" in tail, "разрешения нужны и готовой команде"
+    assert "Запустить быструю команду" in tail, "автоматизацию всё равно делать"
+
+
+def test_the_ready_shortcut_warns_about_someone_elses_link():
+    """Единственная опасность общей команды.
+
+    Если внутри неё осталась чужая личная ссылка, шаги всех, кто её
+    поставил, уходят одному человеку — молча и без единого признака
+    поломки. Проверить это может только сам человек, открыв действие «URL».
+    """
+    note = step_sync.READY.note.lower()
+    assert "чужая" in note or "чужой" in note
+    assert "url" in note
+
+
+def test_the_ready_card_asks_to_paste_the_personal_link():
+    """Общая команда не может знать твою ссылку — её вставляют при установке."""
+    steps = " ".join(step_sync.READY.steps).lower()
+    assert "вставь" in steps and "ссылк" in steps
+
+
 # --- Проверка подключения --------------------------------------------------
 
 

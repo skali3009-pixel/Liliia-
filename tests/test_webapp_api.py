@@ -1171,6 +1171,29 @@ def test_the_app_gets_the_instruction_as_cards_not_as_a_wall_of_text():
     run(scenario)
 
 
+def test_the_ready_shortcut_appears_only_when_it_is_configured(monkeypatch):
+    """Кнопки «готовая команда» нет, пока адрес не задан на сервере.
+
+    Пустая кнопка хуже отсутствующей: человек нажимает и попадает в
+    никуда — а инструкция при этом обещает, что собирать ничего не надо.
+    """
+    async def scenario():
+        async with webapp_client() as (client, _):
+            import config
+
+            monkeypatch.setattr(config, "SHORTCUT_URL", "")
+            plain = await (await call(client, "GET", "/api/steps/sync")).json()
+            assert plain["ready"] == ""
+            assert len(plain["cards"]) == 10
+
+            monkeypatch.setattr(config, "SHORTCUT_URL",
+                                "https://www.icloud.com/shortcuts/XXXX")
+            short = await (await call(client, "GET", "/api/steps/sync")).json()
+            assert short["ready"].endswith("XXXX")
+            assert len(short["cards"]) == 6
+    run(scenario)
+
+
 def test_the_phone_writes_steps_by_the_link_without_any_telegram_signature():
     async def scenario():
         async with webapp_client() as (client, _):
