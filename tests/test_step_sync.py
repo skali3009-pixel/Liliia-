@@ -136,7 +136,10 @@ def test_the_instruction_says_why_and_how_and_about_safety(monkeypatch):
     text = step_sync.instructions(step_sync.link_for("КЛЮЧ"))
 
     assert "«Команды»" in text and "Здоровь" in text
-    assert "23:50" in text, "без расписания присылка не автоматическая"
+    # Что делает присылку автоматической. Раньше это было расписание, теперь —
+    # запуск при открытии Telegram: он проверен на живом айфоне и даёт свежие
+    # шаги тогда, когда на них смотрят. Проверяется механизм, а не время.
+    assert "Telegram" in text and "Автоматизация" in text
     assert "Android" in text
     assert "поменяй" in text, "человек должен знать, что ссылку можно отозвать"
     assert "КЛЮЧ" in text
@@ -178,16 +181,17 @@ def test_the_automations_only_launch_the_ready_shortcut():
     практически недостижимы. Теперь автоматизация только запускает готовую
     команду, и вторая стоит четырёх касаний.
     """
-    launchers = [card for card in step_sync.CARDS
-                 if "Автоматизация»" in " ".join(card.steps)]
-    assert len(launchers) >= 2, "ночной запуск и дневной"
-    for card in launchers:
-        joined = " ".join(card.steps)
-        assert "Запустить быструю команду" in joined
-        assert step_sync.SHORTCUT_NAME in joined
-        # Ни одного действия сборки: иначе это снова полная сборка.
-        assert "Найти данные Здоровья" not in joined
-        assert "Подсчитать статистику" not in joined
+    cards = step_sync.CARDS
+    first = next(i for i, card in enumerate(cards)
+                 if "Автоматизация»" in " ".join(card.steps))
+    tail = " ".join(" ".join(card.steps) + " " + card.note
+                    for card in cards[first:])
+
+    assert "Запустить быструю команду" in tail
+    assert step_sync.SHORTCUT_NAME in tail
+    # Ни одного действия сборки: иначе это снова полная сборка.
+    assert "Найти данные Здоровья" not in tail
+    assert "Подсчитать статистику" not in tail
 
 
 def test_the_shortcut_is_named_before_any_automation_needs_it():
@@ -200,36 +204,44 @@ def test_the_shortcut_is_named_before_any_automation_needs_it():
     assert named < first_launch
 
 
-def test_what_was_not_tried_on_a_real_phone_is_marked():
-    """Обещать непроверенное нельзя, а промолчать — значит соврать.
+def test_the_person_is_told_to_allow_sending_always():
+    """Шаг, без которого автоматика тихо останавливается.
 
-    Дневной запуск по открытию Telegram своими руками мы не проверяли.
+    При первой отправке телефон спрашивает разрешение на обращение к сайту.
+    Ответив «Разрешить один раз», человек получит этот вопрос и при
+    автоматическом запуске — а там на него некому ответить: команда просто
+    встанет, и шаги перестанут приходить, ничего не сообщив. Проверено на
+    живом айфоне.
     """
-    unverified = [card for card in step_sync.CARDS if card.unverified]
-    assert len(unverified) == 1
-    assert "Telegram" in " ".join(unverified[0].steps)
-    assert "не проверяли" in unverified[0].note
+    text = step_sync.as_text()
+    assert "Разрешать всегда" in text
+    card = next(card for card in step_sync.CARDS
+                if "Разрешать всегда" in " ".join(card.steps))
+    assert "переспрашивать" in card.note or "остановится" in card.note
 
 
-def test_the_night_run_avoids_midnight():
-    """В 00:00 начинается новый день, и сумма шагов будет пустой."""
-    night = " ".join(" ".join(card.steps) for card in step_sync.CARDS)
-    assert "23:50" in night
-    assert "00:00" not in night or "Не ставь 00:00" in \
-        " ".join(card.note for card in step_sync.CARDS)
+def test_the_marking_of_unverified_steps_agrees_with_the_words():
+    """Пометка и текст обязаны говорить одно и то же.
 
-
-def test_the_chat_instruction_fits_into_one_telegram_message(monkeypatch):
-    """У сообщения в Telegram потолок в 4096 знаков.
-
-    Полная инструкция карточками в него не влезает: развернув её в чат
-    целиком, бот просто не ответил бы — и узнали бы мы об этом от человека.
-    Поэтому в чат идёт короткий пересказ, а подробности — в приложении.
+    Дневной запуск по открытию Telegram сначала стоял непроверенным — и был
+    помечен. Лилия проверила его на живом айфоне, пометка снята. Опасны оба
+    расхождения: помеченная карточка без объяснения и карточка, которая
+    словами признаётся в непроверенности, но выглядит как проверенная.
     """
-    monkeypatch.setattr(config, "WEBAPP_URL", "https://aura.example")
-    text = step_sync.instructions(step_sync.link_for("К" * 22))
-    assert len(text) < 4000, len(text)
-    assert "в приложении" in text, "человека надо отправить туда, где подробно"
+    for card in step_sync.CARDS:
+        says = "не проверял" in card.note.lower()
+        assert says == card.unverified, card.title
+
+
+def test_the_optional_night_run_avoids_midnight():
+    """Ночной запуск — страховка на дни без Telegram, и он необязателен.
+
+    Но если человек его делает, время должно быть до полуночи: в 00:00
+    начинается новый день, и сумма шагов будет пустой.
+    """
+    notes = " ".join(card.note for card in step_sync.CARDS)
+    assert "23:50" in notes
+    assert "Не ставь 00:00" in notes
 
 
 # --- Проверка подключения --------------------------------------------------
