@@ -28,9 +28,32 @@ QUIET_FROM, QUIET_TO = 23, 7
 # Насколько недобор считается заметным, чтобы о нём вообще говорить.
 NOTABLE_GAP = 0.25
 
+# «Остался один шаг» — самый сильный повод из всех: маленькое усилие,
+# понятная награда и одно действие. Поэтому у него отдельные пороги и
+# отдельный вес, выше обычного недобора. Обычная подсказка тем весомее,
+# чем больше не хватает; эта — наоборот, чем меньше.
+ALMOST_SHARE = 0.2          # доля нормы, ниже которой недобор считается «чуть-чуть»
+ALMOST_WATER_ML = 400       # но и в миллилитрах есть предел: пол-литра — не «чуть-чуть»
+ALMOST_STEPS = 1500
+ALMOST_CRYSTALS = 12
+
 # Сколько раз за день можно предложить одно и то же. Повторённое трижды
 # предложение перестают читать — и заодно перестают читать все остальные.
 MAX_REPEATS = 2
+
+
+def is_almost(left: float, target: float, cap: float) -> bool:
+    """Осталось совсем немного: и по доле нормы, и по самой величине.
+
+    Сработать должны оба порога, а не любой из них. Одной доли мало:
+    двадцать процентов от полутора литров — триста миллилитров, это
+    действительно «один стакан»; двадцать процентов от четырёх литров —
+    восемьсот, и «остался шаг» тут уже враньё. Одной величины тоже мало:
+    полтора километра до цели в тридцать тысяч шагов — не «чуть-чуть».
+    """
+    if not target:
+        return False
+    return 0 < left <= min(cap, target * ALMOST_SHARE)
 
 
 @dataclass(frozen=True)
@@ -57,6 +80,9 @@ class DayContext:
     checkin_done: bool = False
     streak: int = 0
     quests_left: int = 0
+    quests_total: int = 0
+    # Сколько кристаллов до следующего уровня. Ноль — неизвестно.
+    crystals_left: int = 0
     preps_expiring: tuple[str, ...] = ()
     already_suggested: tuple[str, ...] = ()
     # Номер дня. По нему выбирается вариант формулировки: в течение дня
@@ -107,6 +133,34 @@ VARIANTS: dict[str, tuple[str, ...]] = {
         "Воды не хватает {left} мл. Это пара стаканов.",
         "{left} мл до нормы. Догоним?",
         "Осталось {left} мл воды. Начнём со стакана?",
+    ),
+    "water_almost": (
+        "Ещё {left} мл — и вода на сегодня закрыта.",
+        "Остался один стакан: {left} мл, и норма взята.",
+        "До закрытой воды {left} мл. Совсем близко.",
+        "{left} мл — и всё, вода сегодня сделана.",
+        "Последние {left} мл. Закроем?",
+    ),
+    "steps_almost": (
+        "До сегодняшней цели осталось {left} шагов — минут {minutes}.",
+        "{left} шагов до цели. Одна короткая прогулка.",
+        "Осталось {left} шагов, и день по движению закрыт.",
+        "Ещё {left} шагов — это {minutes} минут пешком.",
+        "Совсем близко: {left} шагов до цели.",
+    ),
+    "day_almost": (
+        "Осталось одно небольшое действие, чтобы завершить день.",
+        "Одно задание — и день закрыт полностью.",
+        "До полного дня осталось одно дело.",
+        "Остался один шаг до закрытого дня.",
+        "Одно задание отделяет тебя от закрытого дня.",
+    ),
+    "level_almost": (
+        "До следующего уровня осталось {left} кристаллов.",
+        "Ещё {left} кристаллов — и уровень поднимется.",
+        "{left} кристаллов до нового уровня.",
+        "Новый уровень уже близко: {left} кристаллов.",
+        "Осталось набрать {left} кристаллов до следующей ступени.",
     ),
     "protein": (
         "Белка сегодня {have} из {target} г. Подберу что-нибудь с белком?",
@@ -219,10 +273,18 @@ def _candidates(ctx: DayContext) -> list[Action]:
     water_gap = ctx.gap("water_ml")
     if water_gap is not None and water_gap > 0.05 and 7 <= ctx.hour < 22:
         left = round((ctx.water_target or 0) - ctx.water_ml)
-        text = (say(ctx.day_seed, "water_empty") if ctx.water_ml == 0
-                else say(ctx.day_seed, "water_left", left=left))
-        out.append(Action("water", "Вода", text, "+250 мл", "water",
-                          score=water_gap * 1.1, amount=250))
+        if is_almost(left, ctx.water_target or 0, ALMOST_WATER_ML):
+            # Кнопка предлагает ровно столько, сколько осталось: «+250 мл»
+            # там, где до нормы 300, — это ещё один заход завтра.
+            step = max(50, min(500, int(round(left / 50.0)) * 50))
+            out.append(Action("water", "Вода",
+                              say(ctx.day_seed, "water_almost", left=left),
+                              f"+{step} мл", "water", score=1.35, amount=step))
+        else:
+            text = (say(ctx.day_seed, "water_empty") if ctx.water_ml == 0
+                    else say(ctx.day_seed, "water_left", left=left))
+            out.append(Action("water", "Вода", text, "+250 мл", "water",
+                              score=water_gap * 1.1, amount=250))
 
     protein_gap = ctx.gap("protein_g")
     if protein_gap is not None and protein_gap > NOTABLE_GAP and ctx.hour >= 11:
@@ -254,11 +316,14 @@ def _candidates(ctx: DayContext) -> list[Action]:
         elif ctx.steps < ctx.steps_goal:
             left = ctx.steps_goal - ctx.steps
             minutes = max(round(left / 100), 1)
+            close = is_almost(left, ctx.steps_goal, ALMOST_STEPS)
             out.append(Action("steps", "Шаги",
-                              say(ctx.day_seed, "steps_left", left=left,
-                                  minutes=minutes),
+                              say(ctx.day_seed,
+                                  "steps_almost" if close else "steps_left",
+                                  left=left, minutes=minutes),
                               "Пройтись", "steps",
-                              score=0.5 + 0.4 * (left / ctx.steps_goal)))
+                              score=1.3 if close
+                              else 0.5 + 0.4 * (left / ctx.steps_goal)))
 
     # Тренировку не предлагаем на пустой батарейке: это не забота, а давление.
     if ctx.workouts_today == 0 and 9 <= ctx.hour < 21:
@@ -284,6 +349,18 @@ def _candidates(ctx: DayContext) -> list[Action]:
                           say(ctx.day_seed, "progress",
                               days=ctx.days_since_measure),
                           "Записать замер", "progress", score=0.55))
+
+    # Закрытый день — понятная награда, и до него остаётся одно дело.
+    if ctx.quests_total and ctx.quests_left == 1 and 9 <= ctx.hour < 22:
+        out.append(Action("day", "День", say(ctx.day_seed, "day_almost"),
+                          "Посмотреть день", "today", score=1.15))
+
+    # Уровень — самый слабый из «остался шаг»: награда приятная, но не
+    # сегодняшняя, и торопить с ней некрасиво.
+    if 0 < ctx.crystals_left <= ALMOST_CRYSTALS and 10 <= ctx.hour < 22:
+        out.append(Action("level", "Уровень",
+                          say(ctx.day_seed, "level_almost", left=ctx.crystals_left),
+                          "Посмотреть задания", "today", score=0.9))
 
     if ctx.preps_expiring:
         out.append(Action("prep", "Заготовки",
@@ -343,5 +420,7 @@ def hour_in(timezone_name: str | None, *, now: datetime | None = None) -> int:
     return (now.astimezone(zone) if now else datetime.now(zone)).hour
 
 
-__all__ = ["Action", "DayContext", "MAX_REPEATS", "NOTABLE_GAP", "VARIANTS",
-           "hour_in", "main_quest_codes", "next_action", "say"]
+__all__ = ["Action", "ALMOST_CRYSTALS", "ALMOST_SHARE", "ALMOST_STEPS",
+           "ALMOST_WATER_ML", "DayContext", "MAX_REPEATS", "NOTABLE_GAP",
+           "VARIANTS", "hour_in", "is_almost", "main_quest_codes",
+           "next_action", "say"]

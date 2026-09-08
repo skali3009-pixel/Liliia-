@@ -55,6 +55,10 @@ def day_context(user: User, tz: str, *, totals, water, meals, state, game,
         checkin_done=not state.is_empty,
         streak=game.get("streak", 0),
         quests_left=game.get("quests_total", 0) - game.get("quests_done", 0),
+        quests_total=game.get("quests_total", 0),
+        # Сколько кристаллов до следующего уровня: размер уровня минус
+        # набранное внутри него.
+        crystals_left=max(game.get("xp_to_next", 0) - game.get("xp_in_level", 0), 0),
         preps_expiring=tuple(preps),
         already_suggested=tuple(suggested),
     )

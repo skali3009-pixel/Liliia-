@@ -285,3 +285,55 @@ def test_no_wording_scolds_or_promises_medicine():
             low = text.lower()
             for word in forbidden:
                 assert word not in low, f"«{key}»: {text}"
+
+
+# --- итоги дня целиком ----------------------------------------------------
+
+
+EVENING_MSK = datetime(2026, 9, 8, 18, 0, tzinfo=timezone.utc)   # 21:00 в Москве
+
+
+def test_the_evening_summary_reaches_someone_who_did_part_of_the_day():
+    async def scenario():
+        async with db() as session:
+            # Что-то сделано, что-то нет — самый обычный день.
+            session.add(WaterLog(user_id=1, amount_ml=900, logged_at=EVENING_MSK))
+            for hour in (9, 13, 18):
+                session.add(Meal(user_id=1, name="еда", calories=500, protein_g=25,
+                                 fat_g=15, carbs_g=60,
+                                 logged_at=EVENING_MSK - timedelta(hours=hour)))
+            await session.commit()
+
+            out = await planned(session, now=EVENING_MSK)
+            assert len(out) == 1
+            _, push, _ = out[0]
+            assert push.kind == "evening"
+            assert "✓" in push.text
+            # Итоги дня приходят своей шапкой, а не под «твой ход».
+            assert "Твой ход" not in push.message
+    run(scenario)
+
+
+def test_the_evening_summary_does_not_come_at_other_hours():
+    async def scenario():
+        async with db() as session:
+            session.add(WaterLog(user_id=1, amount_ml=900, logged_at=NOON_MSK))
+            await session.commit()
+            out = await planned(session, now=NOON_MSK)
+            assert all(p.kind != "evening" for _, p, _ in out)
+    run(scenario)
+
+
+def test_switching_off_the_evening_leaves_the_rest_working():
+    async def scenario():
+        async with db() as session:
+            session.add(WaterLog(user_id=1, amount_ml=900, logged_at=EVENING_MSK))
+            for hour in (9, 13, 18):
+                session.add(Meal(user_id=1, name="еда", calories=500, protein_g=25,
+                                 fat_g=15, carbs_g=60,
+                                 logged_at=EVENING_MSK - timedelta(hours=hour)))
+            await session.commit()
+            await notifications.save_prefs(session, 1, evening=False)
+            assert all(p.kind != "evening" for _, p, _ in
+                       await planned(session, now=EVENING_MSK))
+    run(scenario)

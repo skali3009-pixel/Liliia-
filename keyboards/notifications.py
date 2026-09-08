@@ -26,6 +26,7 @@ CB_MUTE = "nudge:mute:"       # + категория
 # Куда ведёт совет. Открывать главный экран в ответ на «подобрать еду» —
 # значит заставить человека искать нужную вкладку самому.
 SCREEN = {
+    "today": "today",
     "water": "today",
     "meal": "today",
     "cube": "cube",
@@ -37,12 +38,16 @@ SCREEN = {
 
 
 def deep_link(target: str) -> str | None:
-    """Адрес приложения, открытого сразу на нужной вкладке."""
-    if not config.WEBAPP_URL:
-        return None
+    """Адрес приложения, открытого сразу на нужной вкладке.
+
+    None — если вести некуда. Пустая цель бывает намеренно: у вечернего
+    «на сегодня достаточно» кнопки действия нет и быть не должно.
+    """
     screen = SCREEN.get(target)
+    if not config.WEBAPP_URL or not screen:
+        return None
     base = config.WEBAPP_URL.rstrip("/")
-    return f"{base}?{urlencode({'screen': screen})}" if screen else base
+    return f"{base}?{urlencode({'screen': screen})}"
 
 
 def nudge_keyboard(*, target: str, cta: str, kind: str,
@@ -63,5 +68,22 @@ def nudge_keyboard(*, target: str, cta: str, kind: str,
     return builder.as_markup()
 
 
-__all__ = ["CB_LATER", "CB_MUTE", "CB_WATER", "SCREEN", "deep_link",
-           "nudge_keyboard"]
+def comeback_keyboard() -> InlineKeyboardMarkup | None:
+    """Кнопка под письмом тому, кто пропал.
+
+    Одна и без вариантов: «позже» и «сегодня не надо» здесь не нужны —
+    таких писем всего два за всё отсутствие, и оба заканчиваются словами
+    о том, как их выключить. Кнопка ведёт на «Сегодня», а не в список
+    накопившихся целей: после долгого перерыва человеку нужен один
+    маленький шаг, а не отчёт о том, сколько он пропустил.
+    """
+    link = deep_link("today")
+    if link is None:
+        return None
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Продолжить", web_app=WebAppInfo(url=link))
+    return builder.as_markup()
+
+
+__all__ = ["CB_LATER", "CB_MUTE", "CB_WATER", "SCREEN", "comeback_keyboard",
+           "deep_link", "nudge_keyboard"]

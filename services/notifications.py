@@ -50,6 +50,11 @@ KIND_OF: dict[str, str] = {
     "rest": KIND_MOVEMENT,
     "checkin": KIND_TURN,
     "progress": KIND_TURN,
+    # Последнее задание дня — это всё ещё «что сделать сейчас».
+    "day": KIND_TURN,
+    # А близкий уровень — про награду, и выключается вместе с достижениями.
+    "level": KIND_ACHIEVEMENT,
+    "evening": KIND_EVENING,
 }
 
 # Сколько сообщений в день допустимо. Не «сколько отправить» — сколько
@@ -87,6 +92,22 @@ SNOOZE_HOURS = 3
 # разговаривать, и настаивать бесполезно.
 FATIGUE_WINDOW = 5
 FATIGUE_LIMIT = 3
+
+
+# Утро. Первое за день сообщение в этих часах здоровается — не отдельным
+# сообщением «доброе утро, посмотри свой ход», а тем же самым, с которым
+# бот и так пришёл. Отдельный утренний привет тратил бы сообщение из
+# бюджета и не менял бы ничего: человеку всё равно пришлось бы открыть
+# приложение, чтобы узнать, что ему предлагают.
+MORNING_FROM, MORNING_TO = 7, 11
+
+GREETING = (
+    "Доброе утро.",
+    "С добрым утром.",
+    "Утро.",
+    "Доброе утро!",
+    "Утро доброе.",
+)
 
 
 @dataclass(frozen=True)
@@ -150,6 +171,21 @@ class Push:
     cta: str
     target: str
     amount: int = 0
+    greeting: str = ""
+
+    @property
+    def message(self) -> str:
+        """Текст сообщения целиком — тот, что уходит в чат.
+
+        Собирается здесь, а не в планировщике: в планировщике его нельзя
+        проверить тестом, а это единственное, что человек видит.
+        """
+        if self.kind == KIND_EVENING:
+            # У итогов дня своя шапка: «твой ход» им не подходит, они не
+            # про следующее действие, а про то, как сложился день.
+            return self.text
+        head = f"{self.greeting} " if self.greeting else ""
+        return f"🐆 {head}Твой ход\n\n{self.text}"
 
 
 def kind_of(code: str) -> str:
@@ -177,6 +213,7 @@ def decide(  # noqa: PLR0911 — каждый выход это отдельна
     now: datetime,
     snoozed: set[str],
     last_seen: datetime | None = None,
+    day_seed: int = 0,
 ) -> Push | None:
     """Отправлять ли, и что именно. Ничего не читает и не пишет — только решает.
 
@@ -223,8 +260,11 @@ def decide(  # noqa: PLR0911 — каждый выход это отдельна
     if action.score < floor:
         return None
 
+    morning = (MORNING_FROM <= local_hour < MORNING_TO and not today
+               and kind != KIND_EVENING)
     return Push(user_id=user_id, kind=kind, code=action.code, text=action.text,
-                cta=action.cta, target=action.target, amount=action.amount)
+                cta=action.cta, target=action.target, amount=action.amount,
+                greeting=GREETING[day_seed % len(GREETING)] if morning else "")
 
 
 def _aware(moment: datetime) -> datetime:
@@ -365,6 +405,7 @@ async def due(session: AsyncSession, *,
     бюджет, слишком свежее прошлое сообщение. Срез собирается только для
     тех, кому после всего этого действительно может уйти сообщение.
     """
+    from services import evening
     from services import turn as turn_service
     from services.comeback import gone_quiet
 
@@ -412,11 +453,20 @@ async def due(session: AsyncSession, *,
 
         # Дорогая часть — только для тех, кто дошёл сюда.
         parts = await turn_service.slice_for(session, user, tz)
-        action = await turn_service.peek_action(session, user, tz, **parts)
+
+        action = None
+        if hour == evening.EVENING_HOUR:
+            summary = evening.render(parts["game"].get("quests") or [],
+                                     seed=day.toordinal())
+            if summary is not None:
+                action = Action("evening", "Итоги дня", summary.text,
+                                "Посмотреть день", summary.target, score=1.1)
+        if action is None:
+            action = await turn_service.peek_action(session, user, tz, **parts)
 
         push = decide(action, user_id=user.id, prefs=prefs, local_hour=hour,
                       today=today, history=history, now=moment, snoozed=snoozed,
-                      last_seen=seen)
+                      last_seen=seen, day_seed=day.toordinal())
         if push is not None:
             out.append((user, push, day))
 
@@ -442,7 +492,8 @@ def local_day_and_hour(user: User, moment: datetime) -> tuple:
 
 __all__ = [
     "BUDGET", "COOLDOWN_HOURS", "FATIGUE_LIMIT", "GAP_HOURS", "KIND_OF",
-    "MIN_SCORE", "RECENT_OPEN_MINUTES", "SNOOZE_HOURS",
+    "GREETING", "MIN_SCORE", "MORNING_FROM", "MORNING_TO",
+    "RECENT_OPEN_MINUTES", "SNOOZE_HOURS",
     "Prefs", "Push", "Sent",
     "candidates", "decide", "due", "last_seen_of", "history_for", "kind_of", "local_day_and_hour",
     "mark", "prefs_for", "remember", "save_prefs", "snooze", "snoozed_kinds",

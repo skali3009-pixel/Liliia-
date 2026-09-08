@@ -10,7 +10,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import config
 from db import get_session
-from keyboards.notifications import nudge_keyboard
+from keyboards.notifications import comeback_keyboard, nudge_keyboard
 from keyboards.supplements import reminder_keyboard
 from services.reminders import collect_due_reminders
 from services import notifications
@@ -87,7 +87,7 @@ async def send_smart_nudges(bot: Bot) -> None:
         try:
             await bot.send_message(
                 user.id,
-                f"🐆 Твой ход\n\n{push.text}",
+                push.message,
                 reply_markup=nudge_keyboard(target=push.target, cta=push.cta,
                                             kind=push.kind, amount=push.amount),
             )
@@ -120,7 +120,8 @@ async def send_comebacks(bot: Bot) -> None:
         if key in _already_sent:
             continue
         try:
-            await bot.send_message(letter.user_id, letter.text)
+            await bot.send_message(letter.user_id, letter.text,
+                                   reply_markup=comeback_keyboard())
             _already_sent.add(key)
         except Exception:
             logger.info("Не получилось позвать обратно %s", letter.user_id)
