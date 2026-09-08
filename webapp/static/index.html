@@ -588,6 +588,13 @@
         <div class="stat-label">ккал за неделю</div></div>
     </section>
 
+    <section class="card" id="cardio-card">
+      <div class="card-head"><h2>Я занималась сама</h2></div>
+      <p class="hint">Бег, бассейн, урок танцев, дорога пешком — отметь, и
+        я посчитаю время и расход.</p>
+      <div id="cardio-list"></div>
+    </section>
+
     <div class="filters">
       <div class="chips" id="category-switch"></div>
       <div class="chips" id="style-switch"></div>
@@ -599,17 +606,38 @@
       <div class="card-head"><h2 id="program-title">Программа</h2>
         <span id="program-sub" class="muted"></span></div>
       <p id="program-note" class="note" hidden></p>
+      <!-- Личная тема открывается только после того, как человек прочитал
+           предупреждение и согласился. До этого упражнений не видно. -->
+      <div id="gym-warning" class="gym-warning" hidden>
+        <p id="gym-warning-text"></p>
+        <button class="btn" id="gym-warning-ok">Понятно, показать</button>
+      </div>
       <div id="exercises"></div>
       <button id="finish-workout" class="btn" hidden>Записать тренировку</button>
     </section>
 
-    <section class="card" id="cardio-card">
-      <div class="card-head"><h2>Кардио</h2></div>
-      <div id="cardio-list"></div>
-    </section>
+
   </main>
 
-  <div id="rest-overlay" class="overlay" hidden>
+  <!-- Сколько минут занималась. Раньше это спрашивало системное окно
+     браузера: чужое на вид, обрезает текст на телефоне и не умеет
+     подсказать привычные варианты. -->
+<div id="minutes-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2>Сколько минут?</h2>
+      <button class="icon-btn" id="minutes-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="state-options" id="minutes-choices"></div>
+    <label class="prof-row">
+      <span>Своё число</span>
+      <input class="input tight" id="minutes-own" type="number" min="1" max="300">
+    </label>
+    <button class="btn" id="minutes-save">Записать</button>
+  </div>
+</div>
+
+<div id="rest-overlay" class="overlay" hidden>
     <div class="rest-card">
       <div class="rest-label">Отдых</div>
       <div id="rest-time" class="rest-time">60</div>

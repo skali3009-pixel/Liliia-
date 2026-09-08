@@ -727,8 +727,11 @@ async def get_workouts(request: web.Request) -> web.Response:
         chosen = program_code or (programs[0].code if programs else None)
 
         exercises = await program_exercises(session, chosen) if chosen else []
-        # Отдельный список кардио нужен только в разделе тела.
-        cardio = await program_exercises(session, "cardio") if category == "body" else []
+        # Занятия («я бегала сорок минут») нужны в любом направлении, а
+        # не только в «Теле»: человек, который пришёл за йогой, точно так
+        # же ходит пешком и плавает. Раньше список был виден лишь в одном
+        # разделе — и его просто не находили.
+        cardio = await program_exercises(session, "cardio")
         summary = await week_summary(session, user_id, timezone_name=tz)
 
     def exercise_json(workout) -> dict:
@@ -762,6 +765,9 @@ async def get_workouts(request: web.Request) -> web.Response:
             "style": style,
             "show_calories": category in CATEGORIES_WITH_CALORIES,
             "note": chosen_program.note if chosen_program else None,
+            # Предупреждение перед личной темой. Приходит отдельным полем,
+            # чтобы приложение показало его вместо упражнений, а не под ними.
+            "warning": chosen_program.warning if chosen_program else None,
             "programs": [
                 {
                     "code": p.code,

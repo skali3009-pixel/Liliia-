@@ -1934,6 +1934,7 @@ function renderWorkouts(data) {
   note.textContent = data.note || '';
   note.hidden = !data.note;
   document.getElementById('cardio-card').hidden = data.cardio.length === 0;
+  renderGymWarning(data);
 
   const box = document.getElementById('exercises');
   box.innerHTML = '';
@@ -1960,6 +1961,48 @@ function renderChips(containerId, items, activeCode, onPick) {
     button.onclick = () => { haptic(); onPick(item.code); };
     box.appendChild(button);
   }
+}
+
+// Личные темы открываются только после прочитанного предупреждения.
+// Согласие помним в этом браузере: спрашивать каждый раз — значит
+// превратить заботу в препятствие.
+const AGREED_KEY = 'aura.gym.agreed';
+
+function agreedPrograms() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(AGREED_KEY) || '[]'));
+  } catch (error) {
+    return new Set();
+  }
+}
+
+function rememberAgreement(code) {
+  try {
+    const agreed = agreedPrograms();
+    agreed.add(code);
+    localStorage.setItem(AGREED_KEY, JSON.stringify([...agreed]));
+  } catch (error) {
+    /* приватный режим — просто спросим ещё раз */
+  }
+}
+
+function renderGymWarning(data) {
+  const box = document.getElementById('gym-warning');
+  const list = document.getElementById('exercises');
+  const finish = document.getElementById('finish-workout');
+
+  const needed = data.warning && !agreedPrograms().has(data.selected);
+  box.hidden = !needed;
+  list.hidden = !!needed;
+  if (needed) finish.hidden = true;
+  if (!needed) return;
+
+  document.getElementById('gym-warning-text').textContent = data.warning;
+  document.getElementById('gym-warning-ok').onclick = () => {
+    rememberAgreement(data.selected);
+    box.hidden = true;
+    list.hidden = false;
+  };
 }
 
 function exerciseRow(exercise, { cardio = false } = {}) {
@@ -2051,17 +2094,47 @@ async function refreshWorkouts() {
   renderWorkouts(gym);
 }
 
+// Сколько минут занималась. Привычные варианты кнопками, своё — полем.
+const MINUTE_CHOICES = [15, 30, 45, 60, 90];
+
+function askMinutes() {
+  return new Promise((resolve) => {
+    const sheet = document.getElementById('minutes-sheet');
+    const box = document.getElementById('minutes-choices');
+    const own = document.getElementById('minutes-own');
+    box.innerHTML = '';
+    own.value = '';
+
+    const close = (value) => { sheet.hidden = true; resolve(value); };
+
+    for (const value of MINUTE_CHOICES) {
+      const button = document.createElement('button');
+      button.className = 'state-opt wide';
+      button.textContent = `${value} мин`;
+      button.onclick = () => close(value);
+      box.appendChild(button);
+    }
+    document.getElementById('minutes-save').onclick = () => {
+      const value = Number(own.value);
+      close(value >= 1 && value <= 300 ? value : null);
+    };
+    document.getElementById('minutes-close').onclick = () => close(null);
+    sheet.hidden = false;
+  });
+}
+
 async function finishWorkout() {
   const ids = [...doneExercises];
   if (ids.length === 0) return;
 
-  // Для кардио спрашиваем реальное время — оно у всех разное.
+  // Для занятия спрашиваем реальное время — оно у всех разное. Своим
+  // окном, а не системным prompt: тот выглядит чужим, обрезает текст на
+  // телефоне и не даёт подсказать привычные варианты.
   const cardioIds = new Set(gym.cardio.map((c) => c.id));
   let minutes = null;
   if (ids.some((id) => cardioIds.has(id))) {
-    const answer = prompt('Сколько минут кардио?', '30');
-    if (answer === null) return;
-    minutes = Number(answer);
+    minutes = await askMinutes();
+    if (minutes === null) return;
   }
 
   try {

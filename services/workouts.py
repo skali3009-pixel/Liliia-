@@ -33,6 +33,9 @@ class ProgramInfo:
     level: str
     exercise_count: int
     note: str | None
+    # Текст, который человек читает до того, как увидит упражнения.
+    # Пусто у всех, кроме тем, которые нельзя открывать без спроса.
+    warning: str | None = None
 
 
 def available_programs(
@@ -57,6 +60,7 @@ def available_programs(
                 level=program["level"],
                 exercise_count=len(program["exercises"]),
                 note=program.get("note"),
+                warning=program.get("warning"),
             )
         )
     return result

@@ -525,7 +525,13 @@ def test_workouts_returns_program_for_place_and_level():
             assert first["sets"] and first["reps"] and first["rest_seconds"]
             assert first["calories"] > 0            # расход посчитан по MET
             assert first["demo_url"].startswith("https://")
-            assert len(data["cardio"]) == 7
+            # Не число, а состав: список занятий растёт, и точное количество
+            # ничего не гарантирует. Гарантирует то, что человек найдёт в
+            # нём то, чем действительно занимается.
+            names = {item["name"] for item in data["cardio"]}
+            for expected in ("Бег трусцой", "Беговая дорожка", "Эллипс",
+                             "Плавание", "Танцы"):
+                assert expected in names, expected
             assert data["cardio"][0]["is_cardio"] is True
     run(scenario)
 
@@ -557,14 +563,13 @@ def test_face_category_has_its_own_programs_and_no_calories():
 
             data = await (await call(client, "GET", "/api/workouts?category=face")).json()
 
-            assert data["selected"] in {"face_yoga", "face_massage"}
-            assert len(data["programs"]) == 2
+            codes = {p["code"] for p in data["programs"]}
+            assert {"face_yoga", "face_massage"} <= codes
             # Расход калорий у гимнастики для лица ничтожен — не показываем.
             assert data["show_calories"] is False
             # Честная оговорка о том, чем это является и чем нет.
             assert "косметологию" in data["note"] or "врач" in data["note"]
             assert data["styles"] == []          # у лица нет форм занятий
-            assert data["cardio"] == []          # и отдельного кардио тоже
     run(scenario)
 
 
@@ -585,8 +590,12 @@ def test_eyes_and_posture_categories_exist():
             assert posture["selected"] == "posture_daily"
             assert posture["show_calories"] is True   # осанка — это всё-таки нагрузка
 
+            # Направлений стало больше: йога, пилатес и стретчинг вышли из
+            # «Тела» в «Спокойное», появились танцы и женское. Проверяем,
+            # что старые никуда не делись, а не пересчитываем список.
             categories = {c["code"] for c in eyes["categories"]}
-            assert categories == {"body", "face", "eyes", "posture"}
+            assert {"body", "face", "eyes", "posture"} <= categories
+            assert {"calm", "dance", "women"} <= categories
     run(scenario)
 
 
@@ -1676,4 +1685,43 @@ def test_friends_need_a_signature():
     async def scenario():
         async with webapp_client() as (client, _):
             assert (await call(client, "GET", "/api/friends", signed=False)).status == 401
+    run(scenario)
+
+
+def test_activities_are_offered_in_every_direction():
+    """Человек, пришедший за йогой, тоже ходит пешком и плавает.
+
+    Раньше список занятий приходил только в разделе «Тело» — и в других
+    направлениях его просто не было, хотя отметить пробежку хочется
+    независимо от того, какую вкладку открыл.
+    """
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from seed.loader import seed_workouts
+            import webapp.api as api_module
+            async with api_module.get_session() as session:
+                await seed_workouts(session)
+
+            for category in ("body", "calm", "dance", "eyes", "women"):
+                data = await (await call(
+                    client, "GET", f"/api/workouts?category={category}")).json()
+                assert data["cardio"], category
+    run(scenario)
+
+
+def test_the_personal_topic_sends_its_warning():
+    async def scenario():
+        async with webapp_client() as (client, _):
+            from seed.loader import seed_workouts
+            import webapp.api as api_module
+            async with api_module.get_session() as session:
+                await seed_workouts(session)
+
+            women = await (await call(
+                client, "GET", "/api/workouts?category=women")).json()
+            assert women["warning"], "личная тема пришла без предупреждения"
+
+            body = await (await call(
+                client, "GET", "/api/workouts?category=body")).json()
+            assert not body["warning"]
     run(scenario)

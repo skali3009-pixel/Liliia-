@@ -1592,3 +1592,14 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
 }
 .cycle-day.today { border-color: var(--lilac); color: var(--fg); }
 .cycle-day:active { transform: scale(.94); }
+
+/* Предупреждение перед личной темой. Оно занимает место упражнений, а не
+   висит над ними: пока человек не прочитал и не согласился, показывать
+   нечего. */
+.gym-warning {
+  margin: 8px 0 4px; padding: 14px 16px; border-radius: 16px;
+  background: rgba(201, 169, 97, .1); border: 1px solid rgba(201, 169, 97, .35);
+}
+.gym-warning p {
+  margin: 0 0 12px; font-size: 14px; line-height: 1.5; white-space: pre-line;
+}

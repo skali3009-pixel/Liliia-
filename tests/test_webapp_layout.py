@@ -462,3 +462,41 @@ def test_the_cycle_strip_opens_on_today():
     """Человек пришёл отметить сегодня, а не листать месяц назад."""
     body = APP_JS.split("function renderCycleStrip(", 1)[1][:1400]
     assert "scrollLeft" in body
+
+
+def test_the_activity_card_is_above_the_catalogue():
+    """Отметить пробежку хотят чаще, чем выбирать программу.
+
+    Раньше этот список лежал внизу экрана и показывался только в «Теле» —
+    человек, пришедший за йогой, его просто не видел.
+    """
+    gym = INDEX.split('id="screen-gym"', 1)[1].split("</main>", 1)[0]
+    assert gym.index("cardio-card") < gym.index("category-switch")
+    assert "Я занималась сама" in gym
+
+
+def test_the_personal_topic_is_hidden_until_it_is_read():
+    """Предупреждение занимает место упражнений, а не висит над ними."""
+    for element_id in ("gym-warning", "gym-warning-text", "gym-warning-ok"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+    # Проверка текстовая — код в браузере отсюда не запустить. Поэтому
+    # сверяем не наличие слова, а само выражение: «список скрыт ровно
+    # тогда, когда предупреждение не прочитано». Первая версия искала
+    # подстроку «list.hidden» и спокойно пропускала «list.hidden = false».
+    body = APP_JS.split("function renderGymWarning(", 1)[1][:900]
+    assert "list.hidden = !!needed" in body
+
+
+def test_minutes_are_asked_in_our_own_window():
+    """Системное окно браузера выглядит чужим и обрезает текст на телефоне.
+
+    Проверяется запись занятия — то, что переделано. Системные окна пока
+    остались при вводе шагов и веса порции; их надо будет заменить так же.
+    """
+    body = APP_JS.split("async function finishWorkout(", 1)[1][:900]
+    assert "prompt(" not in body
+    assert "askMinutes()" in body
+    for element_id in ("minutes-sheet", "minutes-choices", "minutes-own"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
