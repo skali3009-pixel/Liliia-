@@ -678,6 +678,39 @@ def test_the_record_button_has_one_owner():
     assert "gym-warning" in body
 
 
+def test_the_technique_opens_inside_the_app():
+    """Уходить в поиск YouTube посреди тренировки — значит не вернуться.
+
+    У упражнения с написанной техникой ссылка ведёт в своё окно; у
+    остальных пока остаётся старая — оставить человека совсем без
+    подсказки хуже, чем увести. Ссылка исчезнет вместе с последним
+    упражнением без техники.
+    """
+    for element_id in ("how-sheet", "how-title", "how-demo", "how-steps",
+                       "how-mistakes", "how-meta", "how-close"):
+        assert f'id="{element_id}"' in INDEX, element_id
+        assert f"'{element_id}'" in APP_JS, element_id
+
+    body = APP_JS.split("function exerciseRow(", 1)[1][:2000]
+    assert "if (exercise.how)" in body
+    assert "openHow(exercise)" in body
+    # Наружу уводим только там, где своей техники ещё нет.
+    outside = body.split("} else {", 1)[1][:300]
+    assert "exercise.demo_url" in outside
+
+
+def test_the_empty_demo_slot_does_not_eat_the_screen():
+    """Пустой прямоугольник под картинку — половина окна ни о чём.
+
+    Пока анимации нет, это узкая полоса с одной строкой; появится файл —
+    развернётся в кадр.
+    """
+    assert ".how-demo.empty" in STYLES
+    body = APP_JS.split("function openHow(", 1)[1][:1500]
+    assert "classList.toggle('empty'," in body
+    assert "!exercise.demo_image" in body
+
+
 def test_the_personal_topic_is_hidden_until_it_is_read():
     """Предупреждение занимает место упражнений, а не висит над ними."""
     for element_id in ("gym-warning", "gym-warning-text", "gym-warning-ok"):

@@ -1146,6 +1146,24 @@ select.fact-input { text-align: left; width: 130px; }
 .sync-state[data-code="early"] .sync-state-title { color: var(--teal); }
 .sync-state .hint { margin: 0; }
 
+/* Показ движения. Пока картинки нет — ровное место с одной строкой, без
+   обещаний: «скоро будет» в приложении живёт годами. */
+.how-demo {
+  position: relative; margin-bottom: 14px; border-radius: 18px;
+  aspect-ratio: 4 / 3; overflow: hidden; background: var(--surface-2);
+  border: 1px solid var(--stroke);
+  display: flex; align-items: center; justify-content: center;
+}
+/* Пустое место под картинку не должно занимать пол-экрана: пока анимации
+   нет, это узкая полоса с одной строкой, а не пустой прямоугольник. */
+.how-demo.empty { aspect-ratio: auto; padding: 14px 18px; }
+.how-demo img { width: 100%; height: 100%; object-fit: cover; }
+.how-soon { margin: 0; padding: 0 24px; text-align: center;
+            font-size: 13px; color: var(--muted); }
+.how-mistakes { margin: 0; padding-left: 22px; }
+.how-mistakes li { margin-bottom: 8px; font-size: 14px; line-height: 1.45;
+                   color: var(--lilac); }
+
 /* Инструкция по одной карточке: полотном её не читают. */
 .guide-steps { margin: 0 0 14px; padding-left: 22px; }
 .guide-steps li { margin-bottom: 10px; font-size: 15px; line-height: 1.4; }

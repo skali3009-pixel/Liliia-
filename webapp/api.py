@@ -711,6 +711,7 @@ async def delete_photo(request: web.Request) -> web.Response:
 
 async def get_workouts(request: web.Request) -> web.Response:
     """Программы под выбранные место и уровень плюс упражнения выбранной."""
+    from seed.exercise_technique import demo_image, for_name as technique_for
     user_id, tz = request["user_id"], request["timezone"]
     category = request.query.get("category", "body")
     style = request.query.get("style") or None
@@ -751,6 +752,12 @@ async def get_workouts(request: web.Request) -> web.Response:
             "calories": round(exercise_calories(workout, weight)),
             "demo_url": workout.demo_url,
             "is_cardio": workout.workout_type == WorkoutTypeEnum.CARDIO,
+            # Техника словами — вместо ухода на поиск в YouTube. Есть не у
+            # всех упражнений: пишется постепенно, и пока её нет, остаётся
+            # старая ссылка. Отдавать пустое поле честнее, чем выдумывать.
+            "how": (technique.to_dict()
+                    if (technique := technique_for(workout.name)) else None),
+            "demo_image": demo_image(workout.name),
         }
 
     from seed.workout_programs import CATEGORIES, CATEGORIES_WITH_CALORIES

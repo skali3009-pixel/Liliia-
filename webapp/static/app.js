@@ -2268,6 +2268,60 @@ function startWorkout() {
   });
 }
 
+// Как делать упражнение — окном внутри приложения.
+//
+// Раньше «как делать» вело на страницу поиска в YouTube: не на подобранный
+// ролик, а на предложение поискать самому. Человек уходил из приложения в
+// чужую ленту посреди тренировки и не возвращался.
+function openHow(exercise) {
+  const sheet = document.getElementById('how-sheet');
+  document.getElementById('how-title').textContent = exercise.name;
+
+  const load = exercise.seconds_per_set
+    ? `${exercise.sets} подхода по ${exercise.seconds_per_set} с`
+    : `${exercise.sets}×${exercise.reps}`;
+  document.getElementById('how-meta').textContent =
+    [exercise.muscle, load, `отдых ${exercise.rest_seconds} с`]
+      .filter(Boolean).join(' · ');
+
+  // Место под анимацию. Файла пока нет ни у одного упражнения — тогда
+  // показываем ровное место, а не обещание.
+  const image = document.getElementById('how-image');
+  const soon = document.getElementById('how-soon');
+  image.hidden = !exercise.demo_image;
+  soon.hidden = !!exercise.demo_image;
+  document.getElementById('how-demo').classList.toggle('empty',
+                                                       !exercise.demo_image);
+  if (exercise.demo_image) {
+    image.src = exercise.demo_image;
+    image.alt = exercise.name;
+  } else {
+    image.removeAttribute('src');
+  }
+
+  const steps = document.getElementById('how-steps');
+  steps.innerHTML = '';
+  for (const step of exercise.how.steps) {
+    const item = document.createElement('li');
+    item.textContent = step;
+    steps.appendChild(item);
+  }
+
+  const mistakes = document.getElementById('how-mistakes');
+  const head = document.getElementById('how-mistakes-head');
+  mistakes.innerHTML = '';
+  const wrong = exercise.how.mistakes || [];
+  head.hidden = wrong.length === 0;
+  for (const item of wrong) {
+    const line = document.createElement('li');
+    line.textContent = item;
+    mistakes.appendChild(line);
+  }
+
+  haptic();
+  sheet.hidden = false;
+}
+
 // Занятие — плитка, а не строка.
 //
 // Строками их было двенадцать, каждая с подходами, расходом и ссылкой «как
@@ -2313,7 +2367,7 @@ function exerciseRow(exercise) {
       <div class="ex-name${done ? ' done' : ''}"></div>
       <div class="ex-sub"></div>
       <div class="ex-actions">
-        <a class="ex-link" target="_blank" rel="noopener">как делать →</a>
+        <a class="ex-link how-link"></a>
         <button class="ex-link rest-btn">запустить отдых</button>
       </div>
     </div>`;
@@ -2321,7 +2375,21 @@ function exerciseRow(exercise) {
   row.querySelector('.ex-name').textContent = exercise.name;
   row.querySelector('.ex-sub').textContent =
     [exercise.muscle, detail].filter(Boolean).join(' · ');
-  row.querySelector('.ex-link').href = exercise.demo_url;
+
+  // Есть своя техника — показываем её внутри приложения. Нет — оставляем
+  // старую ссылку: уводить в поиск плохо, но оставить человека вообще без
+  // подсказки хуже. Техника пишется постепенно, и ссылка исчезает вместе
+  // с последним упражнением без неё.
+  const link = row.querySelector('.how-link');
+  if (exercise.how) {
+    link.textContent = 'смотреть технику';
+    link.onclick = () => openHow(exercise);
+  } else {
+    link.textContent = 'как делать →';
+    link.href = exercise.demo_url;
+    link.target = '_blank';
+    link.rel = 'noopener';
+  }
 
   row.querySelector('.ex-check').onclick = () => {
     if (doneExercises.has(exercise.id)) doneExercises.delete(exercise.id);
@@ -4451,6 +4519,9 @@ async function init() {
   document.getElementById('finish-workout').onclick = finishWorkout;
   document.getElementById('finish-cardio').onclick = finishCardio;
   document.getElementById('start-workout').onclick = startWorkout;
+  document.getElementById('how-close').onclick = () => {
+    document.getElementById('how-sheet').hidden = true;
+  };
   document.getElementById('preps-toggle').onclick = togglePreps;
   document.getElementById('prep-close').onclick = () => {
     document.getElementById('prep-sheet').hidden = true;
