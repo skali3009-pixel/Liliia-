@@ -808,3 +808,98 @@ def test_the_step_window_offers_no_round_numbers():
     body = APP_JS.split("async function askSteps(", 1)[1][:700]
     assert "choices" not in body
     assert "askNumber({" in body
+
+
+# --- Ая: персонаж, который показывает движение ----------------------------
+
+
+def mover_block() -> str:
+    """Раздел про персонажа целиком — от пропорций до показа движения."""
+    return APP_JS.split("const GIRTH = {", 1)[1].split(
+        "/* --- проводник по тренировке", 1)[0]
+
+
+def test_one_character_shows_every_movement():
+    """Персонаж один на все 108 упражнений, включая лицо и шею.
+
+    Отдельная фигурка «для головы» означала бы, что на двух вкладках живёт
+    вторая, ничья: у неё разойдутся и цвет, и пропорции, и править её будут
+    забывать. Поэтому и портрет собирает та же функция, что и позы.
+    """
+    body = mover_block()
+    assert "function character(pose)" in body
+    head = body.split("const HEAD_SVG = ", 1)[1].split("})();", 1)[0]
+    assert "character({" in head, "портрет рисуется отдельной фигурой"
+
+
+def test_the_character_keeps_the_signs_she_is_known_by():
+    """Девушка-гепард узнаётся силуэтом, а не лицом.
+
+    На кадре высотой в палец лица не видно вовсе — остаются волосы, уши,
+    хвост, пятна и форма. Убери любое, и это уже не она, а «человечек».
+    Список закрыт именно поэтому: он не украшение, а сам персонаж.
+    """
+    body = mover_block()
+    # Сверяем целое выражение, а не начало имени: «it.tail» находится
+    # внутри «it.tailTuft», и первая версия проверки спокойно прошла на
+    # коде, где хвост со сцены убран. Поймано только тем, что сломали.
+    for part in ("hair", "hairCap", "tail", "tailTuft", "tailRings",
+                 "wear", "spots", "shoe", "sole"):
+        assert "${it." + part + "}" in body, f"{part} не попадает на экран"
+    assert "const ear = (side)" in body
+
+
+def test_the_frame_is_fitted_around_the_hair_and_the_tail():
+    """Кадр считается по краям персонажа, а не по суставам.
+
+    По суставам хвост и волосы уходят за край: они длиннее руки. Причём
+    считать надо по обеим позам сразу — иначе фигура пульсирует в размере
+    на каждом кадре.
+    """
+    edge = mover_block().split("const edge = [", 1)[1].split("];", 1)[0]
+    assert "hairLine[hairLine.length - 1]" in edge
+    assert "tailLine[tailLine.length - 1]" in edge
+
+    fit = APP_JS.split("function fitFor(", 1)[1].split("\n}", 1)[0]
+    assert "for (const pose of MOVES[code])" in fit
+    assert "character(pose).edge" in fit
+
+
+def test_every_layer_of_the_figure_is_told_what_colour_to_be():
+    """Забытая фигура в правиле — чёрное пятно на экране.
+
+    Так и вышло: кисточка хвоста рисуется кругом, а правило называло
+    только path и ellipse. Круг остался без заливки, а без заливки SVG
+    рисует чёрным — на конце хвоста повис чёрный шарик. Заметить это можно
+    было только глазами, поэтому проверка здесь.
+    """
+    for group in (".mv-body", ".mv-hair", ".mv-behind"):
+        rule = STYLES.split(group + " path", 1)[1].split("}", 1)[0]
+        for shape in ("ellipse", "circle"):
+            assert shape in rule, f"{group}: {shape} без заливки"
+
+
+def test_the_movement_demo_does_not_borrow_the_body_figures_names():
+    """Одно имя класса на два смысла в этом проекте уже ломало вёрстку.
+
+    `.figure` — это группа фигуры тела на «Прогрессе». Пока показ движения
+    звался так же, правило «.figure circle { fill: none }» гасило заливку
+    плеча на «Прогрессе»: правила стояли ниже и перебивали свои. Имена
+    показа движения теперь начинаются с mv-.
+    """
+    show = APP_JS.split("function showMove(", 1)[1].split("\n}", 1)[0]
+    assert "'mover'" in show or "`mover" in show
+    assert "className = `figure" not in APP_JS
+    # Сверяемся с правилами, а не с текстом: объяснение, почему так делать
+    # нельзя, само содержит запрещённый селектор — и первая версия этой
+    # проверки падала на собственном комментарии.
+    rules = re.sub(r"/\*.*?\*/", "", STYLES, flags=re.S)
+    for forbidden in (".figure line", ".figure path", ".figure circle"):
+        assert forbidden not in rules, forbidden
+
+
+def test_the_still_frame_draws_the_same_character():
+    """С выключенным движением человек видит ту же фигуру, а не заглушку."""
+    show = APP_JS.split("function showMove(", 1)[1].split("\n}", 1)[0]
+    still = show.split("if (!motion())", 1)[1]
+    assert "moverSvg(MOVES[code][0]" in still

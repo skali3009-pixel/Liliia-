@@ -2362,58 +2362,387 @@ const MOVES = {
            { lean: 96, thigh: 34, knee: 96, arm: 112, elbow: 6, y: -2 }],
 };
 
-// Лицо, шея и глаза стик-фигурой не показать: там движение размером с
+/* --- Ая: один персонаж на все упражнения ---------------------------------
+
+   Скелет из углов остаётся тем же — он и дальше отвечает за то, что присед
+   приседает, а планка стоит. Здесь решается другое: как это выглядит.
+
+   Палки показывали движение верно, но заниматься с палкой никто не хочет:
+   в приложении, где всё остальное нарисовано светом и объёмом, схема из
+   линий выглядит недоделкой. Поэтому по тем же суставам собирается силуэт —
+   один и тот же во всех 108 упражнениях: девушка-гепард с высоким хвостом
+   волос, ушами, хвостом и золотыми пятнами.
+
+   Узнаётся она силуэтом, а не лицом. На кадре высотой в палец глаза и рот
+   превращаются в грязь, поэтому лица нет — есть форма, причёска, уши и
+   хвост. Так персонаж читается и в кружке размером с монету, и во весь
+   экран проводника.
+
+   Главное не изменилось: поза считается из углов, а не рисуется на глаз.
+   Художник, рисующий сто поз руками, ошибётся в десяти; здесь ошибиться
+   негде — колено согнуто ровно настолько, насколько сказано в MOVES.
+*/
+
+// Полутолщины частей тела в тех же единицах поля 100×100. Талия уже таза и
+// груди: без этого силуэт получается трубой, а не женской фигурой.
+const GIRTH = {
+  pelvis: 5.5, waist: 3.3, chest: 5.4, shoulders: 4.7, neck: 1.7,
+  thigh: 4.6, knee: 2.9, calf: 3.0, ankle: 1.5,
+  arm: 2.7, elbow: 1.9, wrist: 1.3,
+  headRx: 4.7, headRy: 5.6,
+};
+
+const vlen = (v) => Math.hypot(v.x, v.y) || 1;
+const vsub = (a, b) => ({ x: a.x - b.x, y: a.y - b.y });
+const vunit = (v) => { const len = vlen(v); return { x: v.x / len, y: v.y / len }; };
+const vperp = (v) => ({ x: -v.y, y: v.x });
+const vflip = (v) => ({ x: -v.x, y: -v.y });
+const vgo = (point, dir, k) => ({ x: point.x + dir.x * k, y: point.y + dir.y * k });
+const vmid = (a, b, share) => ({ x: a.x + (b.x - a.x) * share, y: a.y + (b.y - a.y) * share });
+const xy = (point) => `${point.x.toFixed(1)} ${point.y.toFixed(1)}`;
+
+/* Замкнутый гладкий контур через точки: Catmull-Rom в кубические Безье.
+   Замкнутый — потому что тогда и кончики скругляются сами, и не приходится
+   отдельно закруглять концы конечностей. */
+function smoothLoop(points) {
+  const size = points.length;
+  const at = (index) => points[(index + size) % size];
+  const out = [`M ${xy(points[0])}`];
+  for (let i = 0; i < size; i++) {
+    const p0 = at(i - 1), p1 = at(i), p2 = at(i + 1), p3 = at(i + 2);
+    out.push(`C ${xy({ x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6 })} ` +
+             `${xy({ x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6 })} ${xy(p2)}`);
+  }
+  return `${out.join(' ')} Z`;
+}
+
+/* Лента вдоль осевой линии с меняющейся толщиной. Одной формой рисуется и
+   бедро (толстое сверху, тонкое у колена), и хвост, и прядь волос. */
+function ribbon(line, widths) {
+  const size = line.length;
+  const half = (index) => (widths.length === size
+    ? widths[index]
+    : widths[0] + (widths[1] - widths[0]) * (index / (size - 1)));
+  const side = (sign) => {
+    const out = [];
+    for (let step = 0; step < size; step++) {
+      const index = sign > 0 ? step : size - 1 - step;
+      const before = line[Math.max(index - 1, 0)];
+      const after = line[Math.min(index + 1, size - 1)];
+      out.push(vgo(line[index], vperp(vunit(vsub(after, before))), sign * half(index)));
+    }
+    return out;
+  };
+  return smoothLoop([...side(1), ...side(-1)]);
+}
+
+/* Кубическая кривая точками: по ней потом идёт лента. */
+function curvePoints(p0, p1, p2, p3, steps) {
+  const out = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps, u = 1 - t;
+    out.push({
+      x: u * u * u * p0.x + 3 * u * u * t * p1.x + 3 * u * t * t * p2.x + t * t * t * p3.x,
+      y: u * u * u * p0.y + 3 * u * u * t * p1.y + 3 * u * t * t * p2.y + t * t * t * p3.y,
+    });
+  }
+  return out;
+}
+
+const bone = (from, to, w0, w1) => `<path d="${ribbon([from, to], [w0, w1])}"/>`;
+const blob = (at, r) => `<circle cx="${at.x.toFixed(1)}" cy="${at.y.toFixed(1)}" r="${r.toFixed(1)}"/>`;
+
+/* Персонаж целиком: формы по слоям и крайние точки для подгонки кадра.
+   Слои нужны, потому что дальняя сторона тела должна уходить в тень, а
+   волосы и хвост — лежать за телом, а не поверх него. */
+function character(pose) {
+  const joint = skeleton(pose);
+  const up = vunit(vsub(joint.shoulder, joint.hip));   // вдоль корпуса вверх
+  const fwd = vperp(up);                               // куда смотрит фигура
+  const back = vflip(fwd);
+  const headUp = vunit(vsub(joint.head, joint.shoulder));
+  const headFwd = vperp(headUp);
+
+  // Дальняя рука отведена на десяток градусов: две руки в точности одна за
+  // другой сливаются в одну, и фигура становится плоской.
+  const far = skeleton({ ...pose, arm: (pose.arm || 0) - 13 });
+
+  const along = (share) => vmid(joint.hip, joint.shoulder, share);
+  // Таз уходит назад, грудь вперёд, талия между ними уже обеих: в профиль
+  // это и есть женская фигура. Ровная труба читается как манекен.
+  const torso = ribbon([
+    vgo(along(-0.10), back, 2.0),
+    vgo(along(0.36), fwd, 0.2),
+    vgo(along(0.70), fwd, 1.2),
+    vgo(along(1.04), back, 0.4),
+  ], [GIRTH.pelvis, GIRTH.waist, GIRTH.chest, GIRTH.shoulders]);
+
+  // Стопа перпендикулярна голени и смотрит туда же, куда фигура. Она же
+  // кроссовок: на картинке Лилии обувь тёмная со светлой подошвой, и это
+  // единственная деталь одежды, которая видна в любой позе.
+  const shoeAt = (knee, ankle) => {
+    const shin = vunit(vsub(ankle, knee));
+    let toe = vperp(shin);
+    if (toe.x * fwd.x + toe.y * fwd.y < 0) toe = vflip(toe);
+    const heel = vgo(ankle, toe, -1.0);
+    const tip = vgo(ankle, toe, 3.8);
+    const down = vunit(vsub(vgo(ankle, shin, 2), ankle));
+    return {
+      shoe: bone(heel, tip, 2.0, 1.3),
+      sole: bone(vgo(heel, down, 1.2), vgo(tip, down, 0.7), 0.6, 0.45),
+    };
+  };
+
+  const headDeg = Math.atan2(headUp.x, -headUp.y) * 180 / Math.PI;
+
+  // Волосы длинные и светлые, как на картинке. Падают они вниз, к полу, а
+  // не вдоль тела: в планке и в мостике «вдоль тела» — это вперёд, и коса
+  // ложилась комом на голову. Сила тяжести одна на все позы.
+  const down = { x: 0, y: 1 };
+  const hairTop = vgo(vgo(joint.head, headUp, 2.2), back, 1.0);
+  const nape = vgo(vgo(joint.head, back, 5.4), headUp, 0.6);
+  const hairLine = curvePoints(
+    hairTop,
+    nape,
+    vgo(vgo(nape, down, 5.5), back, 2.2),
+    vgo(vgo(nape, down, 11.0), back, 1.0), 11);
+  // Толщина по длине: у макушки прядь узкая, к лопаткам шире, к концу
+  // сходит. Одна ширина на всю длину закрывала лицо копной.
+  // Толщина по длине: у макушки прядь узкая, ниже затылка ровная, и лишь
+  // на последней четверти сходит на нет. Ровный спад от начала до конца
+  // давал не волосы, а конус.
+  const hairW = hairLine.map((_, i, all) => {
+    const share = i / (all.length - 1);
+    if (share < 0.2) return 2.0 + share * 3.5;
+    return share < 0.72 ? 2.7 : 2.7 - (share - 0.72) * 6.6;
+  });
+  const tailRoot = vgo(vgo(joint.hip, back, 2.6), up, -0.8);
+  const tailLine = curvePoints(
+    tailRoot,
+    vgo(vgo(tailRoot, back, 7.0), up, -1.8),
+    vgo(vgo(tailRoot, back, 13.0), up, 4.0),
+    vgo(vgo(tailRoot, back, 12.6), up, 11.0), 10);
+
+  // Ухо: треугольник у макушки. Два уха — переднее и заднее, иначе голова
+  // читается человеческой.
+  // Ухо гепарда маленькое и круглое. Острый треугольник — это кошка, а
+  // кошек в приложении не заказывали: по ушам зверя и узнают.
+  const ear = (side) => {
+    const at = vgo(vgo(joint.head, headUp, 5.4), headFwd, side * 2.4);
+    return `<ellipse cx="${at.x.toFixed(1)}" cy="${at.y.toFixed(1)}" rx="2.4" ry="2.3" ` +
+           `transform="rotate(${headDeg.toFixed(1)} ${xy(at)})"/>`;
+  };
+
+  const head = `<ellipse cx="${joint.head.x.toFixed(1)}" cy="${joint.head.y.toFixed(1)}" ` +
+    `rx="${GIRTH.headRx}" ry="${GIRTH.headRy}" ` +
+    `transform="rotate(${headDeg.toFixed(1)} ${xy(joint.head)})"/>`;
+
+  const nearShoe = shoeAt(joint.knee, joint.ankle);
+  const farShoe = shoeAt(joint.knee2, joint.ankle2);
+
+  const near = [
+    bone(joint.shoulder, joint.head, GIRTH.neck, GIRTH.neck * 1.1),
+    `<path d="${torso}"/>`,
+    head,
+    ear(1), ear(-1),
+    bone(joint.hip, joint.knee, GIRTH.thigh, GIRTH.knee),
+    bone(joint.knee, joint.ankle, GIRTH.calf, GIRTH.ankle),
+    bone(joint.shoulder, joint.elbow, GIRTH.arm, GIRTH.elbow),
+    bone(joint.elbow, joint.hand, GIRTH.elbow, GIRTH.wrist),
+    blob(joint.hand, 1.7),
+  ].join('');
+
+  const behind = [
+    bone(joint.hip, joint.knee2, GIRTH.thigh, GIRTH.knee),
+    bone(joint.knee2, joint.ankle2, GIRTH.calf, GIRTH.ankle),
+    farShoe.shoe,
+    bone(joint.shoulder, far.elbow, GIRTH.arm, GIRTH.elbow),
+    bone(far.elbow, far.hand, GIRTH.elbow, GIRTH.wrist),
+    blob(far.hand, 1.6),
+  ].join('');
+
+  const hair = `<path d="${ribbon(hairLine, hairW)}"/>`;
+
+  // Волосы на затылке лежат поверх головы, а не под ней: под головой их не
+  // видно вовсе, и голова оставалась ровным лиловым яйцом. Так появляется
+  // линия причёски — светлый затылок и лиловое лицо.
+  const cap = vgo(vgo(joint.head, back, 3.9), headUp, 1.8);
+  const hairCap = `<ellipse cx="${cap.x.toFixed(1)}" cy="${cap.y.toFixed(1)}" ` +
+    `rx="${(GIRTH.headRx * 0.80).toFixed(1)}" ry="${(GIRTH.headRy * 0.90).toFixed(1)}" ` +
+    `transform="rotate(${headDeg.toFixed(1)} ${xy(joint.head)})"/>`;
+
+  // Хвост длинный, с кольцами и светлой кисточкой на конце — по картинке.
+  const tail = `<path d="${ribbon(tailLine, [2.4, 1.0])}"/>`;
+  const tailTuft = blob(tailLine[tailLine.length - 1], 1.7);
+
+  // Одежда. На картинке Лилии девушка в чёрном спортивном топе и лосинах;
+  // без одежды тот же силуэт читается голым — это уже другой персонаж.
+  // Шорты, а не лосины: тёмная нога на тёмном фоне теряет контур, и поза
+  // перестаёт читаться, а поза здесь — единственное, ради чего всё.
+  const wear = [
+    `<path d="${ribbon([
+      vgo(along(0.58), fwd, 0.9),
+      vgo(along(0.70), fwd, 1.1),
+      vgo(along(0.84), fwd, 0.3),
+    ], [GIRTH.chest - 0.3, GIRTH.chest + 0.2, GIRTH.chest - 0.5])}"/>`,
+    `<path d="${ribbon([
+      vgo(along(-0.06), back, 1.1),
+      vgo(along(0.10), back, 0.5),
+      vgo(along(0.22), fwd, 0.1),
+    ], [GIRTH.pelvis - 0.2, GIRTH.pelvis - 0.5, GIRTH.waist + 0.6])}"/>`,
+    bone(joint.hip, vmid(joint.hip, joint.knee, 0.26),
+         GIRTH.thigh + 0.15, GIRTH.thigh * 0.94),
+  ].join('');
+
+  // Пятна гепарда. Ставятся по костям, а не по кадру: в любой позе они
+  // остаются на бедре и на плече, а не съезжают в воздух.
+  const spot = (from, to, share, offset, r) => {
+    const at = vmid(from, to, share);
+    const side = vperp(vunit(vsub(to, from)));
+    return blob(vgo(at, side, offset), r);
+  };
+  // Ставятся только там, где кожа открыта: под топом и шортами их не
+  // видно, а нарисованные поверх одежды они превратились бы в горошек.
+  const spots = [
+    spot(joint.hip, joint.knee, 0.66, 1.4, 0.8),
+    spot(joint.hip, joint.knee, 0.84, -1.0, 0.6),
+    spot(joint.knee, joint.ankle, 0.26, 1.1, 0.6),
+    spot(joint.knee, joint.ankle, 0.52, -0.8, 0.5),
+    spot(joint.shoulder, joint.elbow, 0.34, 1.0, 0.6),
+    spot(joint.shoulder, joint.elbow, 0.72, -0.8, 0.5),
+    spot(joint.elbow, joint.hand, 0.40, 0.7, 0.45),
+    spot(joint.hip, joint.shoulder, 0.98, -2.3, 0.55),
+    spot(joint.hip, joint.shoulder, 0.34, 2.2, 0.5),
+    spot(tailLine[3], tailLine[5], 0.5, 0.7, 0.55),
+    spot(tailLine[6], tailLine[8], 0.5, -0.6, 0.5),
+  ].join('');
+  // Кольца у кончика хвоста — признак гепарда не менее заметный, чем пятна.
+  const tailRings = [bone(tailLine[7], tailLine[8], 1.2, 1.1)].join('');
+
+  // Глаз — единственная черта лица: золотая точка, по которой видно, куда
+  // смотрит фигура. Больше на таком размере не читается.
+  const eye = blob(vgo(vgo(joint.head, headFwd, 2.8), headUp, 0.6), 0.85);
+
+  // Портрет для упражнений на шею и лицо: та же голова, но без торса —
+  // срез поперёк плеч в кадре выглядит обломком, а не портретом.
+  //
+  // Здесь кадр крупный, и одной золотой точки вместо глаза мало: на весь
+  // экран это читается пустым пятном. Поэтому в портрете лицо есть — глаз
+  // с золотой радужкой, бровь, нос и пятна на скуле. В движениях тела его
+  // нет намеренно: на кадре высотой в палец лицо превращается в грязь.
+  const flat = (f, u) => ({ x: joint.head.x + f, y: joint.head.y - u });
+  const portrait = {
+    body: [bone(vgo(joint.head, headUp, -8), joint.head, GIRTH.neck * 1.3, GIRTH.neck),
+           head, ear(1), ear(-1)].join(''),
+    // В портрете волосы обрезаны по кадру: полная длина уходит за нижний
+    // край и превращается там в бесформенное пятно.
+    hair: `<path d="${ribbon(hairLine.slice(0, 4), hairW.slice(0, 4))}"/>`,
+    cap: hairCap,
+    face: `<g transform="rotate(${headDeg.toFixed(1)} ${xy(joint.head)})">
+      <ellipse class="mv-sclera" cx="${flat(2.3, 0.7).x.toFixed(1)}" ` +
+        `cy="${flat(2.3, 0.7).y.toFixed(1)}" rx="2.2" ry="1.5"/>
+      <circle class="mv-iris" cx="${flat(2.9, 0.7).x.toFixed(1)}" ` +
+        `cy="${flat(2.9, 0.7).y.toFixed(1)}" r="0.95"/>
+      <circle class="mv-pupil" cx="${flat(3.0, 0.7).x.toFixed(1)}" ` +
+        `cy="${flat(3.0, 0.7).y.toFixed(1)}" r="0.4"/>
+      <path class="mv-line" d="M ${xy(flat(0.9, 2.4))} Q ${xy(flat(2.6, 2.9))} ${xy(flat(4.0, 2.2))}"/>
+      <path class="mv-line" d="M ${xy(flat(4.6, -0.6))} Q ${xy(flat(5.1, -1.3))} ${xy(flat(4.2, -1.6))}"/>
+      <!-- Слёзная полоса от глаза к пасти. По ней гепарда узнают вернее,
+           чем по пятнам: больше ни у кого её нет. -->
+      <path class="mv-tear" d="M ${xy(flat(2.4, -0.9))} Q ${xy(flat(3.0, -2.2))} ${xy(flat(3.7, -3.6))}"/>
+      <circle class="mv-cheek" cx="${flat(3.4, -2.2).x.toFixed(1)}" ` +
+        `cy="${flat(3.4, -2.2).y.toFixed(1)}" r="0.5"/>
+      <circle class="mv-cheek" cx="${flat(1.9, -3.0).x.toFixed(1)}" ` +
+        `cy="${flat(1.9, -3.0).y.toFixed(1)}" r="0.42"/>
+      <circle class="mv-cheek" cx="${flat(0.4, -1.9).x.toFixed(1)}" ` +
+        `cy="${flat(0.4, -1.9).y.toFixed(1)}" r="0.36"/>
+    </g>`,
+    box: `${(joint.head.x - 15).toFixed(1)} ${(joint.head.y - 11.5).toFixed(1)} 30 22.5`,
+  };
+
+  const edge = [
+    joint.hip, joint.shoulder, joint.knee, joint.ankle, joint.knee2, joint.ankle2,
+    joint.elbow, joint.hand, far.elbow, far.hand,
+    hairLine[hairLine.length - 1],
+    vgo(tailLine[tailLine.length - 1], up, 2), vgo(tailLine[tailLine.length - 1], back, 2),
+    vgo(vgo(joint.head, headUp, 9.2), headFwd, 3.2),
+    vgo(vgo(joint.head, headUp, 9.2), headFwd, -3.2),
+    vgo(joint.head, headFwd, GIRTH.headRx + 1),
+    vgo(joint.head, headFwd, -GIRTH.headRx - 1),
+    vgo(joint.ankle, up, -4), vgo(joint.ankle2, up, -4),
+  ];
+
+  return { near, behind, hair, hairCap, tail, tailTuft, tailRings, wear, spots,
+           eye, shoe: nearShoe.shoe, sole: nearShoe.sole, edge, portrait };
+}
+
+// Лицо, шея и глаза силуэтом не показать: там движение размером с
 // подбородок. Для них рисуется голова или глаз крупным планом.
 const HEAD_MOVES = { head: true, eyes: true };
 
-function bounds(points) {
-  const xs = points.map((p) => p.x);
-  const ys = points.map((p) => p.y);
-  return { x0: Math.min(...xs), x1: Math.max(...xs),
-           y0: Math.min(...ys), y1: Math.max(...ys) };
-}
-
-// Кадр подгоняется под движение целиком, по обеим позам сразу. По каждой
-// отдельно фигура пульсировала бы в размере на каждом кадре, а без подгонки
-// вовсе — уходила бы ногами за край: углы у поз очень разные.
+/* Кадр подгоняется под движение целиком, по обеим позам сразу. По каждой
+   отдельно фигура пульсировала бы в размере на каждом кадре, а без подгонки
+   вовсе — уходила бы ногами за край: углы у поз очень разные. */
 const fitted = {};
 
 function fitFor(code) {
   if (fitted[code]) return fitted[code];
   const points = [];
-  for (const pose of MOVES[code]) {
-    const b = skeleton(pose);
-    points.push(...Object.values(b));
-    // Голова круглая: её край считаем отдельно, иначе срезается макушка.
-    points.push({ x: b.head.x - BODY.head, y: b.head.y - BODY.head });
-    points.push({ x: b.head.x + BODY.head, y: b.head.y + BODY.head });
+  for (const pose of MOVES[code]) points.push(...character(pose).edge);
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const pad = 5;
+  let x0 = Math.min(...xs) - pad, x1 = Math.max(...xs) + pad;
+  let y0 = Math.min(...ys) - pad, y1 = Math.max(...ys) + pad;
+  // Кадр приводим к пропорции карточки 4:3, иначе фигура в узком движении
+  // (планка) прижимается к краям, а в высоком (жим) — тонет в полях.
+  let width = x1 - x0, height = y1 - y0;
+  if (width / height < 4 / 3) {
+    const grow = (height * 4 / 3 - width) / 2;
+    x0 -= grow; width = height * 4 / 3;
+  } else {
+    const grow = (width * 3 / 4 - height) / 2;
+    y0 -= grow; height = width * 3 / 4;
   }
-  const box = bounds(points);
-  const pad = 8;
-  const scale = Math.min((100 - pad * 2) / (box.x1 - box.x0 || 1),
-                         (100 - pad * 2) / (box.y1 - box.y0 || 1));
-  fitted[code] = {
-    scale,
-    dx: pad - box.x0 * scale + ((100 - pad * 2) - (box.x1 - box.x0) * scale) / 2,
-    dy: pad - box.y0 * scale + ((100 - pad * 2) - (box.y1 - box.y0) * scale) / 2,
-  };
+  fitted[code] = `${x0.toFixed(1)} ${y0.toFixed(1)} ${width.toFixed(1)} ${height.toFixed(1)}`;
   return fitted[code];
 }
 
-function figureSvg(pose, fit) {
-  const b = skeleton(pose);
-  const line = (from, to) =>
-    `<line x1="${from.x.toFixed(1)}" y1="${from.y.toFixed(1)}" ` +
-    `x2="${to.x.toFixed(1)}" y2="${to.y.toFixed(1)}"/>`;
-  return `<g transform="translate(${fit.dx.toFixed(2)} ${fit.dy.toFixed(2)}) ` +
-         `scale(${fit.scale.toFixed(3)})" stroke-width="${(4.5 / fit.scale).toFixed(2)}">
-    <g class="fig-far">${line(b.hip, b.knee2)}${line(b.knee2, b.ankle2)}</g>
-    <g class="fig-near">
-      ${line(b.hip, b.shoulder)}
-      ${line(b.hip, b.knee)}${line(b.knee, b.ankle)}
-      ${line(b.shoulder, b.elbow)}${line(b.elbow, b.hand)}
-      <circle cx="${b.head.x.toFixed(1)}" cy="${b.head.y.toFixed(1)}" r="${BODY.head}"/>
-    </g></g>`;
+/* Слои. Свет, кромка и тень — тот же приём, что у фигуры на «Прогрессе»:
+   размытый дублёр снизу даёт свечение, кольцо по краю — кромку света, и
+   только потом ложится само тело. Без этих трёх слоёв силуэт остаётся
+   плоским пятном. */
+/* Сцена под фигурой: мягкий свет за спиной и тень на полу. Фигура без них
+   висит в пустоте — ровно то, чем схема отличается от рисунка. Тень стоит
+   у нижнего края кадра, а не под ногами: в планке и в мостике «низ» у тела
+   везде, а пол один. */
+function stage(box) {
+  if (!box) return '';
+  const [x, y, w, h] = box.split(' ').map(Number);
+  return `<ellipse class="mv-aura" cx="${(x + w / 2).toFixed(1)}" cy="${(y + h * 0.46).toFixed(1)}" ` +
+         `rx="${(w * 0.42).toFixed(1)}" ry="${(h * 0.46).toFixed(1)}"/>` +
+         `<ellipse class="mv-floor" cx="${(x + w / 2).toFixed(1)}" cy="${(y + h * 0.93).toFixed(1)}" ` +
+         `rx="${(w * 0.3).toFixed(1)}" ry="${(h * 0.035).toFixed(1)}"/>`;
+}
+
+function moverSvg(pose, box) {
+  const it = character(pose);
+  return `
+    ${stage(box)}
+    <g class="mv-behind">${it.behind}</g>
+    <g class="mv-tail">${it.tail}</g>
+    <g class="mv-spots">${it.tailRings}</g>
+    <g class="mv-hair">${it.tailTuft}</g>
+    <g class="mv-hair">${it.hair}</g>
+    <g class="mv-glow">${it.near}</g>
+    <g class="mv-rim">${it.near}</g>
+    <g class="mv-body">${it.near}</g>
+    <g class="mv-spots">${it.spots}</g>
+    <g class="mv-wear">${it.wear}</g>
+    <g class="mv-hair">${it.hairCap}</g>
+    <g class="mv-shoe">${it.shoe}</g>
+    <g class="mv-sole">${it.sole}</g>
+    <g class="mv-eye">${it.eye}</g>`;
 }
 
 // Одна петля на весь экран: каждое движение своим таймером посадило бы
@@ -2432,19 +2761,88 @@ function figureLoop(now) {
     const k = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
     const eased = k * k * (3 - 2 * k);
     box.querySelector('svg').innerHTML =
-      figureSvg(blend(move[0], move[1], eased), fitFor(box.dataset.move));
+      moverSvg(blend(move[0], move[1], eased), fitFor(box.dataset.move));
   }
   figureFrame = figures.size ? requestAnimationFrame(figureLoop) : null;
 }
 
-const HEAD_SVG = `<svg viewBox="0 0 100 100" class="fig-head" aria-hidden="true">
-  <circle cx="52" cy="40" r="21"/>
-  <path d="M52 61 L52 78 M52 78 L34 88 M52 78 L70 88" fill="none"/>
+/* Свет, кромка и заливка объявлены один раз на всю страницу: фигур на
+   экране не больше одной, но перерисовывается она шестьдесят раз в
+   секунду, и таскать defs в каждом кадре незачем. */
+const MOVE_DEFS = `<svg id="mv-defs" width="0" height="0" aria-hidden="true"
+     style="position:absolute">
+  <defs>
+    <!-- Заливка тянется по всему полю, а не по каждой форме: иначе нога
+         начинается заново со светлого и поперёк бедра идёт ступенька. -->
+    <linearGradient id="mv-fill" gradientUnits="userSpaceOnUse" x1="0" y1="8" x2="0" y2="100">
+      <stop offset="0" stop-color="#D6CBFF"/>
+      <stop offset="0.55" stop-color="#8B5CF6"/>
+      <stop offset="1" stop-color="#4C4BC4"/>
+    </linearGradient>
+    <!-- Волосы светлые, тёплые: на картинке она блондинка, и это же
+         разводит волосы и кожу. Лиловым по лиловому они слипались в одно
+         пятно — голова пропадала. -->
+    <linearGradient id="mv-hair-fill" gradientUnits="userSpaceOnUse" x1="0" y1="10" x2="0" y2="86">
+      <stop offset="0" stop-color="#F7EDD4"/>
+      <stop offset="1" stop-color="#C9A961"/>
+    </linearGradient>
+    <!-- Кромка света — именно кольцо: раздутый силуэт минус исходный. Без
+         вычитания фильтр заливает фигуру целиком. -->
+    <filter id="mv-rim" x="-25%" y="-25%" width="150%" height="150%">
+      <feMorphology in="SourceAlpha" operator="dilate" radius="0.55" result="fat"/>
+      <feComposite in="fat" in2="SourceAlpha" operator="out" result="ring"/>
+      <feGaussianBlur in="ring" stdDeviation="0.35" result="soft"/>
+      <feFlood flood-color="#E7DDFF" flood-opacity="0.95"/>
+      <feComposite operator="in" in2="soft"/>
+    </filter>
+    <filter id="mv-glow" x="-70%" y="-70%" width="240%" height="240%">
+      <feGaussianBlur stdDeviation="3.2"/>
+    </filter>
+    <radialGradient id="mv-aura">
+      <stop offset="0" stop-color="#8B5CF6" stop-opacity=".26"/>
+      <stop offset="0.65" stop-color="#8B5CF6" stop-opacity=".08"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="mv-floor">
+      <stop offset="0" stop-color="#C4B5FD" stop-opacity=".3"/>
+      <stop offset="1" stop-color="#C4B5FD" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
 </svg>`;
 
-const EYE_SVG = `<svg viewBox="0 0 100 100" class="fig-eye" aria-hidden="true">
-  <path d="M14 50 Q50 20 86 50 Q50 80 14 50 Z" fill="none"/>
-  <circle class="pupil" cx="50" cy="50" r="11"/>
+function moveDefs() {
+  if (!document.getElementById('mv-defs')) {
+    const holder = document.createElement('div');
+    holder.innerHTML = MOVE_DEFS;
+    document.body.appendChild(holder.firstElementChild);
+  }
+}
+
+/* Голова крупным планом — для упражнений на шею и лицо. Тот же персонаж:
+   уши, хвост волос, золотой глаз. Иначе на двух вкладках жила бы вторая,
+   ничья фигура. */
+const HEAD_SVG = (() => {
+  const it = character({ lean: 0 });
+  return `<svg viewBox="${it.portrait.box}" class="mv-portrait" aria-hidden="true">
+    ${stage(it.portrait.box)}
+    <g class="mv-hair">${it.portrait.hair}</g>
+    <g class="mv-glow">${it.portrait.body}</g>
+    <g class="mv-rim">${it.portrait.body}</g>
+    <g class="mv-body">${it.portrait.body}</g>
+    <g class="mv-hair">${it.portrait.cap}</g>
+    ${it.portrait.face}
+  </svg>`;
+})();
+
+/* Глаз крупным планом. Миндалевидная форма с золотой радужкой: зрачок
+   ходит из стороны в сторону — это и есть упражнение. */
+const EYE_SVG = `<svg viewBox="0 0 100 100" class="mv-eyeball" aria-hidden="true">
+  <path class="mv-eye-white" d="M10 50 Q50 16 90 50 Q50 84 10 50 Z"/>
+  <g class="mv-iris">
+    <circle cx="50" cy="50" r="15"/>
+    <circle class="mv-pupil" cx="50" cy="50" r="7"/>
+  </g>
+  <path class="mv-lash" d="M10 50 Q50 16 90 50"/>
 </svg>`;
 
 // Показ движения в отведённом месте. Возвращает true, если что-то
@@ -2452,20 +2850,21 @@ const EYE_SVG = `<svg viewBox="0 0 100 100" class="fig-eye" aria-hidden="true">
 function showMove(box, code, period = 2600) {
   box.innerHTML = '';
   if (!code || (!MOVES[code] && !HEAD_MOVES[code])) return false;
+  moveDefs();
 
   const wrap = document.createElement('div');
-  wrap.className = `figure${HEAD_MOVES[code] ? ' head-only' : ''}`;
+  wrap.className = `mover${HEAD_MOVES[code] ? ' head-only' : ''}`;
   wrap.dataset.move = code;
   wrap.dataset.period = period;
   wrap.innerHTML = code === 'eyes' ? EYE_SVG
     : code === 'head' ? HEAD_SVG
-    : '<svg viewBox="0 0 100 100" aria-hidden="true"></svg>';
+    : `<svg viewBox="${fitFor(code)}" aria-hidden="true"></svg>`;
   box.appendChild(wrap);
 
   if (HEAD_MOVES[code]) return true;      // качается стилями, без пересчёта
   // Движение выключено в телефоне — показываем одну позу и не считаем ничего.
   if (!motion()) {
-    wrap.querySelector('svg').innerHTML = figureSvg(MOVES[code][0], fitFor(code));
+    wrap.querySelector('svg').innerHTML = moverSvg(MOVES[code][0], fitFor(code));
     return true;
   }
   figures.add(wrap);

@@ -1146,23 +1146,67 @@ select.fact-input { text-align: left; width: 130px; }
 .sync-state[data-code="early"] .sync-state-title { color: var(--teal); }
 .sync-state .hint { margin: 0; }
 
-/* Фигура показа движения. Рисуется линиями в цветах AURA: не фотография,
-   но и не чужая картинка — движение видно, а весит это пару килобайт. */
+/* Ая — персонаж, который показывает движение. Силуэт собирается кодом по
+   углам в суставах, а здесь ему даётся свет: заливка, свечение снизу,
+   кромка по краю, золотые пятна. Без этих слоёв силуэт остаётся плоским
+   пятном — это ровно то, что отличает «фигуру» от «схемы».
+
+   Имена начинаются с mv-, а не с fig-: fig- — это фигура тела на
+   «Прогрессе». Одно имя класса на два смысла в этом проекте уже
+   разваливало вёрстку (.event был и строкой ленты, и карточкой события);
+   .figure успел стать и группой на «Прогрессе», и рамкой показа движения,
+   и правило «.figure circle { fill: none }» гасило заливку плеча на
+   «Прогрессе». Разведено. */
 .fig-slot { width: 100%; height: 100%; }
 .fig-slot:empty { display: none; }
-.figure { width: 100%; height: 100%; display: flex; align-items: center;
-          justify-content: center; }
-.figure svg { width: 100%; height: 100%; max-height: 240px; }
-.figure line, .figure path { stroke: var(--lilac); stroke-linecap: round;
-                             stroke-linejoin: round; }
-.figure circle { fill: none; stroke: var(--lilac); }
-.fig-head, .fig-eye { stroke-width: 4.5; }
-.fig-eye .pupil { fill: var(--lilac); stroke: none; }
-/* Дальняя нога тусклее: иначе две ноги сливаются в одну толстую. */
-.figure .fig-far line { stroke: var(--violet); opacity: .45; }
-.figure .fig-near { filter: drop-shadow(0 0 6px rgba(139, 92, 246, .55)); }
-.figure .fig-head circle, .figure .fig-head line { stroke: var(--lilac); }
+.mover { width: 100%; height: 100%; display: flex; align-items: center;
+         justify-content: center; }
+.mover svg { width: 100%; height: 100%; max-height: 240px; }
+
+.mv-body path, .mv-body ellipse, .mv-body circle { fill: url(#mv-fill); stroke: none; }
+.mv-hair path, .mv-hair ellipse, .mv-hair circle {
+  fill: url(#mv-hair-fill); stroke: none;
+}
+/* Дальняя сторона тела уходит в тень: без этого две ноги сливаются в одну
+   толстую, и поза перестаёт читаться. */
+/* Каждая группа красит все фигуры, какие в ней могут оказаться, — и path,
+   и ellipse, и circle. Забытый круг остаётся без заливки, а без заливки
+   SVG рисует чёрным: так на конце хвоста однажды повис чёрный шарик. */
+.mv-behind path, .mv-behind ellipse, .mv-behind circle {
+  fill: #5B4BB8; stroke: none;
+}
+.mv-tail path { fill: #7C63D8; stroke: none; }
+/* Дублёр под фигурой: размытая копия даёт свет вокруг силуэта. */
+.mv-glow path, .mv-glow ellipse, .mv-glow circle { fill: var(--violet); stroke: none; }
+.mv-glow { opacity: .45; filter: url(#mv-glow); }
+.mv-rim { filter: url(#mv-rim); }
+/* Розетки у гепарда тёмные, а не золотые: золото — только глаз. */
+.mv-spots circle, .mv-spots path { fill: #2E2168; opacity: .62; }
+.mv-eye circle { fill: var(--gold); }
+/* Спортивная форма — чёрная, как на картинке, но не в ноль: на тёмном
+   экране чистый чёрный вырезал бы в фигуре дыру вместо одежды. */
+.mv-wear path { fill: #262052; stroke: #8B5CF6; stroke-width: .35;
+                stroke-opacity: .55; }
+.mv-shoe path { fill: #1E1940; stroke: none; }
+.mv-sole path { fill: #E8E2FA; stroke: none; opacity: .85; }
+.mv-aura { fill: url(#mv-aura); }
+.mv-floor { fill: url(#mv-floor); }
+
+/* Голова и глаз крупным планом — тот же персонаж и та же палитра. */
 .head-only svg { max-height: 200px; }
+.mv-portrait .mv-sclera { fill: #EFE8FF; }
+.mv-portrait .mv-iris { fill: var(--gold); }
+.mv-portrait .mv-pupil { fill: #0A0912; }
+.mv-portrait .mv-line { fill: none; stroke: #4A3A80; stroke-width: .45;
+                        stroke-linecap: round; }
+.mv-portrait .mv-cheek { fill: #2E2168; opacity: .55; }
+.mv-portrait .mv-tear { fill: none; stroke: #2E2168; stroke-width: .55;
+                        stroke-linecap: round; opacity: .7; }
+.mv-eyeball .mv-eye-white { fill: #1B1735; stroke: var(--lilac); stroke-width: 2.5; }
+.mv-eyeball .mv-iris circle { fill: var(--gold); }
+.mv-eyeball .mv-iris .mv-pupil { fill: #0A0912; }
+.mv-eyeball .mv-lash { fill: none; stroke: var(--lilac); stroke-width: 5;
+                       stroke-linecap: round; }
 
 /* Проводник по тренировке.
    Во время подхода на экране только то, что делаешь сейчас. Никаких
@@ -1488,9 +1532,9 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
 @media (prefers-reduced-motion: no-preference) {
   /* Лицо и глаза: качание головы вместо фигуры — там движение размером с
      подбородок, и стик-фигура его не показывает. */
-  .head-only .fig-head { animation: head-sway 3s ease-in-out infinite;
-                         transform-origin: 50% 80%; }
-  .head-only .pupil { animation: eye-look 3.4s ease-in-out infinite; }
+  .head-only .mv-portrait { animation: head-sway 3s ease-in-out infinite;
+                             transform-origin: 50% 100%; }
+  .head-only .mv-eyeball .mv-iris { animation: eye-look 3.4s ease-in-out infinite; }
 
 
   /* --- Вход экрана: карточки поднимаются каскадом --------------------- */
