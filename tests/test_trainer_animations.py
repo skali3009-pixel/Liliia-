@@ -98,6 +98,41 @@ def test_the_frames_are_where_the_code_looks_for_them():
         assert len(list((TRAINER / "frames" / stem).glob("*.png"))) == item["frames"]
 
 
+def test_every_picture_in_the_pack_opens_to_the_last_byte():
+    """Обрезанный файл — это не «нет картинки», а половина картинки.
+
+    В присланном пакете таких было два, и один из них — кадр 04 у тяги в
+    наклоне, то есть ровно тот, который видит человек с выключенным
+    движением. Браузер на такое не ругается: показывает, сколько успел
+    прочитать, и молчит. Поэтому файлы открываются здесь целиком, а не
+    проверяются на существование.
+    """
+    from PIL import Image
+
+    broken = []
+    for path in sorted(TRAINER.rglob("*.png")) + sorted(TRAINER.rglob("*.webp")):
+        try:
+            picture = Image.open(path)
+            for number in range(getattr(picture, "n_frames", 1)):
+                picture.seek(number)
+                picture.load()
+        except Exception as trouble:      # noqa: BLE001 — важно любое
+            broken.append((path.name, type(trouble).__name__))
+    assert not broken, broken
+
+
+def test_the_poster_is_the_first_frame_and_is_not_kept_twice():
+    """Заставка была отдельным файлом, байт в байт равным кадру 01.
+
+    Полтора мегабайта на шесть упражнений — и два места, где одна и та же
+    картинка может разойтись при следующей правке.
+    """
+    for code, item in PACK["animations"].items():
+        stem = item["asset"].split("/")[-1].removesuffix(".webp")
+        assert item["poster"] == f"frames/{stem}/frame_01.png", code
+    assert not (TRAINER / "posters").exists()
+
+
 def test_the_key_frame_the_still_view_shows_exists_in_every_pack():
     """С выключенным движением показывается кадр 04 — и только он."""
     # Именно четвёртый: на нём движение в нижней точке, по нему упражнение

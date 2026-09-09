@@ -1,7 +1,12 @@
 {
   "assetPack": "AURA Purple Cheetah Trainer",
   "version": 1,
-  "canvas": { "width": 768, "height": 768, "format": "png", "alpha": true },
+  "canvas": {
+    "width": 768,
+    "height": 768,
+    "format": "png",
+    "alpha": true
+  },
   "animations": {
     "bodyweight_squat": {
       "label": "Приседания с собственным весом",
@@ -9,7 +14,7 @@
       "fps": 7,
       "playback": "ping-pong",
       "asset": "animations/anim_squat_bodyweight.webp",
-      "poster": "posters/anim_squat_bodyweight.png"
+      "poster": "frames/anim_squat_bodyweight/frame_01.png"
     },
     "knee_pushup": {
       "label": "Отжимания с колен",
@@ -17,7 +22,7 @@
       "fps": 6,
       "playback": "ping-pong",
       "asset": "animations/anim_pushup_knee.webp",
-      "poster": "posters/anim_pushup_knee.png"
+      "poster": "frames/anim_pushup_knee/frame_01.png"
     },
     "glute_bridge": {
       "label": "Ягодичный мостик",
@@ -25,7 +30,7 @@
       "fps": 6,
       "playback": "ping-pong",
       "asset": "animations/anim_glute_bridge.webp",
-      "poster": "posters/anim_glute_bridge.png"
+      "poster": "frames/anim_glute_bridge/frame_01.png"
     },
     "bottle_bent_over_row": {
       "label": "Тяга в наклоне с бутылками воды",
@@ -33,7 +38,7 @@
       "fps": 6,
       "playback": "ping-pong",
       "asset": "animations/anim_bent_over_row.webp",
-      "poster": "posters/anim_bent_over_row.png"
+      "poster": "frames/anim_bent_over_row/frame_01.png"
     },
     "forearm_plank": {
       "label": "Планка на локтях",
@@ -41,7 +46,7 @@
       "fps": 4,
       "playback": "loop",
       "asset": "animations/anim_plank_forearm.webp",
-      "poster": "posters/anim_plank_forearm.png"
+      "poster": "frames/anim_plank_forearm/frame_01.png"
     },
     "lying_leg_raise": {
       "label": "Подъёмы ног лёжа",
@@ -49,7 +54,7 @@
       "fps": 6,
       "playback": "ping-pong",
       "asset": "animations/anim_leg_raise_lying.webp",
-      "poster": "posters/anim_leg_raise_lying.png"
+      "poster": "frames/anim_leg_raise_lying/frame_01.png"
     }
   }
 }
