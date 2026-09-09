@@ -1146,6 +1146,24 @@ select.fact-input { text-align: left; width: 130px; }
 .sync-state[data-code="early"] .sync-state-title { color: var(--teal); }
 .sync-state .hint { margin: 0; }
 
+/* Фигура показа движения. Рисуется линиями в цветах AURA: не фотография,
+   но и не чужая картинка — движение видно, а весит это пару килобайт. */
+.fig-slot { width: 100%; height: 100%; }
+.fig-slot:empty { display: none; }
+.figure { width: 100%; height: 100%; display: flex; align-items: center;
+          justify-content: center; }
+.figure svg { width: 100%; height: 100%; max-height: 240px; }
+.figure line, .figure path { stroke: var(--lilac); stroke-linecap: round;
+                             stroke-linejoin: round; }
+.figure circle { fill: none; stroke: var(--lilac); }
+.fig-head, .fig-eye { stroke-width: 4.5; }
+.fig-eye .pupil { fill: var(--lilac); stroke: none; }
+/* Дальняя нога тусклее: иначе две ноги сливаются в одну толстую. */
+.figure .fig-far line { stroke: var(--violet); opacity: .45; }
+.figure .fig-near { filter: drop-shadow(0 0 6px rgba(139, 92, 246, .55)); }
+.figure .fig-head circle, .figure .fig-head line { stroke: var(--lilac); }
+.head-only svg { max-height: 200px; }
+
 /* Проводник по тренировке.
    Во время подхода на экране только то, что делаешь сейчас. Никаких
    анимаций: человек смотрит на таймер, а не на интерфейс — и правило
@@ -1468,6 +1486,12 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* Лицо и глаза: качание головы вместо фигуры — там движение размером с
+     подбородок, и стик-фигура его не показывает. */
+  .head-only .fig-head { animation: head-sway 3s ease-in-out infinite;
+                         transform-origin: 50% 80%; }
+  .head-only .pupil { animation: eye-look 3.4s ease-in-out infinite; }
+
 
   /* --- Вход экрана: карточки поднимаются каскадом --------------------- */
   .screen.enter > * {
@@ -1724,4 +1748,14 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
 }
 .gym-warning p {
   margin: 0 0 12px; font-size: 14px; line-height: 1.5; white-space: pre-line;
+}
+
+@keyframes head-sway {
+  0%, 100% { transform: rotate(-4deg); }
+  50% { transform: rotate(4deg); }
+}
+
+@keyframes eye-look {
+  0%, 100% { transform: translateX(-13px); }
+  50% { transform: translateX(13px); }
 }

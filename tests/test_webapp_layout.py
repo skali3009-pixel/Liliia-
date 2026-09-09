@@ -701,6 +701,28 @@ def test_the_technique_opens_inside_the_app():
     assert "youtube.com" not in APP_JS.lower()
 
 
+def test_the_movement_is_drawn_not_generated():
+    """Картинки с персонажем генерировать пробовали.
+
+    Модель переписывает запрос по-своему и вместо приседа рисует стойку,
+    отключить это у неё нельзя, а проверить сотню сгенерированных поз из
+    рабочей сессии невозможно — хранилище закрыто политикой прокси.
+    Поэтому фигура собирается из углов в суставах: присед идёт вниз,
+    потому что колено согнуто на столько-то градусов.
+    """
+    assert "const MOVES = {" in APP_JS
+    assert "function skeleton(" in APP_JS
+
+    # Кадр подгоняется по обеим позам сразу: по каждой отдельно фигура
+    # пульсировала бы в размере, без подгонки — уходила бы за край.
+    fit = APP_JS.split("function fitFor(", 1)[1].split("\n}", 1)[0]
+    assert "for (const pose of MOVES[code])" in fit
+
+    # Движение выключено в телефоне — показываем одну позу и ничего не считаем.
+    show = APP_JS.split("function showMove(", 1)[1].split("\n}", 1)[0]
+    assert "if (!motion())" in show
+
+
 def test_the_empty_demo_slot_does_not_eat_the_screen():
     """Пустой прямоугольник под картинку — половина окна ни о чём.
 

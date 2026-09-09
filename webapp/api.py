@@ -711,7 +711,8 @@ async def delete_photo(request: web.Request) -> web.Response:
 
 async def get_workouts(request: web.Request) -> web.Response:
     """Программы под выбранные место и уровень плюс упражнения выбранной."""
-    from seed.exercise_technique import demo_image, for_name as technique_for
+    from seed.exercise_technique import (demo_image, for_name as technique_for,
+                                         move_for)
     user_id, tz = request["user_id"], request["timezone"]
     category = request.query.get("category", "body")
     style = request.query.get("style") or None
@@ -757,6 +758,9 @@ async def get_workouts(request: web.Request) -> web.Response:
             "how": (technique.to_dict()
                     if (technique := technique_for(workout.name)) else None),
             "demo_image": demo_image(workout.name),
+            # Какое движение рисовать. Картинки нет почти ни у кого, а
+            # показать движение надо всем — и это рисуется на месте.
+            "move": move_for(workout.name),
         }
 
     from seed.workout_programs import CATEGORIES, CATEGORIES_WITH_CALORIES

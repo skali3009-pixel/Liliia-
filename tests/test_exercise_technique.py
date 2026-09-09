@@ -10,8 +10,10 @@
 """
 
 import re
+from pathlib import Path
 
-from seed.exercise_technique import DEMO_IMAGES, TECHNIQUE, demo_image, for_name
+from seed.exercise_technique import (DEMO_IMAGES, MOVES_BY_NAME, TECHNIQUE,
+                                    demo_image, for_name, move_for)
 from seed.workout_programs import PROGRAMS
 
 
@@ -78,6 +80,57 @@ def test_where_there_is_no_technique_yet_nothing_is_invented():
 
 
 # --- показ движения --------------------------------------------------------
+
+
+def drawn_moves() -> set[str]:
+    """Движения, которые приложение умеет рисовать."""
+    app = (Path(__file__).resolve().parents[1] / "webapp" / "static"
+           / "app.js").read_text(encoding="utf-8")
+    body = app.split("const MOVES = {", 1)[1].split("\n};", 1)[0]
+    codes = {row.split(":", 1)[0].strip() for row in body.split("\n")
+             if ":" in row and row.strip() and not row.strip().startswith("//")}
+    return {code for code in codes if code.isalpha()} | {"head", "eyes"}
+
+
+def test_every_exercise_has_a_movement_to_show():
+    """Упражнение без показа — это пустое место посреди подхода.
+
+    Картинок нет почти ни у кого, и появятся они не скоро; движение
+    рисуется на месте, и вот оно должно быть у всех.
+    """
+    missing = catalogue_names() - set(MOVES_BY_NAME)
+    assert not missing, missing
+
+
+def test_the_movements_are_ones_the_app_can_draw():
+    """Опечатка в коде движения — пустой кадр, и никто не заметит."""
+    unknown = set(MOVES_BY_NAME.values()) - drawn_moves()
+    assert not unknown, unknown
+
+
+def test_the_movement_matches_what_the_exercise_actually_is():
+    """Неправильно показанное движение учит неправильному движению.
+
+    Проверяются самые узнаваемые случаи: присед приседает, планка стоит,
+    мостик поднимает таз, а упражнения для глаз показывают глаз, а не
+    фигуру целиком.
+    """
+    expected = {
+        "Приседания с собственным весом": "squat",
+        "Приседания со штангой": "squat",
+        "Выпады назад поочерёдно": "lunge",
+        "Отжимания с колен": "pushup",
+        "Планка на локтях": "plank",
+        "Ягодичный мостик": "bridge",
+        "Румынская тяга с гантелями": "hinge",
+        "Подъёмы ног лёжа": "legraise",
+        "Супермен лёжа": "superman",
+        "Частое моргание": "eyes",
+        "Втягивание подбородка (chin tuck)": "head",
+        "Диафрагмальное дыхание лёжа": "breath",
+    }
+    for name, code in expected.items():
+        assert move_for(name) == code, (name, move_for(name))
 
 
 def test_the_demo_registry_names_exercises_that_exist():

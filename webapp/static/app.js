@@ -2265,6 +2265,214 @@ function startWorkout() {
   openPlayer(gym.exercises);
 }
 
+/* --- показ движения ------------------------------------------------------ */
+//
+// Почему рисуем, а не снимаем. Картинки с фирменным персонажем пробовали
+// генерировать: модель переписывает запрос по-своему и вместо приседа
+// рисует стойку, отключить это у неё нельзя, а увидеть результат из этой
+// сессии невозможно — хранилище закрыто политикой прокси. Библиотека из
+// ста картинок, которых никто не проверил, опаснее пустого места:
+// неправильно показанное движение учит неправильному движению.
+//
+// Поэтому фигура собирается из углов в суставах. Так движение верное по
+// построению: присед идёт вниз, потому что колено согнуто на столько-то
+// градусов, а не потому, что так показалось модели. Весит это пару
+// килобайт, грузится мгновенно и выключается вместе с системной
+// настройкой «уменьшить движение».
+
+// Длины сегментов в единицах поля 100×100. Пропорции взрослого человека,
+// огрублённые: голова меньше настоящей, иначе фигурка читается как ребёнок.
+const BODY = { torso: 26, thigh: 20, shin: 19, upper: 12, fore: 12, head: 6 };
+
+// Углы: 0° — строго вниз, положительные — вперёд (фигура смотрит вправо).
+// Прямое построение: от таза вверх по корпусу и вниз по ногам.
+function skeleton(pose) {
+  const dir = (deg, len) => ({
+    dx: Math.sin(deg * Math.PI / 180) * len,
+    dy: Math.cos(deg * Math.PI / 180) * len,
+  });
+  const add = (point, deg, len) => {
+    const d = dir(deg, len);
+    return { x: point.x + d.dx, y: point.y + d.dy };
+  };
+
+  const hip = { x: 50 + (pose.x || 0), y: 62 + (pose.y || 0) };
+  const lean = pose.lean || 0;
+
+  // Корпус растёт вверх: 180° — прямо вверх от таза.
+  const shoulder = add(hip, 180 + lean, BODY.torso);
+  const head = add(shoulder, 180 + lean + (pose.neck || 0), BODY.head + 3);
+
+  const knee = add(hip, pose.thigh || 0, BODY.thigh);
+  const ankle = add(knee, (pose.thigh || 0) + (pose.knee || 0), BODY.shin);
+
+  const knee2 = add(hip, pose.thigh2 ?? pose.thigh ?? 0, BODY.thigh);
+  const ankle2 = add(knee2, (pose.thigh2 ?? pose.thigh ?? 0) + (pose.knee2 ?? pose.knee ?? 0), BODY.shin);
+
+  const elbow = add(shoulder, lean + (pose.arm || 0), BODY.upper);
+  const hand = add(elbow, lean + (pose.arm || 0) + (pose.elbow || 0), BODY.fore);
+
+  return { hip, shoulder, head, knee, ankle, knee2, ankle2, elbow, hand };
+}
+
+function blend(a, b, k) {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  const out = {};
+  for (const key of keys) {
+    const from = a[key] ?? b[key] ?? 0;
+    const to = b[key] ?? a[key] ?? 0;
+    out[key] = from + (to - from) * k;
+  }
+  return out;
+}
+
+// Движения. У каждого две позы — начало и конец; между ними фигура плавно
+// ходит туда-обратно. Два положения читаются как движение, а сочинять
+// промежуточные кадры не нужно: их считает сам переход.
+//
+// Углы подобраны так, чтобы читалось главное: в приседе сгибается колено и
+// уходит назад таз, в отжимании сгибается локоть, в мостике поднимается таз.
+// Руки в стойке чуть впереди — иначе они сливаются с корпусом в одну линию.
+const MOVES = {
+  squat: [{ thigh: 4, knee: 6, lean: 4, arm: 14, elbow: 4 },
+          { thigh: -40, knee: 82, lean: 28, arm: 76, elbow: 6 }],
+  lunge: [{ thigh: 10, knee: 6, thigh2: -10, knee2: 8, lean: 4, arm: 16, elbow: 6 },
+          { thigh: 34, knee: 56, thigh2: -46, knee2: 88, lean: 8, arm: 16, elbow: 6 }],
+  pushup: [{ lean: 76, thigh: 92, knee: 4, arm: -70, elbow: 4 },
+           { lean: 76, thigh: 92, knee: 4, arm: -104, elbow: 66 }],
+  plank: [{ lean: 78, thigh: 94, knee: 4, arm: -96, elbow: 74 },
+          { lean: 80, thigh: 96, knee: 4, arm: -96, elbow: 74 }],
+  bridge: [{ lean: 108, thigh: 36, knee: 96, arm: 118, elbow: 4 },
+           { lean: 84, thigh: 22, knee: 104, arm: 118, elbow: 4 }],
+  hinge: [{ lean: 8, thigh: 2, knee: 10, arm: 6, elbow: 4 },
+          { lean: 62, thigh: -8, knee: 18, arm: -50, elbow: 4 }],
+  pull: [{ lean: 52, thigh: -6, knee: 14, arm: -46, elbow: 6 },
+         { lean: 52, thigh: -6, knee: 14, arm: -12, elbow: 104 }],
+  press: [{ thigh: 4, knee: 6, arm: -132, elbow: 104 },
+          { thigh: 4, knee: 6, arm: -176, elbow: 8 }],
+  legraise: [{ lean: 96, thigh: 8, knee: 4, thigh2: 8, knee2: 4, arm: 128, elbow: 4 },
+             { lean: 96, thigh: 70, knee: 4, thigh2: 8, knee2: 4, arm: 128, elbow: 4 }],
+  superman: [{ lean: 100, thigh: 88, knee: -4, arm: 172, elbow: 4 },
+             { lean: 88, thigh: 74, knee: -6, arm: 158, elbow: 4 }],
+  march: [{ thigh: -44, knee: 72, thigh2: 14, knee2: 8, arm: 40, elbow: 30 },
+          { thigh: 14, knee: 8, thigh2: -44, knee2: 72, arm: -30, elbow: 30 }],
+  stretch: [{ lean: 8, thigh: 2, knee: 6, arm: -166, elbow: 6 },
+            { lean: 30, thigh: 2, knee: 6, arm: -150, elbow: 6 }],
+  breath: [{ lean: 96, thigh: 34, knee: 96, arm: 112, elbow: 6 },
+           { lean: 96, thigh: 34, knee: 96, arm: 112, elbow: 6, y: -2 }],
+};
+
+// Лицо, шея и глаза стик-фигурой не показать: там движение размером с
+// подбородок. Для них рисуется голова или глаз крупным планом.
+const HEAD_MOVES = { head: true, eyes: true };
+
+function bounds(points) {
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  return { x0: Math.min(...xs), x1: Math.max(...xs),
+           y0: Math.min(...ys), y1: Math.max(...ys) };
+}
+
+// Кадр подгоняется под движение целиком, по обеим позам сразу. По каждой
+// отдельно фигура пульсировала бы в размере на каждом кадре, а без подгонки
+// вовсе — уходила бы ногами за край: углы у поз очень разные.
+const fitted = {};
+
+function fitFor(code) {
+  if (fitted[code]) return fitted[code];
+  const points = [];
+  for (const pose of MOVES[code]) {
+    const b = skeleton(pose);
+    points.push(...Object.values(b));
+    // Голова круглая: её край считаем отдельно, иначе срезается макушка.
+    points.push({ x: b.head.x - BODY.head, y: b.head.y - BODY.head });
+    points.push({ x: b.head.x + BODY.head, y: b.head.y + BODY.head });
+  }
+  const box = bounds(points);
+  const pad = 8;
+  const scale = Math.min((100 - pad * 2) / (box.x1 - box.x0 || 1),
+                         (100 - pad * 2) / (box.y1 - box.y0 || 1));
+  fitted[code] = {
+    scale,
+    dx: pad - box.x0 * scale + ((100 - pad * 2) - (box.x1 - box.x0) * scale) / 2,
+    dy: pad - box.y0 * scale + ((100 - pad * 2) - (box.y1 - box.y0) * scale) / 2,
+  };
+  return fitted[code];
+}
+
+function figureSvg(pose, fit) {
+  const b = skeleton(pose);
+  const line = (from, to) =>
+    `<line x1="${from.x.toFixed(1)}" y1="${from.y.toFixed(1)}" ` +
+    `x2="${to.x.toFixed(1)}" y2="${to.y.toFixed(1)}"/>`;
+  return `<g transform="translate(${fit.dx.toFixed(2)} ${fit.dy.toFixed(2)}) ` +
+         `scale(${fit.scale.toFixed(3)})" stroke-width="${(4.5 / fit.scale).toFixed(2)}">
+    <g class="fig-far">${line(b.hip, b.knee2)}${line(b.knee2, b.ankle2)}</g>
+    <g class="fig-near">
+      ${line(b.hip, b.shoulder)}
+      ${line(b.hip, b.knee)}${line(b.knee, b.ankle)}
+      ${line(b.shoulder, b.elbow)}${line(b.elbow, b.hand)}
+      <circle cx="${b.head.x.toFixed(1)}" cy="${b.head.y.toFixed(1)}" r="${BODY.head}"/>
+    </g></g>`;
+}
+
+// Одна петля на весь экран: каждое движение своим таймером посадило бы
+// телефон, а частота у них всё равно одна.
+let figureFrame = null;
+const figures = new Set();
+
+function figureLoop(now) {
+  for (const box of figures) {
+    if (!box.isConnected) { figures.delete(box); continue; }
+    const move = MOVES[box.dataset.move];
+    if (!move) continue;
+    const period = Number(box.dataset.period) || 2600;
+    // Туда-обратно: половина периода в одну сторону, половина обратно.
+    const phase = (now % period) / period;
+    const k = phase < 0.5 ? phase * 2 : (1 - phase) * 2;
+    const eased = k * k * (3 - 2 * k);
+    box.querySelector('svg').innerHTML =
+      figureSvg(blend(move[0], move[1], eased), fitFor(box.dataset.move));
+  }
+  figureFrame = figures.size ? requestAnimationFrame(figureLoop) : null;
+}
+
+const HEAD_SVG = `<svg viewBox="0 0 100 100" class="fig-head" aria-hidden="true">
+  <circle cx="52" cy="40" r="21"/>
+  <path d="M52 61 L52 78 M52 78 L34 88 M52 78 L70 88" fill="none"/>
+</svg>`;
+
+const EYE_SVG = `<svg viewBox="0 0 100 100" class="fig-eye" aria-hidden="true">
+  <path d="M14 50 Q50 20 86 50 Q50 80 14 50 Z" fill="none"/>
+  <circle class="pupil" cx="50" cy="50" r="11"/>
+</svg>`;
+
+// Показ движения в отведённом месте. Возвращает true, если что-то
+// нарисовано: пустое место должно остаться узкой полосой, а не кадром.
+function showMove(box, code, period = 2600) {
+  box.innerHTML = '';
+  if (!code || (!MOVES[code] && !HEAD_MOVES[code])) return false;
+
+  const wrap = document.createElement('div');
+  wrap.className = `figure${HEAD_MOVES[code] ? ' head-only' : ''}`;
+  wrap.dataset.move = code;
+  wrap.dataset.period = period;
+  wrap.innerHTML = code === 'eyes' ? EYE_SVG
+    : code === 'head' ? HEAD_SVG
+    : '<svg viewBox="0 0 100 100" aria-hidden="true"></svg>';
+  box.appendChild(wrap);
+
+  if (HEAD_MOVES[code]) return true;      // качается стилями, без пересчёта
+  // Движение выключено в телефоне — показываем одну позу и не считаем ничего.
+  if (!motion()) {
+    wrap.querySelector('svg').innerHTML = figureSvg(MOVES[code][0], fitFor(code));
+    return true;
+  }
+  figures.add(wrap);
+  if (!figureFrame) figureFrame = requestAnimationFrame(figureLoop);
+  return true;
+}
+
 /* --- проводник по тренировке -------------------------------------------- */
 //
 // Каталог отвечает на вопрос «что делать», проводник — «что делать прямо
@@ -2350,6 +2558,7 @@ function openPlayer(exercises, saved = null) {
       id: item.id, name: item.name, sets: item.sets || 1,
       reps: item.reps || 0, seconds: item.seconds_per_set || 0,
       rest: item.rest_seconds || 0, image: item.demo_image || null,
+      move: item.move || null,
       hint: item.how && item.how.steps ? item.how.steps[0] : '',
     })),
     index: 0, set: 1, phase: 'exercise', left: 0, paused: false,
@@ -2459,10 +2668,17 @@ function renderPlayer() {
   const demo = document.getElementById('player-demo');
   const show = !rest && item.image;
   image.hidden = !show;
-  document.getElementById('player-soon').hidden = !!show || rest;
-  demo.classList.toggle('empty', !show);
-  demo.hidden = rest;
   if (show) image.src = item.image;
+  // Во время подхода движение показывается всё время — на него и смотрят.
+  // Период берём от самого упражнения: планку держат медленно, шаги идут
+  // быстро, и одинаковый темп врал бы про оба.
+  const drawn = document.getElementById('player-figure');
+  const moving = !rest && !show
+    && showMove(drawn, item.move, item.seconds ? 3400 : 2200);
+  if (rest || show) drawn.innerHTML = '';
+  document.getElementById('player-soon').hidden = !!show || rest || moving;
+  demo.classList.toggle('empty', !show && !moving);
+  demo.hidden = rest;
 
   const ring = document.getElementById('player-ring');
   const counting = rest || timed;
@@ -2624,20 +2840,24 @@ function openHow(exercise) {
     [exercise.muscle, load, `отдых ${exercise.rest_seconds} с`]
       .filter(Boolean).join(' · ');
 
-  // Место под анимацию. Файла пока нет ни у одного упражнения — тогда
-  // показываем ровное место, а не обещание.
+  // Показ движения. Готовая картинка, если она есть; иначе рисуем
+  // движение сами — и только если нет ни того, ни другого, остаётся
+  // узкая полоса с одной строкой.
   const image = document.getElementById('how-image');
   const soon = document.getElementById('how-soon');
+  const demo = document.getElementById('how-demo');
+  const drawn = document.getElementById('how-figure');
+
   image.hidden = !exercise.demo_image;
-  soon.hidden = !!exercise.demo_image;
-  document.getElementById('how-demo').classList.toggle('empty',
-                                                       !exercise.demo_image);
   if (exercise.demo_image) {
     image.src = exercise.demo_image;
     image.alt = exercise.name;
   } else {
     image.removeAttribute('src');
   }
+  const moving = !exercise.demo_image && showMove(drawn, exercise.move);
+  soon.hidden = !!exercise.demo_image || moving;
+  demo.classList.toggle('empty', !exercise.demo_image && !moving);
 
   const steps = document.getElementById('how-steps');
   steps.innerHTML = '';
