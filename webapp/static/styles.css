@@ -1146,34 +1146,35 @@ select.fact-input { text-align: left; width: 130px; }
 .sync-state[data-code="early"] .sync-state-title { color: var(--teal); }
 .sync-state .hint { margin: 0; }
 
-/* Тренер: готовые анимации персонажа.
+/* Тренер: готовые ролики персонажа.
 
    Кадр строго квадратный и не меняет размера между упражнениями: холст у
-   всех анимаций один (768×768), и любой «подгон по содержимому» дёргал бы
+   всех роликов один (960×960), и любой «подгон по содержимому» дёргал бы
    окно при каждом переключении. Картинка вписывается целиком
    (object-fit: contain) — обрезать персонажа по краям нельзя, поза важнее
-   плотной заливки кадра. */
-.how-demo.square { aspect-ratio: 1 / 1; }
-.trainer { position: relative; width: 100%; height: 100%; }
-.trainer-shot {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: contain; display: block;
+   плотной заливки кадра. Фон — цвет сцены из манифеста (#151126), чтобы
+   поля по краям не выглядели дырой.
+
+   Ни рамки, ни фильтров, ни оверлеев поверх ролика: он показывается таким,
+   каким снят. */
+.how-demo.square { aspect-ratio: 1 / 1; border-color: transparent; }
+/* Вес селектора здесь не украшение: рядом живёт старое правило
+   `.how-demo img { object-fit: cover }`, и оно обрезало планку по краям —
+   поймано в браузере. */
+.how-demo .exercise-technique-media,
+.exercise-technique-media {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: contain;
+  background: #151126;
 }
-/* Листалка кадров для тех, кто выключил движение в телефоне. */
-.trainer-steps {
-  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 6px;
-  /* Подложка обязательна: без неё подпись ложится на ноги персонажа и
-     читается через раз — проверено в браузере. */
-  padding: 3px 6px; border-radius: 999px;
-  background: rgba(10, 9, 18, .72); backdrop-filter: blur(6px);
-}
-.trainer-steps span { font-size: 12px; color: var(--lilac); min-width: 78px;
-                      text-align: center; }
-.trainer-steps .icon-btn { width: 28px; height: 28px; font-size: 17px; }
 /* В проводнике квадрат не должен съедать экран: под ним ещё название,
    счёт подходов, подсказка и три кнопки. Замерено на 390×844. */
 .player-body .how-demo.square { max-height: 38vh; }
+.player-body .how-demo.square .exercise-technique-media {
+  height: 100%; width: auto; margin: 0 auto;
+}
 
 /* Ая — персонаж, который показывает движение. Силуэт собирается кодом по
    углам в суставах, а здесь ему даётся свет: заливка, свечение снизу,
@@ -1559,6 +1560,12 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  /* Планка — удержание, и двигаться в ней нечему: там не повторы, а
+     неподвижная поза. Поэтому у неё вместо ролика кадр, а «живым» его
+     делает только очень слабое дыхание свечения самого контейнера.
+     Изображение при этом не трогается вовсе — ни масштаба, ни фильтра. */
+  .how-demo.trainer-hold { animation: hold-breath 4.8s ease-in-out infinite; }
+
   /* Лицо и глаза: качание головы вместо фигуры — там движение размером с
      подбородок, и стик-фигура его не показывает. */
   .head-only .mv-portrait { animation: head-sway 3s ease-in-out infinite;
@@ -1821,6 +1828,11 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
 }
 .gym-warning p {
   margin: 0 0 12px; font-size: 14px; line-height: 1.5; white-space: pre-line;
+}
+
+@keyframes hold-breath {
+  0%, 100% { box-shadow: 0 0 0 rgba(139, 92, 246, 0); }
+  50% { box-shadow: 0 0 22px rgba(139, 92, 246, .28); }
 }
 
 @keyframes head-sway {

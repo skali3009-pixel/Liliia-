@@ -2894,21 +2894,20 @@ function showMove(box, code, period = 2600) {
   return true;
 }
 
-/* --- Тренер: готовые анимации персонажа ----------------------------------
+/* --- Тренер: готовые ролики персонажа -------------------------------------
 
-   Персонажа приложение больше не собирает само. Анимации нарисованы
-   заранее, лежат в `webapp/static/trainer/` и подключаются как есть: не
-   разбираются на кадры, не пересобираются, не дорисовываются.
+   Персонажа приложение не рисует и не собирает. Ролики сняты заранее,
+   лежат в `webapp/static/trainer/` и ставятся как есть: без ускорения,
+   без фильтров, без масок и без оверлеев поверх.
 
    Связь «упражнение → файл» идёт только через `manifest.json` и постоянный
    код упражнения (`exercise_id`). По русскому названию файлы не ищутся
    никогда: одна запятая в названии — и человек молча остался бы без
    показа, а узнали бы мы об этом от него, а не от кода.
 
-   Чего нет у упражнения ассета, того и не показываем: вместо старого
-   рисованного персонажа — одна честная строка «Анимация техники
-   готовится». Подмешивать две разные графики в один экран нельзя: человек
-   решит, что это два разных приложения.
+   Чего нет у упражнения ассета, того и не показываем: вместо чужой
+   графики — одна честная строка «Анимация техники готовится». Две разные
+   графики в одном экране выглядят двумя разными приложениями.
 */
 
 const TRAINER_ROOT = '/static/trainer/';
@@ -2934,80 +2933,57 @@ function loadTrainerPack() {
 
 function trainerFor(exerciseId) {
   if (!exerciseId || !trainerPack) return null;
-  return trainerPack.animations?.[exerciseId] || null;
+  return (trainerPack.assets || []).find((item) => item.exerciseId === exerciseId) || null;
 }
 
-/* Папка с кадрами выводится из имени готового файла, а не из названия
-   упражнения: `animations/anim_squat_bodyweight.webp` →
-   `frames/anim_squat_bodyweight/frame_04.png`. Стоит тест, что для каждой
-   анимации из манифеста эти шесть файлов на диске есть. */
-function trainerFrame(item, number) {
-  const stem = item.asset.split('/').pop().replace(/\.webp$/, '');
-  return `${TRAINER_ROOT}frames/${stem}/frame_0${number}.png`;
-}
+// Пути к файлам собираются в одном месте — здесь. Папку ассетов меняют
+// правкой TRAINER_ROOT, а не строчкой в каждой карточке.
+const trainerUrl = (path) => TRAINER_ROOT + path;
 
-/* Анимированный WebP умеют не все: статический понимают все, а движущийся
-   не понимает Safari до 14-й версии. Отличить это по ошибке загрузки
-   нельзя — такой браузер спокойно покажет первый кадр и замрёт. Поэтому
-   один раз проверяем декодированием: это двухкадровый WebP размером 1×1. */
-const ANIMATED_WEBP = 'data:image/webp;base64,UklGRlIAAABXRUJQVlA4WAoAAAAS'
-  + 'AAAAAAAAAAAAQU5JTQYAAAD/////AABBTk1GJgAAAAAAAAAAAAAAAAAAAGQAAABWUDhM'
-  + 'DQAAAC8AAAAQBxAREYiI/gcA';
-let animatedWebp = null;
-
-function checkAnimatedWebp() {
-  if (animatedWebp) return animatedWebp;
-  animatedWebp = new Promise((done) => {
-    const probe = new Image();
-    probe.onload = () => done(probe.width === 1 && probe.height === 1);
-    probe.onerror = () => done(false);
-    probe.src = ANIMATED_WEBP;
-  });
-  return animatedWebp;
-}
-
-/* Предзагрузка. Файл весит два-три мегабайта, и если начать качать его в
-   момент открытия окна, человек несколько секунд смотрит на заставку.
-   Качаем заранее — по касанию кнопки и на отдыхе перед следующим
-   упражнением, — но не все шесть сразу: это шестнадцать мегабайт. */
+/* Предзагрузка. Ролик весит два с половиной мегабайта, и если начать
+   качать его в момент открытия окна, человек несколько секунд смотрит на
+   заставку. Качаем заранее — по касанию кнопки и на отдыхе перед
+   следующим упражнением, — но не все пять сразу. */
 const trainerWarm = new Set();
 
 function preloadTrainer(exerciseId) {
   const item = trainerFor(exerciseId);
   if (!item || trainerWarm.has(exerciseId)) return;
   trainerWarm.add(exerciseId);
-  new Image().src = TRAINER_ROOT + item.asset;
+  if (item.format === 'mp4') {
+    const probe = document.createElement('video');
+    probe.preload = 'auto';
+    probe.muted = true;
+    probe.src = trainerUrl(item.src);
+  } else {
+    new Image().src = trainerUrl(item.src);
+  }
 }
 
-/* Показ кадрами: и запасной путь для старых браузеров, и листалка для тех,
-   кто выключил движение в телефоне. */
-function trainerFrames(shot, item, still) {
-  const count = item.frames || 6;
-  // Ключевой кадр — четвёртый: на нём движение в нижней точке, по нему
-  // упражнение и узнают. Первый кадр — просто «стоит».
-  let at = Math.min(4, count);
-  const show = () => { shot.src = trainerFrame(item, at); };
-  show();
-  if (still) return { show: () => show(), step: (delta) => {
-    at = ((at - 1 + delta + count) % count) + 1; show(); return at; }, count, at: () => at };
-
-  // Туда-обратно или по кругу — как сказано в манифесте.
-  let step = 1;
-  const timer = setInterval(() => {
-    if (!shot.isConnected) { clearInterval(timer); return; }
-    if (item.playback === 'ping-pong') {
-      if (at >= count) step = -1;
-      if (at <= 1) step = 1;
-      at += step;
-    } else {
-      at = at >= count ? 1 : at + 1;
-    }
-    show();
-  }, Math.round(1000 / (item.fps || 6)));
-  return null;
+// Удержание (планка) — не ролик: активному движению конечностей здесь
+// взяться неоткуда. Дышит только свечение самого контейнера, и включает
+// его тот, кто этим контейнером владеет.
+function trainerIsHold(exerciseId) {
+  return trainerFor(exerciseId)?.animationType === 'hold';
 }
 
-/* Показ анимации тренера в отведённом месте.
+/* Запуск — после того, как окно показано. Пока окно скрыто, браузер
+   запускать ролик отказывается, и молча: обещание play() отклоняется, а
+   атрибут autoplay второй раз уже не срабатывает. Поймано в браузере: в
+   проводнике ролик шёл, а в окне техники стоял на нуле. */
+function playTrainer(box) {
+  for (const video of box.querySelectorAll('video')) video.play?.().catch(() => {});
+}
+
+/* Ролик ставится на паузу, когда окно закрывают: за кадром он продолжал бы
+   крутиться и жечь батарею, а вернувшись, человек застал бы движение с
+   середины. При следующем открытии показ собирается заново, то есть всегда
+   с нулевой секунды. */
+function pauseTrainer(box) {
+  for (const video of box.querySelectorAll('video')) video.pause();
+}
+
+/* Показ техники в отведённом месте.
    Возвращает true, если что-то показано: строку «готовится» показывает
    вызывающий, и она не должна висеть поверх картинки. */
 function ExerciseTrainerAnimation(box, exerciseId) {
@@ -3015,51 +2991,38 @@ function ExerciseTrainerAnimation(box, exerciseId) {
   const item = trainerFor(exerciseId);
   if (!item) return false;
 
-  const stage = document.createElement('div');
-  stage.className = 'trainer';
+  const poster = trainerUrl(item.poster || item.src);
 
-  // Заставка стоит до готовности анимации. Без неё окно открывается
-  // пустым прямоугольником, и кажется, что оно сломалось.
-  const poster = document.createElement('img');
-  poster.className = 'trainer-shot';
-  poster.src = TRAINER_ROOT + item.poster;
-  poster.alt = item.label || '';
-  stage.appendChild(poster);
-  box.appendChild(stage);
-
-  // Движение выключено в телефоне — один ключевой кадр и листалка.
-  if (!motion()) {
-    poster.alt = `${item.label || ''}: кадр движения`;
-    const control = trainerFrames(poster, item, true);
-    const bar = document.createElement('div');
-    bar.className = 'trainer-steps';
-    bar.innerHTML = '<button class="icon-btn" aria-label="Кадр назад">‹</button>'
-      + '<span></span><button class="icon-btn" aria-label="Кадр вперёд">›</button>';
-    const label = bar.querySelector('span');
-    const say = () => { label.textContent = `Кадр ${control.at()} из ${control.count}`; };
-    const [back, forward] = bar.querySelectorAll('button');
-    back.onclick = () => { control.step(-1); say(); };
-    forward.onclick = () => { control.step(1); say(); };
-    say();
-    stage.appendChild(bar);
+  // Движение выключено в телефоне — показываем только заставку. Это та же
+  // поза, тот же кадр и тот же размер, просто она не двигается.
+  const still = !motion() || item.format !== 'mp4';
+  if (still) {
+    const shot = document.createElement('img');
+    shot.className = 'exercise-technique-media';
+    shot.src = motion() ? trainerUrl(item.src) : poster;
+    shot.alt = item.titleRu || '';
+    box.appendChild(shot);
     return true;
   }
 
-  checkAnimatedWebp().then((ok) => {
-    if (!stage.isConnected) return;
-    if (!ok) { trainerFrames(poster, item, false); return; }
-    const play = document.createElement('img');
-    play.className = 'trainer-shot';
-    play.alt = '';
-    play.decoding = 'async';
-    play.hidden = true;
-    // Подменяем заставку только после полной загрузки: иначе на месте
-    // картинки на секунду появляется пустота.
-    play.onload = () => { play.hidden = false; poster.hidden = true; };
-    play.onerror = () => trainerFrames(poster, item, false);
-    play.src = TRAINER_ROOT + item.asset;
-    stage.appendChild(play);
-  });
+  const video = document.createElement('video');
+  video.className = 'exercise-technique-media';
+  video.autoplay = true;
+  video.loop = item.loop !== false;
+  video.muted = true;          // без этого телефон не даст запустить сам
+  video.defaultMuted = true;
+  video.playsInline = true;
+  video.setAttribute('muted', '');
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.preload = 'metadata';
+  video.poster = poster;
+  video.setAttribute('aria-label', item.titleRu || '');
+  const source = document.createElement('source');
+  source.src = trainerUrl(item.src);
+  source.type = 'video/mp4';
+  video.appendChild(source);
+  box.appendChild(video);
   return true;
 }
 
@@ -3273,7 +3236,9 @@ function renderPlayer() {
   document.getElementById('player-soon').hidden = !!show || rest || moving;
   demo.classList.toggle('empty', !show && !moving);
   demo.classList.toggle('square', moving);
+  demo.classList.toggle('trainer-hold', moving && trainerIsHold(item.exercise_id));
   demo.hidden = rest;
+  if (moving) playTrainer(drawn);
 
   const ring = document.getElementById('player-ring');
   const counting = rest || timed;
@@ -3457,6 +3422,7 @@ function openHow(exercise) {
   // Кадр у анимаций квадратный. Без этого при переходе от упражнения с
   // анимацией к упражнению без неё окно прыгало бы в высоте.
   demo.classList.toggle('square', moving);
+  demo.classList.toggle('trainer-hold', moving && trainerIsHold(exercise.exercise_id));
 
   const steps = document.getElementById('how-steps');
   steps.innerHTML = '';
@@ -3479,6 +3445,9 @@ function openHow(exercise) {
 
   haptic();
   sheet.hidden = false;
+  // Только теперь, когда окно на экране: до этого браузер запускать
+  // отказывается.
+  playTrainer(drawn);
 }
 
 // Занятие — плитка, а не строка.
@@ -5681,6 +5650,9 @@ async function init() {
   document.getElementById('start-workout').onclick = startWorkout;
   document.getElementById('how-close').onclick = () => {
     document.getElementById('how-sheet').hidden = true;
+    // За кадром ролик крутился бы дальше и жёг батарею, а вернувшись,
+    // человек застал бы движение с середины.
+    pauseTrainer(document.getElementById('how-figure'));
   };
   document.getElementById('player-main').onclick = playerMain;
   document.getElementById('player-pause').onclick = playerPause;

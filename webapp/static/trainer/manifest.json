@@ -1,60 +1,67 @@
 {
-  "assetPack": "AURA Purple Cheetah Trainer",
-  "version": 1,
-  "canvas": {
-    "width": 768,
-    "height": 768,
-    "format": "png",
-    "alpha": true
-  },
-  "animations": {
-    "bodyweight_squat": {
-      "label": "Приседания с собственным весом",
-      "frames": 6,
-      "fps": 7,
-      "playback": "ping-pong",
-      "asset": "animations/anim_squat_bodyweight.webp",
-      "poster": "frames/anim_squat_bodyweight/frame_01.png"
+  "package": "AURA_block_01_home_beginner_v2",
+  "version": "2.0.0-test",
+  "backgroundColor": "#151126",
+  "assets": [
+    {
+      "exerciseId": "bodyweight_squat",
+      "titleRu": "Приседания с собственным весом",
+      "animationAssetId": "anim_squat_bodyweight",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_squat_bodyweight.mp4",
+      "poster": "posters/anim_squat_bodyweight.png",
+      "loop": true
     },
-    "knee_pushup": {
-      "label": "Отжимания с колен",
-      "frames": 6,
-      "fps": 6,
-      "playback": "ping-pong",
-      "asset": "animations/anim_pushup_knee.webp",
-      "poster": "frames/anim_pushup_knee/frame_01.png"
+    {
+      "exerciseId": "knee_pushup",
+      "titleRu": "Отжимания с колен",
+      "animationAssetId": "anim_pushup_knee",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pushup_knee.mp4",
+      "poster": "posters/anim_pushup_knee.png",
+      "loop": true
     },
-    "glute_bridge": {
-      "label": "Ягодичный мостик",
-      "frames": 6,
-      "fps": 6,
-      "playback": "ping-pong",
-      "asset": "animations/anim_glute_bridge.webp",
-      "poster": "frames/anim_glute_bridge/frame_01.png"
+    {
+      "exerciseId": "glute_bridge",
+      "titleRu": "Ягодичный мостик",
+      "animationAssetId": "anim_glute_bridge",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_glute_bridge.mp4",
+      "poster": "posters/anim_glute_bridge.png",
+      "loop": true
     },
-    "bottle_bent_over_row": {
-      "label": "Тяга в наклоне с бутылками воды",
-      "frames": 6,
-      "fps": 6,
-      "playback": "ping-pong",
-      "asset": "animations/anim_bent_over_row.webp",
-      "poster": "frames/anim_bent_over_row/frame_01.png"
+    {
+      "exerciseId": "bottle_bent_over_row",
+      "titleRu": "Тяга в наклоне с бутылками воды",
+      "animationAssetId": "anim_bent_over_row",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_bent_over_row.mp4",
+      "poster": "posters/anim_bent_over_row.png",
+      "loop": true
     },
-    "forearm_plank": {
-      "label": "Планка на локтях",
-      "frames": 6,
-      "fps": 4,
-      "playback": "loop",
-      "asset": "animations/anim_plank_forearm.webp",
-      "poster": "frames/anim_plank_forearm/frame_01.png"
+    {
+      "exerciseId": "forearm_plank",
+      "titleRu": "Планка на локтях",
+      "animationAssetId": "anim_plank_forearm",
+      "animationType": "hold",
+      "format": "png",
+      "src": "static/anim_plank_forearm.png",
+      "poster": "static/anim_plank_forearm.png",
+      "loop": false
     },
-    "lying_leg_raise": {
-      "label": "Подъёмы ног лёжа",
-      "frames": 6,
-      "fps": 6,
-      "playback": "ping-pong",
-      "asset": "animations/anim_leg_raise_lying.webp",
-      "poster": "frames/anim_leg_raise_lying/frame_01.png"
+    {
+      "exerciseId": "lying_leg_raise",
+      "titleRu": "Подъёмы ног лёжа",
+      "animationAssetId": "anim_leg_raise_lying",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_leg_raise_lying.mp4",
+      "poster": "posters/anim_leg_raise_lying.png",
+      "loop": true
     }
-  }
+  ]
 }
