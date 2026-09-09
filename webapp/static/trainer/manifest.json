@@ -1,6 +1,4 @@
 {
-  "package": "AURA_block_01_home_beginner_v2",
-  "version": "2.0.0-test",
   "backgroundColor": "#151126",
   "assets": [
     {
@@ -62,6 +60,80 @@
       "src": "animations/anim_leg_raise_lying.mp4",
       "poster": "posters/anim_leg_raise_lying.png",
       "loop": true
+    },
+    {
+      "exerciseId": "plie_squat",
+      "titleRu": "Приседания-плие",
+      "animationAssetId": "anim_plie_squat",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_plie_squat.mp4",
+      "poster": "posters/anim_plie_squat.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "standard_pushup",
+      "titleRu": "Отжимания классические",
+      "animationAssetId": "anim_pushup_standard",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pushup_standard.mp4",
+      "poster": "posters/anim_pushup_standard.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "alternating_reverse_lunge",
+      "titleRu": "Выпады назад поочерёдно",
+      "animationAssetId": "anim_reverse_lunge_alternating",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_reverse_lunge_alternating.mp4",
+      "poster": "posters/anim_reverse_lunge_alternating.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "single_leg_glute_bridge",
+      "titleRu": "Ягодичный мостик на одной ноге",
+      "animationAssetId": "anim_glute_bridge_single_leg",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_glute_bridge_single_leg.mp4",
+      "poster": "posters/anim_glute_bridge_single_leg.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "superman_raise",
+      "titleRu": "Половинный Супермен — подъём корпуса и рук",
+      "animationAssetId": "anim_superman_raise",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_superman_raise.mp4",
+      "poster": "posters/anim_superman_raise.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "plank_arm_raise",
+      "titleRu": "Планка с подъёмом руки",
+      "animationAssetId": "anim_plank_arm_raise",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_plank_arm_raise.mp4",
+      "poster": "posters/anim_plank_arm_raise.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "bicycle_crunch",
+      "titleRu": "Скручивания «велосипед»",
+      "animationAssetId": "anim_bicycle_crunch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_bicycle_crunch.mp4",
+      "poster": "posters/anim_bicycle_crunch.png",
+      "loop": true
     }
+  ],
+  "packages": [
+    "AURA_block_01_home_beginner_v2",
+    "AURA_block_02_home_intermediate_v2"
   ]
 }

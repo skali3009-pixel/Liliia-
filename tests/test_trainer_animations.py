@@ -220,6 +220,71 @@ def test_only_the_asset_of_this_exercise_is_shown():
     assert "trainerUrl(item.src)" in body
 
 
+# --- блоки складываются, а не заменяют друг друга --------------------------
+
+# Что именно принёс каждый блок. Список закрыт нарочно: слияние манифестов
+# делается скриптом, а скрипт легко написать так, что он затрёт всё
+# прежнее — и заметить это будет некому, потому что новый блок при этом
+# работает прекрасно.
+BLOCK_01 = {
+    "bodyweight_squat": "anim_squat_bodyweight",
+    "knee_pushup": "anim_pushup_knee",
+    "glute_bridge": "anim_glute_bridge",
+    "bottle_bent_over_row": "anim_bent_over_row",
+    "forearm_plank": "anim_plank_forearm",
+    "lying_leg_raise": "anim_leg_raise_lying",
+}
+BLOCK_02 = {
+    "plie_squat": "anim_plie_squat",
+    "standard_pushup": "anim_pushup_standard",
+    "alternating_reverse_lunge": "anim_reverse_lunge_alternating",
+    "single_leg_glute_bridge": "anim_glute_bridge_single_leg",
+    "superman_raise": "anim_superman_raise",
+    "plank_arm_raise": "anim_plank_arm_raise",
+    "bicycle_crunch": "anim_bicycle_crunch",
+}
+
+
+def test_the_first_block_survives_every_later_one():
+    """Новый блок добавляется к прежним, а не встаёт на их место."""
+    have = {item["exerciseId"]: item["animationAssetId"] for item in ASSETS}
+    for code, asset in BLOCK_01.items():
+        assert have.get(code) == asset, (code, have.get(code))
+
+
+def test_the_second_block_is_installed_whole():
+    """Семь упражнений «Дом · Средний» — все, а не сколько доехало."""
+    have = {item["exerciseId"]: item["animationAssetId"] for item in ASSETS}
+    for code, asset in BLOCK_02.items():
+        assert have.get(code) == asset, (code, have.get(code))
+
+
+def test_the_superman_is_the_corrected_half_version():
+    """Пятое упражнение блока 02 присылали дважды.
+
+    В первой версии персонаж отрывал от пола и ноги, и таз — это уже не то
+    упражнение. В исправленной ноги и таз лежат, поднимаются грудная
+    клетка и прямые руки. Проверено глазами по заставке и по контрольному
+    листу кадров: декодера H.264 в этой сессии нет, и автоматически
+    отличить одно от другого нечем. Здесь заперто то, что проверяется, —
+    что стоит именно файл из исправленного пакета и что заставка к нему
+    своя.
+    """
+    superman = next(item for item in ASSETS if item["exerciseId"] == "superman_raise")
+    assert superman["src"] == "animations/anim_superman_raise.mp4"
+    assert superman["poster"] == "posters/anim_superman_raise.png"
+    assert (TRAINER / superman["src"]).exists()
+    assert (TRAINER / superman["poster"]).exists()
+    assert "AURA_block_02_home_intermediate_v2" in PACK["packages"]
+
+
+def test_the_manifest_remembers_which_packages_it_is_made_of():
+    """Иначе после третьего блока никто не скажет, что откуда взялось."""
+    assert PACK["packages"] == ["AURA_block_01_home_beginner_v2",
+                                "AURA_block_02_home_intermediate_v2"]
+    assert len(ASSETS) == len(BLOCK_01) + len(BLOCK_02)
+
+
 def test_no_two_exercises_point_at_the_same_file():
     """Один файл на два упражнения — это человек, который учится не тому.
 
