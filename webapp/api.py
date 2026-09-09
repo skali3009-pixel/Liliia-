@@ -750,7 +750,6 @@ async def get_workouts(request: web.Request) -> web.Response:
             ),
             "minutes": round(exercise_minutes(workout)),
             "calories": round(exercise_calories(workout, weight)),
-            "demo_url": workout.demo_url,
             "is_cardio": workout.workout_type == WorkoutTypeEnum.CARDIO,
             # Техника словами — вместо ухода на поиск в YouTube. Есть не у
             # всех упражнений: пишется постепенно, и пока её нет, остаётся

@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import LevelEnum, LocationEnum, Workout, WorkoutTypeEnum
-from seed.workout_programs import CARDIO, PROGRAMS, demo_url
+from seed.workout_programs import CARDIO, PROGRAMS
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +69,6 @@ async def seed_workouts(session: AsyncSession) -> int:
                     reps=reps,
                     rest_seconds=rest,
                     met_value=met,
-                    demo_url=demo_url(name),
                 )
             )
             added += 1
@@ -91,7 +90,6 @@ async def seed_workouts(session: AsyncSession) -> int:
                 position=position,
                 duration_minutes=minutes,
                 met_value=met,
-                demo_url=demo_url(name),
             )
         )
         added += 1

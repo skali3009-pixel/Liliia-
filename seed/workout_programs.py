@@ -15,7 +15,6 @@ MET взяты из Compendium of Physical Activities.
 
 from __future__ import annotations
 
-from urllib.parse import quote
 
 # Что тренируем.
 # Подписи без эмодзи: направление называет само себя, а картинка рядом с
@@ -336,9 +335,3 @@ CARDIO: list[tuple[str, int, float]] = [
 
 # У лица и глаз расход калорий ничтожен — показывать его бессмысленно.
 CATEGORIES_WITH_CALORIES = {"body", "calm", "dance", "posture"}
-
-
-def demo_url(exercise_name: str) -> str:
-    """Поиск техники упражнения на YouTube."""
-    query = quote(f"{exercise_name} техника выполнения")
-    return f"https://www.youtube.com/results?search_query={query}"

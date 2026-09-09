@@ -31,6 +31,18 @@ def test_the_technique_describes_exercises_that_exist():
     assert not unknown, unknown
 
 
+def test_every_exercise_in_the_catalogue_has_a_technique():
+    """Ссылки наружу больше нет — значит, пробелов быть не может.
+
+    Раньше упражнение без техники показывало ссылку на поиск в YouTube.
+    Теперь не показывает ничего: человек открыл бы упражнение и не нашёл
+    ни слова о том, как его делать. Добавили упражнение — напишите к нему
+    технику, и этот тест напомнит об этом сразу.
+    """
+    missing = catalogue_names() - set(TECHNIQUE)
+    assert not missing, missing
+
+
 def test_every_technique_says_what_to_do():
     """Пустая техника хуже отсутствующей: человек открыл и ничего не нашёл."""
     for name, how in TECHNIQUE.items():

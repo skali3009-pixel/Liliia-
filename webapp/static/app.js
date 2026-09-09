@@ -2716,19 +2716,15 @@ function exerciseRow(exercise) {
   row.querySelector('.ex-sub').textContent =
     [exercise.muscle, detail].filter(Boolean).join(' · ');
 
-  // Есть своя техника — показываем её внутри приложения. Нет — оставляем
-  // старую ссылку: уводить в поиск плохо, но оставить человека вообще без
-  // подсказки хуже. Техника пишется постепенно, и ссылка исчезает вместе
-  // с последним упражнением без неё.
+  // Техника открывается внутри приложения. Наружу не уводим больше никуда:
+  // раньше «как делать» вело на страницу поиска в YouTube, и человек уходил
+  // в чужую ленту посреди тренировки. Техника написана у всех упражнений
+  // каталога, и на это стоит тест.
   const link = row.querySelector('.how-link');
+  link.hidden = !exercise.how;
   if (exercise.how) {
     link.textContent = 'смотреть технику';
     link.onclick = () => openHow(exercise);
-  } else {
-    link.textContent = 'как делать →';
-    link.href = exercise.demo_url;
-    link.target = '_blank';
-    link.rel = 'noopener';
   }
 
   row.querySelector('.ex-check').onclick = () => {

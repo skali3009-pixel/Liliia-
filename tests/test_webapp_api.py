@@ -524,7 +524,10 @@ def test_workouts_returns_program_for_place_and_level():
             first = data["exercises"][0]
             assert first["sets"] and first["reps"] and first["rest_seconds"]
             assert first["calories"] > 0            # расход посчитан по MET
-            assert first["demo_url"].startswith("https://")
+            # Наружу больше не уводим: техника открывается внутри
+            # приложения, и она есть у каждого упражнения каталога.
+            assert "demo_url" not in first
+            assert first["how"]["steps"]
             # Не число, а состав: список занятий растёт, и точное количество
             # ничего не гарантирует. Гарантирует то, что человек найдёт в
             # нём то, чем действительно занимается.

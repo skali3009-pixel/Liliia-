@@ -681,10 +681,10 @@ def test_the_record_button_has_one_owner():
 def test_the_technique_opens_inside_the_app():
     """Уходить в поиск YouTube посреди тренировки — значит не вернуться.
 
-    У упражнения с написанной техникой ссылка ведёт в своё окно; у
-    остальных пока остаётся старая — оставить человека совсем без
-    подсказки хуже, чем увести. Ссылка исчезнет вместе с последним
-    упражнением без техники.
+    Раньше «как делать» вело на страницу результатов поиска: не на
+    подобранный ролик, а на предложение поискать самому. Теперь техника
+    написана у всех упражнений каталога и открывается своим окном, а
+    наружу приложение не уводит вообще.
     """
     for element_id in ("how-sheet", "how-title", "how-demo", "how-steps",
                        "how-mistakes", "how-meta", "how-close"):
@@ -694,9 +694,11 @@ def test_the_technique_opens_inside_the_app():
     body = APP_JS.split("function exerciseRow(", 1)[1][:2000]
     assert "if (exercise.how)" in body
     assert "openHow(exercise)" in body
-    # Наружу уводим только там, где своей техники ещё нет.
-    outside = body.split("} else {", 1)[1][:300]
-    assert "exercise.demo_url" in outside
+    # Наружу не уводим никуда: техника написана у всех упражнений.
+    assert "demo_url" not in APP_JS
+    # Ищем ссылку, а не слово: в комментарии рядом объяснено, почему её
+    # больше нет, и запрещать само упоминание значит запрещать объяснение.
+    assert "youtube.com" not in APP_JS.lower()
 
 
 def test_the_empty_demo_slot_does_not_eat_the_screen():
