@@ -129,8 +129,17 @@ def test_the_manifest_names_exercises_that_exist():
 
 def test_every_file_named_in_the_manifest_is_on_disk():
     for item in ASSETS:
+        # Заставка не обязательна: у кадра она и есть сам кадр, и
+        # корректирующий пакет её для планки не прислал вовсе.
         for key in ("src", "poster"):
-            assert (TRAINER / item[key]).exists(), (item["exerciseId"], item[key])
+            if key in item:
+                assert (TRAINER / item[key]).exists(), (item["exerciseId"], item[key])
+
+
+def test_a_missing_poster_falls_back_to_the_picture_itself():
+    """У кадра заставка — он сам. Без запасного пути окно открывалось бы
+    пустым прямоугольником, пока грузится то же самое изображение."""
+    assert "const poster = trainerUrl(item.poster || item.src);" in APP_JS
 
 
 def test_every_picture_opens_to_the_last_byte():
@@ -278,11 +287,30 @@ def test_the_superman_is_the_corrected_half_version():
     assert "AURA_block_02_home_intermediate_v2" in PACK["packages"]
 
 
+# Точечный корректирующий пакет: три ассета заменены, один добавлен.
+# `machine_leg_press` — единственное, что доехало от блока 03: сам блок
+# «Зал · Новичок» не присылали, и остальных четырёх его упражнений нет.
+CORRECTED = {
+    "knee_pushup": "anim_pushup_knee",
+    "forearm_plank": "anim_plank_forearm",
+    "bicycle_crunch": "anim_bicycle_crunch",
+    "machine_leg_press": "anim_machine_leg_press",
+}
+
+
 def test_the_manifest_remembers_which_packages_it_is_made_of():
-    """Иначе после третьего блока никто не скажет, что откуда взялось."""
+    """Иначе после третьего пакета никто не скажет, что откуда взялось."""
     assert PACK["packages"] == ["AURA_block_01_home_beginner_v2",
-                                "AURA_block_02_home_intermediate_v2"]
-    assert len(ASSETS) == len(BLOCK_01) + len(BLOCK_02)
+                                "AURA_block_02_home_intermediate_v2",
+                                "AURA_corrections_blocks_01-03_v3_compact"]
+    assert len(ASSETS) == len(BLOCK_01 | BLOCK_02 | CORRECTED)
+
+
+def test_the_corrections_landed_on_the_right_exercises():
+    """Корректирующий пакет меняет ровно четыре записи и ничего больше."""
+    have = {item["exerciseId"]: item["animationAssetId"] for item in ASSETS}
+    for code, asset in CORRECTED.items():
+        assert have.get(code) == asset, (code, have.get(code))
 
 
 def test_no_two_exercises_point_at_the_same_file():
@@ -295,8 +323,9 @@ def test_no_two_exercises_point_at_the_same_file():
     for key in ("animationAssetId", "src", "poster"):
         seen = {}
         for item in ASSETS:
-            # Планка показывает заставкой саму себя: у неё src и poster
-            # совпадают намеренно, и это единственное такое место.
+            # Заставки может не быть вовсе: у кадра она и есть сам кадр.
+            if key not in item:
+                continue
             seen.setdefault(item[key], []).append(item["exerciseId"])
         doubled = {value: who for value, who in seen.items() if len(who) > 1}
         assert not doubled, (key, doubled)
@@ -380,7 +409,12 @@ def test_the_plank_is_a_still_pose_and_the_picture_is_untouched():
     И это дыхание выключается системной настройкой, как всё остальное.
     """
     plank = next(item for item in ASSETS if item["exerciseId"] == "forearm_plank")
-    assert plank["format"] == "png" and plank["animationType"] == "hold"
+    assert plank["format"] == "png"
+    # Вид удержания в манифестах называется по-разному: блок 01 прислал
+    # `hold`, корректирующий пакет — `static_hold`. Код сверяется по
+    # вхождению слова, иначе свечение молча пропало бы на новом пакете.
+    assert "hold" in plank["animationType"]
+    assert "(trainerFor(exerciseId)?.animationType || '').includes('hold')" in APP_JS
     assert plank["src"] == "static/anim_plank_forearm.png"
     # Класс вешает тот, кто владеет контейнером: свечение живёт на рамке
     # окна, а не на слоте с картинкой — из слота его срезало бы overflow.

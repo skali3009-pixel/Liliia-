@@ -12,6 +12,7 @@
       "loop": true
     },
     {
+      "programId": "home_beginner",
       "exerciseId": "knee_pushup",
       "titleRu": "Отжимания с колен",
       "animationAssetId": "anim_pushup_knee",
@@ -19,7 +20,8 @@
       "format": "mp4",
       "src": "animations/anim_pushup_knee.mp4",
       "poster": "posters/anim_pushup_knee.png",
-      "loop": true
+      "loop": true,
+      "replaceExisting": true
     },
     {
       "exerciseId": "glute_bridge",
@@ -42,14 +44,15 @@
       "loop": true
     },
     {
+      "programId": "home_beginner",
       "exerciseId": "forearm_plank",
       "titleRu": "Планка на локтях",
       "animationAssetId": "anim_plank_forearm",
-      "animationType": "hold",
+      "animationType": "static_hold",
       "format": "png",
       "src": "static/anim_plank_forearm.png",
-      "poster": "static/anim_plank_forearm.png",
-      "loop": false
+      "loop": false,
+      "replaceExisting": true
     },
     {
       "exerciseId": "lying_leg_raise",
@@ -122,6 +125,7 @@
       "loop": true
     },
     {
+      "programId": "home_intermediate",
       "exerciseId": "bicycle_crunch",
       "titleRu": "Скручивания «велосипед»",
       "animationAssetId": "anim_bicycle_crunch",
@@ -129,11 +133,25 @@
       "format": "mp4",
       "src": "animations/anim_bicycle_crunch.mp4",
       "poster": "posters/anim_bicycle_crunch.png",
-      "loop": true
+      "loop": true,
+      "replaceExisting": true
+    },
+    {
+      "programId": "gym_beginner",
+      "exerciseId": "machine_leg_press",
+      "titleRu": "Жим ногами в тренажёре",
+      "animationAssetId": "anim_machine_leg_press",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_machine_leg_press.mp4",
+      "poster": "posters/anim_machine_leg_press.png",
+      "loop": true,
+      "replaceExisting": true
     }
   ],
   "packages": [
     "AURA_block_01_home_beginner_v2",
-    "AURA_block_02_home_intermediate_v2"
+    "AURA_block_02_home_intermediate_v2",
+    "AURA_corrections_blocks_01-03_v3_compact"
   ]
 }
