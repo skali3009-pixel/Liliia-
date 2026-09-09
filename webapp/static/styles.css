@@ -1146,6 +1146,35 @@ select.fact-input { text-align: left; width: 130px; }
 .sync-state[data-code="early"] .sync-state-title { color: var(--teal); }
 .sync-state .hint { margin: 0; }
 
+/* Тренер: готовые анимации персонажа.
+
+   Кадр строго квадратный и не меняет размера между упражнениями: холст у
+   всех анимаций один (768×768), и любой «подгон по содержимому» дёргал бы
+   окно при каждом переключении. Картинка вписывается целиком
+   (object-fit: contain) — обрезать персонажа по краям нельзя, поза важнее
+   плотной заливки кадра. */
+.how-demo.square { aspect-ratio: 1 / 1; }
+.trainer { position: relative; width: 100%; height: 100%; }
+.trainer-shot {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; display: block;
+}
+/* Листалка кадров для тех, кто выключил движение в телефоне. */
+.trainer-steps {
+  position: absolute; left: 50%; bottom: 8px; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 6px;
+  /* Подложка обязательна: без неё подпись ложится на ноги персонажа и
+     читается через раз — проверено в браузере. */
+  padding: 3px 6px; border-radius: 999px;
+  background: rgba(10, 9, 18, .72); backdrop-filter: blur(6px);
+}
+.trainer-steps span { font-size: 12px; color: var(--lilac); min-width: 78px;
+                      text-align: center; }
+.trainer-steps .icon-btn { width: 28px; height: 28px; font-size: 17px; }
+/* В проводнике квадрат не должен съедать экран: под ним ещё название,
+   счёт подходов, подсказка и три кнопки. Замерено на 390×844. */
+.player-body .how-demo.square { max-height: 38vh; }
+
 /* Ая — персонаж, который показывает движение. Силуэт собирается кодом по
    углам в суставах, а здесь ему даётся свет: заливка, свечение снизу,
    кромка по краю, золотые пятна. Без этих слоёв силуэт остаётся плоским

@@ -711,6 +711,7 @@ async def delete_photo(request: web.Request) -> web.Response:
 
 async def get_workouts(request: web.Request) -> web.Response:
     """Программы под выбранные место и уровень плюс упражнения выбранной."""
+    from seed.exercise_ids import id_for
     from seed.exercise_technique import (demo_image, for_name as technique_for,
                                          move_for)
     user_id, tz = request["user_id"], request["timezone"]
@@ -761,6 +762,11 @@ async def get_workouts(request: web.Request) -> web.Response:
             # Какое движение рисовать. Картинки нет почти ни у кого, а
             # показать движение надо всем — и это рисуется на месте.
             "move": move_for(workout.name),
+            # Постоянный код упражнения. По нему приложение находит
+            # анимацию тренера в manifest.json — не по русскому названию:
+            # одна запятая в названии, и человек молча остался бы без
+            # показа. Кода нет — значит, и анимации нет.
+            "exercise_id": id_for(workout.name),
         }
 
     from seed.workout_programs import CATEGORIES, CATEGORIES_WITH_CALORIES

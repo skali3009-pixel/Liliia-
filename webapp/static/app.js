@@ -2894,6 +2894,175 @@ function showMove(box, code, period = 2600) {
   return true;
 }
 
+/* --- Тренер: готовые анимации персонажа ----------------------------------
+
+   Персонажа приложение больше не собирает само. Анимации нарисованы
+   заранее, лежат в `webapp/static/trainer/` и подключаются как есть: не
+   разбираются на кадры, не пересобираются, не дорисовываются.
+
+   Связь «упражнение → файл» идёт только через `manifest.json` и постоянный
+   код упражнения (`exercise_id`). По русскому названию файлы не ищутся
+   никогда: одна запятая в названии — и человек молча остался бы без
+   показа, а узнали бы мы об этом от него, а не от кода.
+
+   Чего нет у упражнения ассета, того и не показываем: вместо старого
+   рисованного персонажа — одна честная строка «Анимация техники
+   готовится». Подмешивать две разные графики в один экран нельзя: человек
+   решит, что это два разных приложения.
+*/
+
+const TRAINER_ROOT = '/static/trainer/';
+let trainerPack = null;
+let trainerRequest = null;
+
+// Тянем манифест сразу при запуске: в проводник можно попасть, не открывая
+// каталог, — через «продолжить тренировку», — и там он нужен готовым.
+setTimeout(() => loadTrainerPack(), 0);
+
+function loadTrainerPack() {
+  if (trainerPack) return Promise.resolve(trainerPack);
+  if (!trainerRequest) {
+    trainerRequest = fetch(`${TRAINER_ROOT}manifest.json`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((pack) => { trainerPack = pack; return pack; })
+      // Пакет не скачался — экран не должен падать: покажется строка
+      // «готовится», как у упражнения без ассета.
+      .catch(() => null);
+  }
+  return trainerRequest;
+}
+
+function trainerFor(exerciseId) {
+  if (!exerciseId || !trainerPack) return null;
+  return trainerPack.animations?.[exerciseId] || null;
+}
+
+/* Папка с кадрами выводится из имени готового файла, а не из названия
+   упражнения: `animations/anim_squat_bodyweight.webp` →
+   `frames/anim_squat_bodyweight/frame_04.png`. Стоит тест, что для каждой
+   анимации из манифеста эти шесть файлов на диске есть. */
+function trainerFrame(item, number) {
+  const stem = item.asset.split('/').pop().replace(/\.webp$/, '');
+  return `${TRAINER_ROOT}frames/${stem}/frame_0${number}.png`;
+}
+
+/* Анимированный WebP умеют не все: статический понимают все, а движущийся
+   не понимает Safari до 14-й версии. Отличить это по ошибке загрузки
+   нельзя — такой браузер спокойно покажет первый кадр и замрёт. Поэтому
+   один раз проверяем декодированием: это двухкадровый WebP размером 1×1. */
+const ANIMATED_WEBP = 'data:image/webp;base64,UklGRlIAAABXRUJQVlA4WAoAAAAS'
+  + 'AAAAAAAAAAAAQU5JTQYAAAD/////AABBTk1GJgAAAAAAAAAAAAAAAAAAAGQAAABWUDhM'
+  + 'DQAAAC8AAAAQBxAREYiI/gcA';
+let animatedWebp = null;
+
+function checkAnimatedWebp() {
+  if (animatedWebp) return animatedWebp;
+  animatedWebp = new Promise((done) => {
+    const probe = new Image();
+    probe.onload = () => done(probe.width === 1 && probe.height === 1);
+    probe.onerror = () => done(false);
+    probe.src = ANIMATED_WEBP;
+  });
+  return animatedWebp;
+}
+
+/* Предзагрузка. Файл весит два-три мегабайта, и если начать качать его в
+   момент открытия окна, человек несколько секунд смотрит на заставку.
+   Качаем заранее — по касанию кнопки и на отдыхе перед следующим
+   упражнением, — но не все шесть сразу: это шестнадцать мегабайт. */
+const trainerWarm = new Set();
+
+function preloadTrainer(exerciseId) {
+  const item = trainerFor(exerciseId);
+  if (!item || trainerWarm.has(exerciseId)) return;
+  trainerWarm.add(exerciseId);
+  new Image().src = TRAINER_ROOT + item.asset;
+}
+
+/* Показ кадрами: и запасной путь для старых браузеров, и листалка для тех,
+   кто выключил движение в телефоне. */
+function trainerFrames(shot, item, still) {
+  const count = item.frames || 6;
+  // Ключевой кадр — четвёртый: на нём движение в нижней точке, по нему
+  // упражнение и узнают. Первый кадр — просто «стоит».
+  let at = Math.min(4, count);
+  const show = () => { shot.src = trainerFrame(item, at); };
+  show();
+  if (still) return { show: () => show(), step: (delta) => {
+    at = ((at - 1 + delta + count) % count) + 1; show(); return at; }, count, at: () => at };
+
+  // Туда-обратно или по кругу — как сказано в манифесте.
+  let step = 1;
+  const timer = setInterval(() => {
+    if (!shot.isConnected) { clearInterval(timer); return; }
+    if (item.playback === 'ping-pong') {
+      if (at >= count) step = -1;
+      if (at <= 1) step = 1;
+      at += step;
+    } else {
+      at = at >= count ? 1 : at + 1;
+    }
+    show();
+  }, Math.round(1000 / (item.fps || 6)));
+  return null;
+}
+
+/* Показ анимации тренера в отведённом месте.
+   Возвращает true, если что-то показано: строку «готовится» показывает
+   вызывающий, и она не должна висеть поверх картинки. */
+function ExerciseTrainerAnimation(box, exerciseId) {
+  box.innerHTML = '';
+  const item = trainerFor(exerciseId);
+  if (!item) return false;
+
+  const stage = document.createElement('div');
+  stage.className = 'trainer';
+
+  // Заставка стоит до готовности анимации. Без неё окно открывается
+  // пустым прямоугольником, и кажется, что оно сломалось.
+  const poster = document.createElement('img');
+  poster.className = 'trainer-shot';
+  poster.src = TRAINER_ROOT + item.poster;
+  poster.alt = item.label || '';
+  stage.appendChild(poster);
+  box.appendChild(stage);
+
+  // Движение выключено в телефоне — один ключевой кадр и листалка.
+  if (!motion()) {
+    poster.alt = `${item.label || ''}: кадр движения`;
+    const control = trainerFrames(poster, item, true);
+    const bar = document.createElement('div');
+    bar.className = 'trainer-steps';
+    bar.innerHTML = '<button class="icon-btn" aria-label="Кадр назад">‹</button>'
+      + '<span></span><button class="icon-btn" aria-label="Кадр вперёд">›</button>';
+    const label = bar.querySelector('span');
+    const say = () => { label.textContent = `Кадр ${control.at()} из ${control.count}`; };
+    const [back, forward] = bar.querySelectorAll('button');
+    back.onclick = () => { control.step(-1); say(); };
+    forward.onclick = () => { control.step(1); say(); };
+    say();
+    stage.appendChild(bar);
+    return true;
+  }
+
+  checkAnimatedWebp().then((ok) => {
+    if (!stage.isConnected) return;
+    if (!ok) { trainerFrames(poster, item, false); return; }
+    const play = document.createElement('img');
+    play.className = 'trainer-shot';
+    play.alt = '';
+    play.decoding = 'async';
+    play.hidden = true;
+    // Подменяем заставку только после полной загрузки: иначе на месте
+    // картинки на секунду появляется пустота.
+    play.onload = () => { play.hidden = false; poster.hidden = true; };
+    play.onerror = () => trainerFrames(poster, item, false);
+    play.src = TRAINER_ROOT + item.asset;
+    stage.appendChild(play);
+  });
+  return true;
+}
+
 /* --- проводник по тренировке -------------------------------------------- */
 //
 // Каталог отвечает на вопрос «что делать», проводник — «что делать прямо
@@ -2979,7 +3148,7 @@ function openPlayer(exercises, saved = null) {
       id: item.id, name: item.name, sets: item.sets || 1,
       reps: item.reps || 0, seconds: item.seconds_per_set || 0,
       rest: item.rest_seconds || 0, image: item.demo_image || null,
-      move: item.move || null,
+      move: item.move || null, exercise_id: item.exercise_id || null,
       hint: item.how && item.how.steps ? item.how.steps[0] : '',
     })),
     index: 0, set: 1, phase: 'exercise', left: 0, paused: false,
@@ -3013,6 +3182,10 @@ function enterPhase(phase, left = null) {
   } else if (phase === 'rest') {
     player.left = left !== null ? left : item.rest;
     beep(520);
+    // Отдых — как раз то время, когда можно спокойно скачать анимацию
+    // следующего упражнения: экран всё равно занят кольцом таймера.
+    const next = player.list[player.index + 1];
+    if (next) preloadTrainer(next.exercise_id);
   }
   playerSave();
   renderPlayer();
@@ -3095,10 +3268,11 @@ function renderPlayer() {
   // быстро, и одинаковый темп врал бы про оба.
   const drawn = document.getElementById('player-figure');
   const moving = !rest && !show
-    && showMove(drawn, item.move, item.seconds ? 3400 : 2200);
+    && ExerciseTrainerAnimation(drawn, item.exercise_id);
   if (rest || show) drawn.innerHTML = '';
   document.getElementById('player-soon').hidden = !!show || rest || moving;
   demo.classList.toggle('empty', !show && !moving);
+  demo.classList.toggle('square', moving);
   demo.hidden = rest;
 
   const ring = document.getElementById('player-ring');
@@ -3261,9 +3435,9 @@ function openHow(exercise) {
     [exercise.muscle, load, `отдых ${exercise.rest_seconds} с`]
       .filter(Boolean).join(' · ');
 
-  // Показ движения. Готовая картинка, если она есть; иначе рисуем
-  // движение сами — и только если нет ни того, ни другого, остаётся
-  // узкая полоса с одной строкой.
+  // Показ движения. Готовая картинка, если она есть; иначе анимация
+  // тренера по постоянному коду упражнения. Нет ни того, ни другого —
+  // остаётся узкая полоса с одной строкой, а не чужая графика.
   const image = document.getElementById('how-image');
   const soon = document.getElementById('how-soon');
   const demo = document.getElementById('how-demo');
@@ -3276,9 +3450,13 @@ function openHow(exercise) {
   } else {
     image.removeAttribute('src');
   }
-  const moving = !exercise.demo_image && showMove(drawn, exercise.move);
+  const moving = !exercise.demo_image
+    && ExerciseTrainerAnimation(drawn, exercise.exercise_id);
   soon.hidden = !!exercise.demo_image || moving;
   demo.classList.toggle('empty', !exercise.demo_image && !moving);
+  // Кадр у анимаций квадратный. Без этого при переходе от упражнения с
+  // анимацией к упражнению без неё окно прыгало бы в высоте.
+  demo.classList.toggle('square', moving);
 
   const steps = document.getElementById('how-steps');
   steps.innerHTML = '';
@@ -3365,6 +3543,10 @@ function exerciseRow(exercise) {
   link.hidden = !exercise.how;
   if (exercise.how) {
     link.textContent = 'смотреть технику';
+    // Качать начинаем по касанию, а не по нажатию: между ними десятые доли
+    // секунды, но файл весит мегабайты, и без этого окно открывается на
+    // заставке и стоит.
+    link.onpointerdown = () => preloadTrainer(exercise.exercise_id);
     link.onclick = () => openHow(exercise);
   }
 
@@ -3442,7 +3624,8 @@ async function refreshWorkouts() {
   if (style) params.set('style', style);
   if (programCode) params.set('program', programCode);
 
-  gym = await api(`/api/workouts?${params}`);
+  const [data] = await Promise.all([api(`/api/workouts?${params}`), loadTrainerPack()]);
+  gym = data;
   renderWorkouts(gym);
 }
 

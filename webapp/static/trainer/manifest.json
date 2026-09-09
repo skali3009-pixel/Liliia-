@@ -1,0 +1,55 @@
+{
+  "assetPack": "AURA Purple Cheetah Trainer",
+  "version": 1,
+  "canvas": { "width": 768, "height": 768, "format": "png", "alpha": true },
+  "animations": {
+    "bodyweight_squat": {
+      "label": "Приседания с собственным весом",
+      "frames": 6,
+      "fps": 7,
+      "playback": "ping-pong",
+      "asset": "animations/anim_squat_bodyweight.webp",
+      "poster": "posters/anim_squat_bodyweight.png"
+    },
+    "knee_pushup": {
+      "label": "Отжимания с колен",
+      "frames": 6,
+      "fps": 6,
+      "playback": "ping-pong",
+      "asset": "animations/anim_pushup_knee.webp",
+      "poster": "posters/anim_pushup_knee.png"
+    },
+    "glute_bridge": {
+      "label": "Ягодичный мостик",
+      "frames": 6,
+      "fps": 6,
+      "playback": "ping-pong",
+      "asset": "animations/anim_glute_bridge.webp",
+      "poster": "posters/anim_glute_bridge.png"
+    },
+    "bottle_bent_over_row": {
+      "label": "Тяга в наклоне с бутылками воды",
+      "frames": 6,
+      "fps": 6,
+      "playback": "ping-pong",
+      "asset": "animations/anim_bent_over_row.webp",
+      "poster": "posters/anim_bent_over_row.png"
+    },
+    "forearm_plank": {
+      "label": "Планка на локтях",
+      "frames": 6,
+      "fps": 4,
+      "playback": "loop",
+      "asset": "animations/anim_plank_forearm.webp",
+      "poster": "posters/anim_plank_forearm.png"
+    },
+    "lying_leg_raise": {
+      "label": "Подъёмы ног лёжа",
+      "frames": 6,
+      "fps": 6,
+      "playback": "ping-pong",
+      "asset": "animations/anim_leg_raise_lying.webp",
+      "poster": "posters/anim_leg_raise_lying.png"
+    }
+  }
+}
