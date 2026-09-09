@@ -2150,17 +2150,20 @@ function renderWorkouts(data) {
   document.getElementById('cardio-card').hidden = data.cardio.length === 0;
   renderGymWarning(data);
 
-  const box = document.getElementById('exercises');
-  box.innerHTML = '';
-  for (const exercise of data.exercises) {
-    box.appendChild(exerciseRow(exercise));
-  }
+  // Три числа, по которым принимают решение. Без них «Начать» — прыжок в
+  // неизвестность.
+  const facts = data.facts || {};
+  document.getElementById('program-facts').textContent = [
+    facts.minutes ? `~${facts.minutes} мин` : '',
+    facts.exercises ? `${facts.exercises} ${plural(facts.exercises,
+      'упражнение', 'упражнения', 'упражнений')}` : '',
+    facts.calories && data.show_calories ? `~${facts.calories} ккал` : '',
+  ].filter(Boolean).join(' · ');
 
-  const cardio = document.getElementById('cardio-list');
-  cardio.innerHTML = '';
-  for (const exercise of data.cardio) {
-    cardio.appendChild(cardioChip(exercise));
-  }
+  fillWithMore('exercises', data.exercises, EXERCISES_SHOWN, exerciseRow,
+               (rest) => `Показать все (${rest + EXERCISES_SHOWN})`);
+  fillWithMore('cardio', data.cardio, CARDIO_SHOWN, cardioChip,
+               (rest) => `Ещё занятия (${rest})`, 'cardio-list');
 
   updateFinishButton();
 }
@@ -2218,6 +2221,51 @@ function renderGymWarning(data) {
     box.hidden = true;
     list.hidden = false;
   };
+}
+
+// Сколько показываем сразу, а сколько прячем под кнопку. Решение
+// принимают по первым трём упражнениям; двенадцать плиток занятий подряд —
+// это стена, даже если каждая маленькая.
+const EXERCISES_SHOWN = 3;
+const CARDIO_SHOWN = 6;
+
+// Список с «остальным под кнопкой» — тот же приём, что у заданий дня.
+// Развёрнутое состояние сохраняется между перерисовками: иначе отметка
+// упражнения схлопывала бы список обратно.
+const opened = new Set();
+
+function fillWithMore(name, items, shown, make, label, headId = name) {
+  const head = document.getElementById(headId);
+  const tail = document.getElementById(`${name}-more`);
+  const toggle = document.getElementById(`${name}-toggle`);
+
+  head.innerHTML = '';
+  tail.innerHTML = '';
+  items.slice(0, shown).forEach((item) => head.appendChild(make(item)));
+  items.slice(shown).forEach((item) => tail.appendChild(make(item)));
+
+  const rest = Math.max(items.length - shown, 0);
+  toggle.hidden = rest === 0;
+  tail.hidden = rest === 0 || !opened.has(name);
+  toggle.textContent = opened.has(name) ? 'Свернуть' : label(rest);
+  toggle.onclick = () => {
+    if (opened.has(name)) opened.delete(name);
+    else opened.add(name);
+    haptic();
+    renderWorkouts(gym);
+  };
+}
+
+// «Начать тренировку»: пока это разворачивает все упражнения и подводит к
+// первому. Проводник по подходам с таймером — следующий шаг; кнопка
+// останется той же, изменится только то, что она открывает.
+function startWorkout() {
+  opened.add('exercises');
+  haptic('medium');
+  renderWorkouts(gym);
+  document.querySelector('#exercises .exercise')?.scrollIntoView({
+    behavior: motion() ? 'smooth' : 'auto', block: 'center',
+  });
 }
 
 // Занятие — плитка, а не строка.
@@ -4402,6 +4450,7 @@ async function init() {
 
   document.getElementById('finish-workout').onclick = finishWorkout;
   document.getElementById('finish-cardio').onclick = finishCardio;
+  document.getElementById('start-workout').onclick = startWorkout;
   document.getElementById('preps-toggle').onclick = togglePreps;
   document.getElementById('prep-close').onclick = () => {
     document.getElementById('prep-sheet').hidden = true;

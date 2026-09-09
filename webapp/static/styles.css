@@ -526,6 +526,14 @@ button:focus-visible, .tab:focus-visible {
   font-size: 13px; font-weight: 500; font-family: inherit; cursor: pointer; white-space: nowrap;
 }
 .chips .chip-btn.active { background: var(--accent); color: var(--accent-fg); }
+/* Факты тренировки: сколько займёт, из скольких упражнений, во что
+   обойдётся. Строка одна и мелкая — решение принимают по числам, а не по
+   их оформлению. */
+.prog-facts {
+  margin: 2px 0 12px; font-size: 13px; color: var(--lilac);
+  letter-spacing: .01em;
+}
+.prog-facts:empty { display: none; }
 .chips.programs { margin-top: 10px; }
 .chips.programs .chip-btn { background: var(--card); }
 .chips.programs .chip-btn.active { background: var(--accent); color: var(--accent-fg); }

@@ -754,6 +754,7 @@ async def get_workouts(request: web.Request) -> web.Response:
         }
 
     from seed.workout_programs import CATEGORIES, CATEGORIES_WITH_CALORIES
+    from services.workout_picker import program_minutes
 
     chosen_program = next((p for p in programs if p.code == chosen), None)
 
@@ -778,6 +779,14 @@ async def get_workouts(request: web.Request) -> web.Response:
                 for p in programs
             ],
             "selected": chosen,
+            # Карточка тренировки: сколько займёт, из скольких упражнений и
+            # во что обойдётся. Без этих трёх чисел «Начать» — прыжок в
+            # неизвестность, а человек решает именно по ним.
+            "facts": {
+                "minutes": round(program_minutes(chosen)) if chosen else 0,
+                "exercises": len(exercises),
+                "calories": round(sum(exercise_calories(w, weight) for w in exercises)),
+            },
             "exercises": [exercise_json(w) for w in exercises],
             "cardio": [exercise_json(w) for w in cardio],
             "week": summary,

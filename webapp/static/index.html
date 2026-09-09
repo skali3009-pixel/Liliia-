@@ -581,6 +581,21 @@
       <div id="pick-result"></div>
     </section>
 
+    <!-- Занятия плитками, а не списком: двенадцать строк с описанием — это
+         половина страницы. Показываем шесть, остальные под кнопкой: даже
+         плитками двенадцать штук — это стена. -->
+    <section class="card" id="cardio-card">
+      <div class="card-head"><h2>Я занималась сама</h2></div>
+      <p class="hint">Бег, бассейн, урок танцев, дорога пешком — отметь, и
+        я посчитаю время и расход.</p>
+      <div class="chips wrap" id="cardio-list"></div>
+      <div class="chips wrap" id="cardio-more" hidden></div>
+      <button class="link-btn" id="cardio-toggle" hidden>Ещё занятия</button>
+      <!-- Кнопка живёт здесь же: отметила занятие — подтвердила, не
+           пролистывая до конца каталога упражнений. -->
+      <button id="finish-cardio" class="btn" hidden>Записать занятие</button>
+    </section>
+
     <!-- Кнопки выбора идут сразу за подбором: человек либо отвечает на
          один вопрос, либо выбирает сам — и второе не должно лежать за
          экраном. Раньше между ними стоял список занятий в 1180 точек, и
@@ -592,19 +607,6 @@
 
     <div class="chips programs" id="program-switch"></div>
 
-    <!-- Занятия плитками, а не списком. Двенадцать строк с описанием и
-         ссылкой — это половина всей страницы; здесь же нужно одно:
-         отметить, что человек уже сделал. Время спросим при записи. -->
-    <section class="card" id="cardio-card">
-      <div class="card-head"><h2>Я занималась сама</h2></div>
-      <p class="hint">Бег, бассейн, урок танцев, дорога пешком — отметь, и
-        я посчитаю время и расход.</p>
-      <div class="chips wrap" id="cardio-list"></div>
-      <!-- Кнопка живёт здесь же: отметила занятие — подтвердила, не
-           пролистывая до конца каталога упражнений. -->
-      <button id="finish-cardio" class="btn" hidden>Записать занятие</button>
-    </section>
-
     <section class="card">
       <div class="card-head"><h2 id="program-title">Программа</h2>
         <span id="program-sub" class="muted"></span></div>
@@ -615,7 +617,15 @@
         <p id="gym-warning-text"></p>
         <button class="btn" id="gym-warning-ok">Понятно, показать</button>
       </div>
+      <!-- Три числа, по которым человек решает: сколько это займёт, из
+           скольких упражнений и во что обойдётся. -->
+      <p class="prog-facts" id="program-facts"></p>
+      <button class="btn" id="start-workout">Начать тренировку</button>
       <div id="exercises"></div>
+      <!-- Остальные упражнения под кнопкой: шесть подряд — это стена, а
+           решение принимают по первым трём. -->
+      <div id="exercises-more" hidden></div>
+      <button class="link-btn" id="exercises-toggle" hidden>Показать все</button>
       <button id="finish-workout" class="btn" hidden>Записать тренировку</button>
     </section>
 

@@ -544,19 +544,70 @@ def test_the_activity_card_is_above_the_catalogue():
     assert "Я занималась сама" in gym
 
 
-def test_the_choice_buttons_come_right_after_the_picker():
+def test_the_choice_buttons_are_seen_without_scrolling():
     """Замерено в браузере: раньше фильтры начинались на 1626-й точке.
 
     Между подбором и ими лежал список занятий высотой 1180 точек — половина
     всей страницы, — и человек, который хочет выбрать сам, до кнопок просто
-    не доходил. Теперь порядок такой: подбор, кнопки, занятия, каталог, а
-    итог недели — в конце: он ничем не управляет.
+    не доходил. Порядок здесь второстепенен: важно, что список занятий над
+    ними короткий. Сейчас он 287 точек, кнопки начинаются на 644-й и видны
+    без прокрутки — проверено в браузере на живом сервере.
+
+    Поэтому проверяем не порядок ради порядка, а то, из-за чего кнопки
+    уезжали: над ними не должно быть ни одного длинного списка. Оба списка
+    показывают часть, остальное — под кнопкой.
     """
     gym = INDEX.split('id="screen-gym"', 1)[1].split("</main>", 1)[0]
     order = [gym.index(mark) for mark in (
-        'id="pick-card"', 'class="filters"', 'id="program-switch"',
-        'id="cardio-card"', 'id="exercises"', 'class="stats"')]
+        'id="pick-card"', 'id="cardio-card"', 'class="filters"',
+        'id="program-switch"', 'id="exercises"', 'class="stats"')]
     assert order == sorted(order), "порядок блоков «Спорта» изменился"
+
+    # Между подбором и кнопками — только карточка занятий, и она свёрнута.
+    between = gym[order[0]:order[2]]
+    assert 'id="cardio-more" hidden' in between
+    assert 'id="cardio-toggle"' in between
+
+
+def test_neither_list_is_shown_whole_at_once():
+    """Шесть упражнений подряд — стена, двенадцать плиток — тоже.
+
+    Решение принимают по первым трём упражнениям, а из занятий обычно
+    нужно одно из шести привычных. Остальное — под кнопкой, тем же
+    приёмом, что и задания дня.
+    """
+    for name in ("exercises", "cardio"):
+        assert f'id="{name}-more" hidden' in INDEX, name
+        assert f'id="{name}-toggle"' in INDEX, name
+
+    body = APP_JS.split("function fillWithMore(", 1)[1][:1200]
+    # Развёрнутое состояние переживает перерисовку: иначе отметка
+    # упражнения схлопывала бы список обратно, и человек терял бы место.
+    # Сверяем само выражение, а не наличие слова: первая версия проверяла
+    # «opened.has(name) где-нибудь в функции» и спокойно проходила, когда
+    # видимостью управляло «tail.hidden = true».
+    assert "tail.hidden = rest === 0 || !opened.has(name)" in body
+    assert "EXERCISES_SHOWN = 3" in APP_JS and "CARDIO_SHOWN = 6" in APP_JS
+
+
+def test_the_workout_card_says_what_it_costs():
+    """«Начать» без чисел — прыжок в неизвестность.
+
+    Сколько займёт, из скольких упражнений, во что обойдётся: человек
+    решает именно по ним. Проверено в браузере: «~21 мин · 6 упражнений ·
+    ~92 ккал».
+    """
+    assert 'id="program-facts"' in INDEX
+    assert 'id="start-workout"' in INDEX
+    assert '"facts"' in (Path(__file__).resolve().parent.parent / "webapp"
+                         / "api.py").read_text(encoding="utf-8")
+
+    body = APP_JS.split("const facts = data.facts", 1)[1][:500]
+    for word in ("minutes", "exercises", "calories"):
+        assert word in body, word
+    # Расход показываем только там, где он осмыслен: у лица и глаз он
+    # ничтожен, и сервер про это уже знает.
+    assert "data.show_calories" in body
 
 
 def test_activities_are_marked_by_tiles_not_by_rows():
@@ -569,8 +620,11 @@ def test_activities_are_marked_by_tiles_not_by_rows():
     assert 'class="chips wrap" id="cardio-list"' in INDEX
     assert ".chips.wrap" in STYLES
 
-    body = APP_JS.split("function renderWorkouts(", 1)[1][:2000]
-    assert "cardio.appendChild(cardioChip(exercise))" in body
+    body = APP_JS.split("function renderWorkouts(", 1)[1][:3000]
+    # Строки собирает exerciseRow, плитки — cardioChip. Занятия обязаны
+    # идти через второй: у пробежки нет ни подходов, ни отдыха.
+    assert "fillWithMore('cardio', data.cardio, CARDIO_SHOWN, cardioChip" in body
+    assert "fillWithMore('cardio', data.cardio, CARDIO_SHOWN, exerciseRow" not in body
     # Отметка и фильтр выглядят одинаково — значит, отметку надо отличать.
     chip = APP_JS.split("function cardioChip(", 1)[1][:900]
     assert "✓" in chip
