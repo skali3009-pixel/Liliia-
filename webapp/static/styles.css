@@ -1146,6 +1146,49 @@ select.fact-input { text-align: left; width: 130px; }
 .sync-state[data-code="early"] .sync-state-title { color: var(--teal); }
 .sync-state .hint { margin: 0; }
 
+/* Проводник по тренировке.
+   Во время подхода на экране только то, что делаешь сейчас. Никаких
+   анимаций: человек смотрит на таймер, а не на интерфейс — и правило
+   «уменьшить движение» здесь соблюдать нечем, потому что двигать нечего. */
+.player {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column;
+  background: var(--void);
+  padding: calc(12px + env(safe-area-inset-top)) 16px
+           calc(16px + env(safe-area-inset-bottom));
+}
+.player-bar { height: 3px; border-radius: 2px; background: var(--surface-2); }
+.player-bar div { height: 100%; width: 0; border-radius: 2px; background: var(--accent); }
+.player-head { display: flex; align-items: center; justify-content: space-between;
+               margin: 12px 0 4px; }
+.player-step { font-size: 12px; letter-spacing: .1em; text-transform: uppercase;
+               color: var(--muted); }
+.player-tools { display: flex; gap: 6px; }
+.player-tools .icon-btn.off { opacity: .4; }
+
+.player-body { flex: 1; display: flex; flex-direction: column; align-items: center;
+               justify-content: center; text-align: center; gap: 6px; min-height: 0; }
+.player-body .how-demo { width: 100%; max-width: 320px; margin-bottom: 8px; }
+.player-phase { font-size: 12px; letter-spacing: .12em; text-transform: uppercase;
+                color: var(--gold); }
+.player-name { font-size: 24px; line-height: 1.15; margin: 2px 0; }
+.player-set { margin: 0; font-size: 15px; color: var(--lilac); }
+.player-hint { margin: 6px 0 0; font-size: 13px; color: var(--muted);
+               max-width: 300px; }
+
+.player-ring { position: relative; width: 168px; height: 168px; margin: 6px 0; }
+.player-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+/* Кольцо перерисовывается каждую секунду, поэтому без плавности: она бы
+   врала на последней секунде и мешала бы тем, кто движение выключил. */
+.ring-fill.plain { stroke: var(--accent); transition: none; }
+.player-time {
+  position: absolute; inset: 0; display: flex; align-items: center;
+  justify-content: center; font-size: 42px; font-weight: 600;
+}
+
+.player-controls { flex: none; }
+.player-row { display: flex; gap: 10px; }
+.player-row .btn { margin-top: 10px; }
+
 /* Показ движения. Пока картинки нет — ровное место с одной строкой, без
    обещаний: «скоро будет» в приложении живёт годами. */
 .how-demo {

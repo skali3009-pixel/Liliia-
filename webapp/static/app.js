@@ -2260,12 +2260,352 @@ function fillWithMore(name, items, shown, make, label, headId = name) {
 // первому. Проводник по подходам с таймером — следующий шаг; кнопка
 // останется той же, изменится только то, что она открывает.
 function startWorkout() {
-  opened.add('exercises');
+  if (!gym || !gym.exercises.length) return;
   haptic('medium');
-  renderWorkouts(gym);
-  document.querySelector('#exercises .exercise')?.scrollIntoView({
-    behavior: motion() ? 'smooth' : 'auto', block: 'center',
+  openPlayer(gym.exercises);
+}
+
+/* --- проводник по тренировке -------------------------------------------- */
+//
+// Каталог отвечает на вопрос «что делать», проводник — «что делать прямо
+// сейчас». Разница в том, что во время подхода человек не читает: он
+// смотрит на счёт подходов и на таймер. Поэтому здесь отдельный экран, а
+// не ещё одна карточка в списке.
+//
+// Состояние держим одно на всё занятие и сохраняем его в браузере после
+// каждого шага: мини-приложение закрывается легко — свернул Telegram,
+// позвонили, — и потерять тренировку на четвёртом подходе обиднее, чем
+// не начать её вовсе.
+
+const PLAYER_KEY = 'aura.workout';
+const MUTE_KEY = 'aura.workout.mute';
+// Дольше этого недоделанную тренировку не предлагаем продолжить: это уже
+// не пауза, а другой день.
+const RESUME_HOURS = 3;
+const REST_BONUS = 15;
+const RING = 327;          // длина окружности кольца, как у остальных
+
+let player = null;
+let playerTimer = null;
+let wakeLock = null;
+
+function playerSaved() {
+  try {
+    return JSON.parse(localStorage.getItem(PLAYER_KEY) || 'null');
+  } catch (error) {
+    return null;
+  }
+}
+
+function playerSave() {
+  if (!player) return;
+  try {
+    localStorage.setItem(PLAYER_KEY, JSON.stringify(player));
+  } catch (error) {
+    /* приватный режим — тренировка просто не переживёт закрытия */
+  }
+}
+
+function playerForget() {
+  try { localStorage.removeItem(PLAYER_KEY); } catch (error) { /* пусто */ }
+}
+
+// Экран не должен гаснуть посреди подхода. Умеют это не все телефоны и не
+// все версии Telegram — поэтому только пробуем, и молча живём дальше.
+async function keepAwake(on) {
+  try {
+    if (on) wakeLock = await navigator.wakeLock?.request('screen');
+    else { await wakeLock?.release(); wakeLock = null; }
+  } catch (error) {
+    wakeLock = null;
+  }
+}
+
+// Короткий сигнал вместо файла: файл пришлось бы качать, а звук нужен на
+// полсекунды. Тихий нарочно — в наушниках это звучит громче, чем кажется.
+function beep(hz = 660, ms = 120) {
+  if (!player || player.muted) return;
+  try {
+    const audio = new (window.AudioContext || window.webkitAudioContext)();
+    const tone = audio.createOscillator();
+    const gain = audio.createGain();
+    tone.frequency.value = hz;
+    gain.gain.value = 0.05;
+    tone.connect(gain).connect(audio.destination);
+    tone.start();
+    tone.stop(audio.currentTime + ms / 1000);
+    setTimeout(() => audio.close(), ms + 200);
+  } catch (error) {
+    /* браузер не дал звук — тренировке это не мешает */
+  }
+}
+
+function openPlayer(exercises, saved = null) {
+  // Продолжение прерванной тренировки приходит сюда без списка: он уже
+  // лежит в сохранённом состоянии. Проверка на пустой список без этой
+  // оговорки молча не открывала проводник — поймано в браузере.
+  if (!saved && !exercises.length) return;
+  player = saved || {
+    list: exercises.map((item) => ({
+      id: item.id, name: item.name, sets: item.sets || 1,
+      reps: item.reps || 0, seconds: item.seconds_per_set || 0,
+      rest: item.rest_seconds || 0, image: item.demo_image || null,
+      hint: item.how && item.how.steps ? item.how.steps[0] : '',
+    })),
+    index: 0, set: 1, phase: 'exercise', left: 0, paused: false,
+    started: Date.now(), muted: playerMuted(), done: [],
+  };
+  player.muted = playerMuted();
+
+  document.getElementById('player').hidden = false;
+  document.getElementById('player-finish').hidden = true;
+  document.getElementById('player-work').hidden = false;
+  document.getElementById('player-controls').hidden = false;
+  keepAwake(true);
+  enterPhase(player.phase, player.left || null);
+}
+
+function playerMuted() {
+  try { return localStorage.getItem(MUTE_KEY) === '1'; } catch (e) { return false; }
+}
+
+function current() { return player.list[player.index]; }
+
+// Вход в фазу. Упражнение бывает двух видов, и это не оформление, а разная
+// механика: планку держат по секундам и она заканчивается сама, приседания
+// считают повторами и заканчиваются, когда человек скажет.
+function enterPhase(phase, left = null) {
+  player.phase = phase;
+  const item = current();
+  if (phase === 'exercise') {
+    player.left = left !== null ? left : (item.seconds || 0);
+    if (item.seconds) beep(760);
+  } else if (phase === 'rest') {
+    player.left = left !== null ? left : item.rest;
+    beep(520);
+  }
+  playerSave();
+  renderPlayer();
+  runPlayerTimer();
+}
+
+function runPlayerTimer() {
+  clearInterval(playerTimer);
+  const counts = (player.phase === 'rest')
+    || (player.phase === 'exercise' && current().seconds);
+  if (!counts || player.paused) return;
+
+  playerTimer = setInterval(() => {
+    if (!player || player.paused) return;
+    player.left -= 1;
+    if (player.left <= 3 && player.left > 0) beep(880, 90);
+    if (player.left <= 0) {
+      clearInterval(playerTimer);
+      beep(player.phase === 'rest' ? 760 : 520, 160);
+      advance();
+      return;
+    }
+    playerSave();
+    renderPlayer();
+  }, 1000);
+}
+
+// Дальше по сценарию: подход → отдых → следующий подход → следующее
+// упражнение → итог.
+function advance() {
+  const item = current();
+  if (player.phase === 'exercise') {
+    if (!player.done.includes(item.id)) player.done.push(item.id);
+    const last = player.set >= item.sets && player.index >= player.list.length - 1;
+    if (last) return finishPlayer();
+    if (item.rest) return enterPhase('rest');
+    return nextSet();
+  }
+  nextSet();
+}
+
+function nextSet() {
+  const item = current();
+  if (player.set < item.sets) player.set += 1;
+  else { player.index += 1; player.set = 1; }
+  if (player.index >= player.list.length) return finishPlayer();
+  enterPhase('exercise');
+}
+
+function renderPlayer() {
+  if (!player) return;
+  const item = current();
+  const rest = player.phase === 'rest';
+  const timed = !!item.seconds;
+
+  const total = player.list.reduce((sum, one) => sum + one.sets, 0);
+  const passed = player.list.slice(0, player.index)
+    .reduce((sum, one) => sum + one.sets, 0) + (player.set - 1);
+  document.getElementById('player-done-bar').style.width =
+    `${Math.round((passed / total) * 100)}%`;
+  document.getElementById('player-step').textContent =
+    `Упражнение ${player.index + 1} из ${player.list.length}`;
+
+  const next = rest ? nextName() : item.name;
+  document.getElementById('player-phase').textContent = rest ? 'Отдых' : 'Подход';
+  document.getElementById('player-name').textContent = rest ? next : item.name;
+  document.getElementById('player-set').textContent = rest
+    ? 'Дальше'
+    : `Подход ${player.set} из ${item.sets} — ` +
+      (timed ? `${item.seconds} с` : `${item.reps} повторов`);
+  document.getElementById('player-hint').textContent = rest ? '' : (item.hint || '');
+
+  const image = document.getElementById('player-image');
+  const demo = document.getElementById('player-demo');
+  const show = !rest && item.image;
+  image.hidden = !show;
+  document.getElementById('player-soon').hidden = !!show || rest;
+  demo.classList.toggle('empty', !show);
+  demo.hidden = rest;
+  if (show) image.src = item.image;
+
+  const ring = document.getElementById('player-ring');
+  const counting = rest || timed;
+  ring.hidden = !counting;
+  if (counting) {
+    const full = rest ? item.rest : item.seconds;
+    document.getElementById('player-time').textContent = Math.max(player.left, 0);
+    document.getElementById('player-fill').style.strokeDashoffset =
+      RING * (1 - Math.max(player.left, 0) / (full || 1));
+  }
+
+  const main = document.getElementById('player-main');
+  main.textContent = rest ? `+${REST_BONUS} секунд`
+    : (timed ? (player.paused ? 'Продолжить' : 'Пропустить время') : 'Готово');
+  document.getElementById('player-pause').textContent =
+    player.paused ? 'Продолжить' : 'Пауза';
+  document.getElementById('player-skip').textContent =
+    rest ? 'Пропустить отдых' : 'Пропустить упражнение';
+  document.getElementById('player-sound').classList.toggle('off', player.muted);
+}
+
+function nextName() {
+  const item = current();
+  if (player.set < item.sets) return item.name;
+  const next = player.list[player.index + 1];
+  return next ? next.name : item.name;
+}
+
+function playerMain() {
+  if (player.phase === 'rest') {
+    player.left += REST_BONUS;
+    renderPlayer();
+    playerSave();
+    return;
+  }
+  if (current().seconds && player.paused) return playerPause();
+  advance();
+}
+
+function playerPause() {
+  player.paused = !player.paused;
+  playerSave();
+  renderPlayer();
+  runPlayerTimer();
+}
+
+// «Пропустить» во время отдыха — просто дальше. Во время упражнения —
+// целиком следующее: пропускают обычно то, что сегодня не идёт.
+function playerSkip() {
+  if (player.phase === 'rest') return nextSet();
+  player.index += 1;
+  player.set = 1;
+  if (player.index >= player.list.length) return finishPlayer();
+  enterPhase('exercise');
+}
+
+async function finishPlayer() {
+  clearInterval(playerTimer);
+  const done = [...new Set(player.done)];
+  const minutes = Math.max(Math.round((Date.now() - player.started) / 60000), 1);
+
+  document.getElementById('player-work').hidden = true;
+  document.getElementById('player-controls').hidden = true;
+  document.getElementById('player-finish').hidden = false;
+  document.getElementById('finish-time').textContent =
+    `${Math.floor(minutes / 60) ? `${Math.floor(minutes / 60)} ч ` : ''}${minutes % 60} мин`;
+  beep(880, 200);
+  playerForget();
+
+  if (!done.length) {
+    document.getElementById('finish-facts').textContent = 'Ничего не отмечено';
+    document.getElementById('finish-note').textContent = '';
+    setTimeout(closePlayer, 1600);
+    return;
+  }
+
+  try {
+    // Запись уходит тем же путём, что и раньше: кристаллы, серия и задания
+    // пересчитываются сами, дублировать их здесь нечем и незачем.
+    const result = await api('/api/workouts/log', {
+      method: 'POST',
+      body: JSON.stringify({ exercise_ids: done }),
+    });
+    document.getElementById('finish-facts').textContent =
+      `${done.length} ${plural(done.length, 'упражнение', 'упражнения', 'упражнений')}`
+      + ` · ~${result.calories} ккал`;
+    document.getElementById('finish-note').textContent = 'Записано в дневник';
+    haptic('medium');
+    await refreshWorkouts();
+    await refresh();
+  } catch (error) {
+    document.getElementById('finish-facts').textContent = 'Не удалось записать';
+    document.getElementById('finish-note').textContent = error.message;
+  }
+  setTimeout(closePlayer, 2200);
+}
+
+function closePlayer() {
+  clearInterval(playerTimer);
+  keepAwake(false);
+  document.getElementById('player').hidden = true;
+  player = null;
+}
+
+// Выход посреди тренировки. Записываем то, что успели: человек честно это
+// сделал, и терять сделанное — худшее, что может случиться.
+async function leavePlayer() {
+  if (!player) return closePlayer();
+  if (player.done.length === 0) {
+    playerForget();
+    return closePlayer();
+  }
+  const sure = await askYes({
+    title: 'Завершить тренировку?',
+    text: `Сделанное запишется: ${player.done.length} `
+      + plural(player.done.length, 'упражнение', 'упражнения', 'упражнений') + '.',
+    action: 'Завершить',
   });
+  if (sure) await finishPlayer();
+}
+
+function playerMute() {
+  player.muted = !player.muted;
+  try { localStorage.setItem(MUTE_KEY, player.muted ? '1' : '0'); } catch (e) { /* пусто */ }
+  renderPlayer();
+}
+
+// Мини-приложение закрылось посреди тренировки — предлагаем продолжить с
+// того же подхода. Через несколько часов уже не предлагаем: это другой день.
+async function offerResume() {
+  const saved = playerSaved();
+  if (!saved || !saved.list || !saved.list.length) return;
+  const hours = (Date.now() - (saved.started || 0)) / 3600000;
+  if (hours > RESUME_HOURS) return playerForget();
+
+  const item = saved.list[saved.index];
+  const sure = await askYes({
+    title: 'Продолжить тренировку?',
+    text: `Ты остановилась на «${item ? item.name : ''}», подход ${saved.set}.`,
+    action: 'Продолжить',
+  });
+  if (sure) openPlayer([], saved);
+  else playerForget();
 }
 
 // Как делать упражнение — окном внутри приложения.
@@ -4522,6 +4862,11 @@ async function init() {
   document.getElementById('how-close').onclick = () => {
     document.getElementById('how-sheet').hidden = true;
   };
+  document.getElementById('player-main').onclick = playerMain;
+  document.getElementById('player-pause').onclick = playerPause;
+  document.getElementById('player-skip').onclick = playerSkip;
+  document.getElementById('player-sound').onclick = playerMute;
+  document.getElementById('player-close').onclick = leavePlayer;
   document.getElementById('preps-toggle').onclick = togglePreps;
   document.getElementById('prep-close').onclick = () => {
     document.getElementById('prep-sheet').hidden = true;
@@ -4544,6 +4889,9 @@ async function init() {
     // анимировал бы то, чего на экране нет.
     playEntrance('today');
     openRequestedScreen();
+    // Тренировка, прерванная закрытием приложения, предлагается к
+    // продолжению — но только сегодня и только если что-то уже сделано.
+    offerResume();
   } catch (e) {
     if (e.message.includes('Подписка')) return;   // экран оплаты уже показан
     document.getElementById('loading').textContent =

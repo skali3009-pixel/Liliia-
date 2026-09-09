@@ -677,6 +677,55 @@
   </div>
 </div>
 
+<!-- Проводник по тренировке. Отдельный экран поверх всего: во время
+     подхода на экране должно быть только то, что делаешь сейчас — показ
+     движения, счёт подходов и таймер. Остальное мешает. -->
+<div id="player" class="player" hidden>
+  <div class="player-bar"><div id="player-done-bar"></div></div>
+  <div class="player-head">
+    <span class="player-step" id="player-step"></span>
+    <div class="player-tools">
+      <button class="icon-btn" id="player-sound" aria-label="Звук">🔔</button>
+      <button class="icon-btn" id="player-close" aria-label="Завершить">✕</button>
+    </div>
+  </div>
+
+  <div class="player-body" id="player-work">
+    <div class="how-demo empty" id="player-demo">
+      <img id="player-image" alt="" hidden>
+      <p class="how-soon" id="player-soon">Показ движения появится здесь</p>
+    </div>
+    <div class="player-phase" id="player-phase"></div>
+    <h2 class="player-name" id="player-name"></h2>
+    <p class="player-set" id="player-set"></p>
+    <div class="player-ring" id="player-ring" hidden>
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+        <circle class="ring-fill plain" id="player-fill" cx="60" cy="60" r="52"></circle>
+      </svg>
+      <div class="player-time" id="player-time">0</div>
+    </div>
+    <p class="player-hint" id="player-hint"></p>
+  </div>
+
+  <!-- Итог. Кристаллы, серия и задания пересчитываются сами: запись
+       уходит тем же путём, что и раньше. -->
+  <div class="player-body" id="player-finish" hidden>
+    <div class="player-phase">Тренировка завершена</div>
+    <h2 class="player-name" id="finish-time">0:00</h2>
+    <p class="player-set" id="finish-facts"></p>
+    <p class="player-hint" id="finish-note"></p>
+  </div>
+
+  <div class="player-controls" id="player-controls">
+    <button class="btn" id="player-main">Готово</button>
+    <div class="player-row">
+      <button class="btn ghost" id="player-pause">Пауза</button>
+      <button class="btn ghost" id="player-skip">Пропустить</button>
+    </div>
+  </div>
+</div>
+
 <div id="rest-overlay" class="overlay" hidden>
     <div class="rest-card">
       <div class="rest-label">Отдых</div>
