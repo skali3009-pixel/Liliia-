@@ -2342,8 +2342,13 @@ const MOVES = {
            { lean: 76, thigh: 92, knee: 4, arm: -104, elbow: 66 }],
   plank: [{ lean: 78, thigh: 94, knee: 4, arm: -96, elbow: 74 },
           { lean: 80, thigh: 96, knee: 4, arm: -96, elbow: 74 }],
-  bridge: [{ lean: 108, thigh: 36, knee: 96, arm: 118, elbow: 4 },
-           { lean: 84, thigh: 22, knee: 104, arm: 118, elbow: 4 }],
+  // Мостик считался, а не подбирался на глаз: плечи и стопы обязаны лежать
+  // на одной линии пола, иначе фигура висит в воздухе. Отсюда и углы —
+  // высота плеча над тазом задана (8 и 20 единиц), голень поставлена почти
+  // отвесно, а колено и наклон корпуса из этого вычислены. Шея отдельно
+  // кладёт голову на пол: без неё затылок уходил под пол.
+  bridge: [{ lean: 108, thigh: 123, knee: -117, neck: -18, arm: -18, elbow: 2 },
+           { lean: 140, thigh: 87, knee: -81, neck: -50, arm: -50, elbow: 2 }],
   hinge: [{ lean: 8, thigh: 2, knee: 10, arm: 6, elbow: 4 },
           { lean: 62, thigh: -8, knee: 18, arm: -50, elbow: 4 }],
   pull: [{ lean: 52, thigh: -6, knee: 14, arm: -46, elbow: 6 },
@@ -2358,8 +2363,10 @@ const MOVES = {
           { thigh: 14, knee: 8, thigh2: -44, knee2: 72, arm: -30, elbow: 30 }],
   stretch: [{ lean: 8, thigh: 2, knee: 6, arm: -166, elbow: 6 },
             { lean: 30, thigh: 2, knee: 6, arm: -150, elbow: 6 }],
-  breath: [{ lean: 96, thigh: 34, knee: 96, arm: 112, elbow: 6 },
-           { lean: 96, thigh: 34, knee: 96, arm: 112, elbow: 6, y: -2 }],
+  // Дыхание лёжа — та же поза, что у мостика внизу; движется только живот,
+  // поэтому кадры отличаются на пару единиц, а не углами.
+  breath: [{ lean: 108, thigh: 123, knee: -117, neck: -18, arm: -14, elbow: 2 },
+           { lean: 108, thigh: 123, knee: -117, neck: -18, arm: -14, elbow: 2, y: -2 }],
 };
 
 /* --- Ая: один персонаж на все упражнения ---------------------------------
@@ -2499,13 +2506,19 @@ function character(pose) {
   // не вдоль тела: в планке и в мостике «вдоль тела» — это вперёд, и коса
   // ложилась комом на голову. Сила тяжести одна на все позы.
   const down = { x: 0, y: 1 };
+
+  // Пол — самая нижняя точка тела. Волосы и хвост до него доходят и на нём
+  // остаются: без этого у лежащей фигуры коса уходила сквозь пол вниз.
+  const floorY = Math.max(joint.hip.y, joint.shoulder.y, joint.head.y,
+                          joint.ankle.y, joint.ankle2.y) + 1.5;
+  const onFloor = (point) => ({ x: point.x, y: Math.min(point.y, floorY) });
   const hairTop = vgo(vgo(joint.head, headUp, 2.2), back, 1.0);
   const nape = vgo(vgo(joint.head, back, 5.4), headUp, 0.6);
   const hairLine = curvePoints(
     hairTop,
     nape,
     vgo(vgo(nape, down, 5.5), back, 2.2),
-    vgo(vgo(nape, down, 11.0), back, 1.0), 11);
+    vgo(vgo(nape, down, 11.0), back, 1.0), 11).map(onFloor);
   // Толщина по длине: у макушки прядь узкая, к лопаткам шире, к концу
   // сходит. Одна ширина на всю длину закрывала лицо копной.
   // Толщина по длине: у макушки прядь узкая, ниже затылка ровная, и лишь
@@ -2516,12 +2529,21 @@ function character(pose) {
     if (share < 0.2) return 2.0 + share * 3.5;
     return share < 0.72 ? 2.7 : 2.7 - (share - 0.72) * 6.6;
   });
-  const tailRoot = vgo(vgo(joint.hip, back, 2.6), up, -0.8);
+  // Хвост продолжает позвоночник и уходит назад: у стоящей фигуры это
+  // вниз и чуть за спину, у лежащей — за таз, к ногам. Пока он крепился
+  // только «за спину», в планке он подворачивался под живот.
+  let tailDir = vunit({ x: -up.x * 0.95 + back.x * 0.35,
+                        y: -up.y * 0.95 + back.y * 0.35 });
+  // Вверх от таза хвост не растёт ни в какой позе: в мостике позвоночник
+  // и правда смотрит вверх, но хвост мягкий и лежит, а не стоит антенной.
+  if (tailDir.y < 0.15) tailDir = vunit({ x: tailDir.x, y: 0.15 });
+  const skyward = { x: 0, y: -1 };
+  const tailRoot = vgo(vgo(joint.hip, back, 2.2), up, -0.8);
   const tailLine = curvePoints(
     tailRoot,
-    vgo(vgo(tailRoot, back, 7.0), up, -1.8),
-    vgo(vgo(tailRoot, back, 13.0), up, 4.0),
-    vgo(vgo(tailRoot, back, 12.6), up, 11.0), 10);
+    vgo(tailRoot, tailDir, 7.0),
+    vgo(vgo(tailRoot, tailDir, 12.5), skyward, 3.5),
+    vgo(vgo(tailRoot, tailDir, 13.5), skyward, 9.5), 10).map(onFloor);
 
   // Ухо: треугольник у макушки. Два уха — переднее и заднее, иначе голова
   // читается человеческой.
