@@ -2203,12 +2203,13 @@ function rememberAgreement(code) {
 function renderGymWarning(data) {
   const box = document.getElementById('gym-warning');
   const list = document.getElementById('exercises');
-  const finish = document.getElementById('finish-workout');
 
   const needed = data.warning && !agreedPrograms().has(data.selected);
   box.hidden = !needed;
   list.hidden = !!needed;
-  if (needed) finish.hidden = true;
+  // Кнопку записи прячет updateFinishButton — она вызывается следом и
+  // иначе открыла бы её обратно. Двое хозяев у одной кнопки — это спор,
+  // который однажды проигрывает предупреждение.
   if (!needed) return;
 
   document.getElementById('gym-warning-text').textContent = data.warning;
@@ -2291,11 +2292,30 @@ function exerciseRow(exercise) {
   return row;
 }
 
+// Две кнопки записи, каждая в своей карточке. Одна общая внизу означала
+// бы, что человек, отметивший пробежку наверху, листает до конца каталога
+// упражнений, чтобы её подтвердить.
 function updateFinishButton() {
-  const button = document.getElementById('finish-workout');
-  const count = doneExercises.size;
-  button.hidden = count === 0;
-  button.textContent = `Записать тренировку (${count})`;
+  const cardioIds = new Set((gym?.cardio || []).map((item) => item.id));
+  const marked = [...doneExercises];
+  const runs = marked.filter((id) => cardioIds.has(id));
+  const moves = marked.filter((id) => !cardioIds.has(id));
+
+  const program = document.getElementById('finish-workout');
+  const hidden = !document.getElementById('gym-warning').hidden;
+  program.hidden = hidden || moves.length === 0;
+  program.textContent = `Записать тренировку (${moves.length})`;
+
+  const cardio = document.getElementById('finish-cardio');
+  cardio.hidden = runs.length === 0;
+  if (runs.length === 1) {
+    // Названием видно, что именно запишется: отметить соседнюю плитку
+    // случайно легко.
+    const one = (gym?.cardio || []).find((item) => item.id === runs[0]);
+    cardio.textContent = one ? `Записать: ${one.name}` : 'Записать занятие';
+  } else if (runs.length > 1) {
+    cardio.textContent = `Записать занятия (${runs.length})`;
+  }
 }
 
 function startRest(seconds) {
@@ -2386,9 +2406,15 @@ function askNumber({ title, hint = '', label = 'Своё число', choices = 
   });
 }
 
-function askMinutes() {
-  return askNumber({ title: 'Сколько минут?', choices: MINUTE_CHOICES,
-                     unit: 'мин', min: 1, max: 300 });
+// Минуты записываются каждому отмеченному занятию, а не делятся между
+// ними: полчаса бега и полчаса скакалки — это час, а не полчаса. Когда
+// отмечено больше одного, об этом надо сказать в заголовке, иначе человек
+// увидит в дневнике вдвое больше, чем имел в виду.
+function askMinutes(many = false) {
+  return askNumber({
+    title: many ? 'Сколько минут на каждое?' : 'Сколько минут?',
+    choices: MINUTE_CHOICES, unit: 'мин', min: 1, max: 300,
+  });
 }
 
 // Вопрос «точно?» — тоже своим окном. У системного окна браузера кнопки
@@ -2416,30 +2442,38 @@ function askYes({ title, text = '', action = 'Да', danger = false }) {
   });
 }
 
-async function finishWorkout() {
-  const ids = [...doneExercises];
+// Записывает ровно то, что отмечено в своей карточке. Остальные отметки
+// остаются: человек мог отметить и пробежку, и упражнения — и подтвердить
+// их по очереди, каждое там, где отмечал.
+async function recordWorkout(ids, minutes = null) {
   if (ids.length === 0) return;
-
-  // Для занятия спрашиваем реальное время — оно у всех разное. Своим
-  // окном, а не системным prompt: тот выглядит чужим, обрезает текст на
-  // телефоне и не даёт подсказать привычные варианты.
-  const cardioIds = new Set(gym.cardio.map((c) => c.id));
-  let minutes = null;
-  if (ids.some((id) => cardioIds.has(id))) {
-    minutes = await askMinutes();
-    if (minutes === null) return;
-  }
-
   try {
     const result = await api('/api/workouts/log', {
       method: 'POST',
       body: JSON.stringify({ exercise_ids: ids, minutes }),
     });
-    doneExercises.clear();
+    for (const id of ids) doneExercises.delete(id);
     haptic('medium');
     toast(`Записано: ${result.minutes} мин, ${result.calories} ккал`);
     await refreshWorkouts();
   } catch (e) { toast(e.message); }
+}
+
+async function finishWorkout() {
+  const cardioIds = new Set((gym?.cardio || []).map((item) => item.id));
+  await recordWorkout([...doneExercises].filter((id) => !cardioIds.has(id)));
+}
+
+async function finishCardio() {
+  const cardioIds = new Set((gym?.cardio || []).map((item) => item.id));
+  const ids = [...doneExercises].filter((id) => cardioIds.has(id));
+  if (ids.length === 0) return;
+
+  // Время у занятия своё: сорок минут пешком и сорок минут бега — разные
+  // вещи. Спрашиваем своим окном, а не системным.
+  const minutes = await askMinutes(ids.length > 1);
+  if (minutes === null) return;
+  await recordWorkout(ids, minutes);
 }
 
 
@@ -4367,6 +4401,7 @@ async function init() {
   document.getElementById('m-save').onclick = saveMeasurement;
 
   document.getElementById('finish-workout').onclick = finishWorkout;
+  document.getElementById('finish-cardio').onclick = finishCardio;
   document.getElementById('preps-toggle').onclick = togglePreps;
   document.getElementById('prep-close').onclick = () => {
     document.getElementById('prep-sheet').hidden = true;

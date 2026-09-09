@@ -577,6 +577,53 @@ def test_activities_are_marked_by_tiles_not_by_rows():
     assert "doneExercises.delete" in chip and "doneExercises.add" in chip
 
 
+def test_the_activity_is_confirmed_where_it_was_marked():
+    """Отметила пробежку наверху — подтвердила там же.
+
+    Одна кнопка внизу означала бы, что человек листает до конца каталога
+    упражнений ради занятия, которое отметил в самом начале. Проверено в
+    браузере: с того места, где стоят плитки, кнопка видна без прокрутки.
+    """
+    gym = INDEX.split('id="screen-gym"', 1)[1].split("</main>", 1)[0]
+    card = gym.split('id="cardio-card"', 1)[1].split("</section>", 1)[0]
+    assert 'id="finish-cardio"' in card, "кнопка должна жить в карточке занятий"
+
+    # Каждая кнопка записывает своё: иначе нажатие в одной карточке уносит
+    # отметки из другой, и человек об этом не узнает.
+    runs = APP_JS.split("async function finishCardio(", 1)[1][:700]
+    assert "cardioIds.has(id)" in runs and "!cardioIds.has(id)" not in runs
+    moves = APP_JS.split("async function finishWorkout(", 1)[1][:400]
+    assert "!cardioIds.has(id)" in moves
+
+
+def test_minutes_are_said_to_be_counted_for_each_activity():
+    """Полчаса бега и полчаса скакалки — это час, а не полчаса.
+
+    Минуты записываются каждому отмеченному занятию. Пока плитку было
+    трудно нажать, это почти не встречалось; теперь отметить две — одно
+    движение, и молчать об этом нельзя.
+    """
+    body = APP_JS.split("function askMinutes(", 1)[1][:400]
+    assert "на каждое" in body
+    call = APP_JS.split("async function finishCardio(", 1)[1][:700]
+    assert "askMinutes(ids.length > 1)" in call
+
+
+def test_the_record_button_has_one_owner():
+    """Двое хозяев у одной кнопки — это спор, который кто-то проигрывает.
+
+    Предупреждение прятало кнопку записи, а обновление показывало её
+    обратно: вызывается оно следом. Теперь прячет только один, и он
+    смотрит на предупреждение.
+    """
+    warning = APP_JS.split("function renderGymWarning(", 1)[1][:700]
+    assert "finish" not in warning.split("if (!needed) return;")[0].replace(
+        "// Кнопку записи прячет updateFinishButton — она вызывается следом и", "")
+
+    body = APP_JS.split("function updateFinishButton(", 1)[1][:900]
+    assert "gym-warning" in body
+
+
 def test_the_personal_topic_is_hidden_until_it_is_read():
     """Предупреждение занимает место упражнений, а не висит над ними."""
     for element_id in ("gym-warning", "gym-warning-text", "gym-warning-ok"):
@@ -599,7 +646,10 @@ def test_numbers_are_asked_in_our_own_window():
     добавленное завтра рядом.
     """
     assert "prompt(" not in APP_JS
-    for name in ("askMinutes()", "askNumber({"):
+    # Со скобкой без содержимого не сверяемся: у askMinutes появился
+    # признак «отмечено несколько», и проверка на «askMinutes()» падала бы
+    # из-за него, ничего не поймав.
+    for name in ("askMinutes(", "askNumber({"):
         assert name in APP_JS, name
     for element_id in ("number-sheet", "number-choices", "number-own",
                        "number-title", "number-hint", "number-label"):
