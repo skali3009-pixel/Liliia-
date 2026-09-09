@@ -147,11 +147,82 @@
       "poster": "posters/anim_machine_leg_press.png",
       "loop": true,
       "replaceExisting": true
+    },
+    {
+      "exerciseId": "barbell_squat",
+      "titleRu": "Приседания со штангой",
+      "animationAssetId": "anim_barbell_squat",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_barbell_squat.mp4",
+      "poster": "posters/anim_barbell_squat.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "dumbbell_romanian_deadlift",
+      "titleRu": "Румынская тяга с гантелями",
+      "animationAssetId": "anim_dumbbell_romanian_deadlift",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_dumbbell_romanian_deadlift.mp4",
+      "poster": "posters/anim_dumbbell_romanian_deadlift.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "dumbbell_bench_press",
+      "titleRu": "Жим гантелей лёжа",
+      "animationAssetId": "anim_dumbbell_bench_press",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_dumbbell_bench_press.mp4",
+      "poster": "posters/anim_dumbbell_bench_press.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "single_arm_dumbbell_row",
+      "titleRu": "Тяга гантели в наклоне",
+      "animationAssetId": "anim_single_arm_dumbbell_row",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_single_arm_dumbbell_row.mp4",
+      "poster": "posters/anim_single_arm_dumbbell_row.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "dumbbell_lunge",
+      "titleRu": "Выпады с гантелями",
+      "animationAssetId": "anim_dumbbell_lunge",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_dumbbell_lunge.mp4",
+      "poster": "posters/anim_dumbbell_lunge.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "seated_dumbbell_shoulder_press",
+      "titleRu": "Жим гантелей сидя",
+      "animationAssetId": "anim_seated_dumbbell_shoulder_press",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_seated_dumbbell_shoulder_press.mp4",
+      "poster": "posters/anim_seated_dumbbell_shoulder_press.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "bench_crunch",
+      "titleRu": "Скручивания на скамье",
+      "animationAssetId": "anim_bench_crunch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_bench_crunch.mp4",
+      "poster": "posters/anim_bench_crunch.png",
+      "loop": true
     }
   ],
   "packages": [
     "AURA_block_01_home_beginner_v2",
     "AURA_block_02_home_intermediate_v2",
-    "AURA_corrections_blocks_01-03_v3_compact"
+    "AURA_corrections_blocks_01-03_v3_compact",
+    "AURA_block_04_gym_intermediate_v2_compact"
   ]
 }

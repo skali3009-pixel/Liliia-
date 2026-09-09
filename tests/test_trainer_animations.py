@@ -298,12 +298,40 @@ CORRECTED = {
 }
 
 
+BLOCK_04 = {
+    "barbell_squat": "anim_barbell_squat",
+    "dumbbell_romanian_deadlift": "anim_dumbbell_romanian_deadlift",
+    "dumbbell_bench_press": "anim_dumbbell_bench_press",
+    "single_arm_dumbbell_row": "anim_single_arm_dumbbell_row",
+    "dumbbell_lunge": "anim_dumbbell_lunge",
+    "seated_dumbbell_shoulder_press": "anim_seated_dumbbell_shoulder_press",
+    "bench_crunch": "anim_bench_crunch",
+}
+
+
 def test_the_manifest_remembers_which_packages_it_is_made_of():
-    """Иначе после третьего пакета никто не скажет, что откуда взялось."""
+    """Иначе после четвёртого пакета никто не скажет, что откуда взялось."""
     assert PACK["packages"] == ["AURA_block_01_home_beginner_v2",
                                 "AURA_block_02_home_intermediate_v2",
-                                "AURA_corrections_blocks_01-03_v3_compact"]
-    assert len(ASSETS) == len(BLOCK_01 | BLOCK_02 | CORRECTED)
+                                "AURA_corrections_blocks_01-03_v3_compact",
+                                "AURA_block_04_gym_intermediate_v2_compact"]
+    assert len(ASSETS) == len(BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04)
+
+
+def test_the_fourth_block_is_installed_whole():
+    """Семь упражнений «Зал · Средний» — все, а не сколько доехало.
+
+    Блок 04 накрывает программу целиком: в «Зале · Среднем» ровно семь
+    упражнений, и показ теперь есть у каждого.
+    """
+    have = {item["exerciseId"]: item["animationAssetId"] for item in ASSETS}
+    for code, asset in BLOCK_04.items():
+        assert have.get(code) == asset, (code, have.get(code))
+
+    from seed.exercise_ids import id_for
+    programme = {id_for(item[0])
+                 for item in PROGRAMS["gym_intermediate"]["exercises"]}
+    assert programme == set(BLOCK_04), programme ^ set(BLOCK_04)
 
 
 def test_the_corrections_landed_on_the_right_exercises():
