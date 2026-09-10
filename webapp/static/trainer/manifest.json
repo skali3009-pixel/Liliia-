@@ -417,6 +417,76 @@
       "src": "animations/anim_savasana.mp4",
       "poster": "posters/anim_savasana.jpg",
       "loop": true
+    },
+    {
+      "exerciseId": "seated_forward_bend",
+      "titleRu": "Наклон к прямым ногам сидя",
+      "animationAssetId": "anim_seated_forward_bend",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_seated_forward_bend.mp4",
+      "poster": "posters/anim_seated_forward_bend.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "standing_quad_stretch",
+      "titleRu": "Растяжка квадрицепса стоя",
+      "animationAssetId": "anim_standing_quad_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_standing_quad_stretch.mp4",
+      "poster": "posters/anim_standing_quad_stretch.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "pigeon_pose",
+      "titleRu": "Поза голубя",
+      "animationAssetId": "anim_pigeon_pose",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pigeon_pose.mp4",
+      "poster": "posters/anim_pigeon_pose.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "doorway_chest_stretch",
+      "titleRu": "Растяжка груди в дверном проёме",
+      "animationAssetId": "anim_doorway_chest_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_doorway_chest_stretch.mp4",
+      "poster": "posters/anim_doorway_chest_stretch.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "supine_spinal_twist",
+      "titleRu": "Скручивание лёжа",
+      "animationAssetId": "anim_supine_spinal_twist",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_supine_spinal_twist.mp4",
+      "poster": "posters/anim_supine_spinal_twist.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "neck_side_tilt",
+      "titleRu": "Наклоны головы к плечу",
+      "animationAssetId": "anim_neck_side_tilt",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_neck_side_tilt.mp4",
+      "poster": "posters/anim_neck_side_tilt.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "wall_calf_stretch",
+      "titleRu": "Растяжка икр у стены",
+      "animationAssetId": "anim_wall_calf_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_wall_calf_stretch.mp4",
+      "poster": "posters/anim_wall_calf_stretch.jpg",
+      "loop": true
     }
   ],
   "packages": [
@@ -426,6 +496,7 @@
     "AURA_block_04_gym_intermediate_v2_compact",
     "AURA_block_05_cardio_home_v1_compact",
     "AURA_block_06_bands_v1_compact",
-    "AURA_block_07_yoga_v1_compact"
+    "AURA_block_07_yoga_v1_compact",
+    "AURA_block_08_stretching_v1_compact"
   ]
 }

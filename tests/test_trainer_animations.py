@@ -347,6 +347,17 @@ BLOCK_07 = {
 }
 
 
+BLOCK_08 = {
+    "seated_forward_bend": "anim_seated_forward_bend",
+    "standing_quad_stretch": "anim_standing_quad_stretch",
+    "pigeon_pose": "anim_pigeon_pose",
+    "doorway_chest_stretch": "anim_doorway_chest_stretch",
+    "supine_spinal_twist": "anim_supine_spinal_twist",
+    "neck_side_tilt": "anim_neck_side_tilt",
+    "wall_calf_stretch": "anim_wall_calf_stretch",
+}
+
+
 def test_the_manifest_remembers_which_packages_it_is_made_of():
     """Иначе после четвёртого пакета никто не скажет, что откуда взялось."""
     assert PACK["packages"] == ["AURA_block_01_home_beginner_v2",
@@ -355,10 +366,11 @@ def test_the_manifest_remembers_which_packages_it_is_made_of():
                                 "AURA_block_04_gym_intermediate_v2_compact",
                                 "AURA_block_05_cardio_home_v1_compact",
                                 "AURA_block_06_bands_v1_compact",
-                                "AURA_block_07_yoga_v1_compact"]
+                                "AURA_block_07_yoga_v1_compact",
+                                "AURA_block_08_stretching_v1_compact"]
     assert len(ASSETS) == len(
         BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04 | BLOCK_05 | BLOCK_06
-        | BLOCK_07)
+        | BLOCK_07 | BLOCK_08)
 
 
 def test_the_fourth_block_is_installed_whole():
@@ -416,6 +428,23 @@ def test_the_seventh_block_is_installed_whole():
 
     programme = {id_for(item[0]) for item in PROGRAMS["yoga"]["exercises"]}
     assert programme == set(BLOCK_07), programme ^ set(BLOCK_07)
+
+
+def test_the_eighth_block_is_installed_whole():
+    """Семь растяжек «Стретчинга» — все, а не сколько доехало.
+
+    Три упражнения этого блока названы почти как чужие: «Растяжка груди в
+    дверном проёме» здесь, «Раскрытие груди в дверном проёме» в «Осанке» и
+    «Растяжка грудных в дверном проёме» в «Холке» — три разных кода. Сверка
+    идёт с составом программы, поэтому подмена одного другим здесь и
+    вскроется.
+    """
+    have = {item["exerciseId"]: item["animationAssetId"] for item in ASSETS}
+    for code, asset in BLOCK_08.items():
+        assert have.get(code) == asset, (code, have.get(code))
+
+    programme = {id_for(item[0]) for item in PROGRAMS["stretching"]["exercises"]}
+    assert programme == set(BLOCK_08), programme ^ set(BLOCK_08)
 
 
 def test_the_corrections_landed_on_the_right_exercises():
