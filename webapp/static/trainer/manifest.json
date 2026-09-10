@@ -277,6 +277,76 @@
       "src": "animations/anim_burpee.mp4",
       "poster": "posters/anim_burpee.jpg",
       "loop": true
+    },
+    {
+      "exerciseId": "band_squat",
+      "titleRu": "Приседания с резинкой над коленями",
+      "animationAssetId": "anim_band_squat",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_band_squat.mp4",
+      "poster": "posters/anim_band_squat.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "standing_hip_abduction",
+      "titleRu": "Отведение ноги в сторону стоя",
+      "animationAssetId": "anim_standing_hip_abduction",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_standing_hip_abduction.mp4",
+      "poster": "posters/anim_standing_hip_abduction.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "side_lying_clamshell",
+      "titleRu": "«Ракушка» лёжа на боку",
+      "animationAssetId": "anim_side_lying_clamshell",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_side_lying_clamshell.mp4",
+      "poster": "posters/anim_side_lying_clamshell.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "band_glute_bridge",
+      "titleRu": "Ягодичный мостик с резинкой",
+      "animationAssetId": "anim_band_glute_bridge",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_band_glute_bridge.mp4",
+      "poster": "posters/anim_band_glute_bridge.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "band_lateral_walk",
+      "titleRu": "Шаги в стороны с резинкой",
+      "animationAssetId": "anim_band_lateral_walk",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_band_lateral_walk.mp4",
+      "poster": "posters/anim_band_lateral_walk.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "seated_band_row",
+      "titleRu": "Тяга резинки к поясу сидя",
+      "animationAssetId": "anim_seated_band_row",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_seated_band_row.mp4",
+      "poster": "posters/anim_seated_band_row.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "band_pull_apart",
+      "titleRu": "Разведение рук с резинкой",
+      "animationAssetId": "anim_band_pull_apart",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_band_pull_apart.mp4",
+      "poster": "posters/anim_band_pull_apart.jpg",
+      "loop": true
     }
   ],
   "packages": [
@@ -284,6 +354,7 @@
     "AURA_block_02_home_intermediate_v2",
     "AURA_corrections_blocks_01-03_v3_compact",
     "AURA_block_04_gym_intermediate_v2_compact",
-    "AURA_block_05_cardio_home_v1_compact"
+    "AURA_block_05_cardio_home_v1_compact",
+    "AURA_block_06_bands_v1_compact"
   ]
 }

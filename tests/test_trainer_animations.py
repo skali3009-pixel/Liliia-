@@ -325,14 +325,27 @@ BLOCK_05 = {
 }
 
 
+BLOCK_06 = {
+    "band_squat": "anim_band_squat",
+    "standing_hip_abduction": "anim_standing_hip_abduction",
+    "side_lying_clamshell": "anim_side_lying_clamshell",
+    "band_glute_bridge": "anim_band_glute_bridge",
+    "band_lateral_walk": "anim_band_lateral_walk",
+    "seated_band_row": "anim_seated_band_row",
+    "band_pull_apart": "anim_band_pull_apart",
+}
+
+
 def test_the_manifest_remembers_which_packages_it_is_made_of():
     """Иначе после четвёртого пакета никто не скажет, что откуда взялось."""
     assert PACK["packages"] == ["AURA_block_01_home_beginner_v2",
                                 "AURA_block_02_home_intermediate_v2",
                                 "AURA_corrections_blocks_01-03_v3_compact",
                                 "AURA_block_04_gym_intermediate_v2_compact",
-                                "AURA_block_05_cardio_home_v1_compact"]
-    assert len(ASSETS) == len(BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04 | BLOCK_05)
+                                "AURA_block_05_cardio_home_v1_compact",
+                                "AURA_block_06_bands_v1_compact"]
+    assert len(ASSETS) == len(
+        BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04 | BLOCK_05 | BLOCK_06)
 
 
 def test_the_fourth_block_is_installed_whole():
@@ -366,6 +379,20 @@ def test_the_fifth_block_is_installed_whole():
     programme = {id_for(item[0])
                  for item in PROGRAMS["home_cardio"]["exercises"]}
     assert programme == set(BLOCK_05), programme ^ set(BLOCK_05)
+
+
+def test_the_sixth_block_is_installed_whole():
+    """Семь упражнений «Резинок» — все, а не сколько доехало.
+
+    Сверка идёт с составом программы, а не с числом семь: пакет,
+    приславший чужое упражнение вместо своего, дал бы то же самое число.
+    """
+    have = {item["exerciseId"]: item["animationAssetId"] for item in ASSETS}
+    for code, asset in BLOCK_06.items():
+        assert have.get(code) == asset, (code, have.get(code))
+
+    programme = {id_for(item[0]) for item in PROGRAMS["bands"]["exercises"]}
+    assert programme == set(BLOCK_06), programme ^ set(BLOCK_06)
 
 
 def test_the_corrections_landed_on_the_right_exercises():
