@@ -217,12 +217,73 @@
       "src": "animations/anim_bench_crunch.mp4",
       "poster": "posters/anim_bench_crunch.png",
       "loop": true
+    },
+    {
+      "exerciseId": "jumping_jack",
+      "titleRu": "Джампинг-джек",
+      "animationAssetId": "anim_jumping_jack",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_jumping_jack.mp4",
+      "poster": "posters/anim_jumping_jack.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "high_knees_run",
+      "titleRu": "Бег на месте с высоким подниманием колен",
+      "animationAssetId": "anim_high_knees_run",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_high_knees_run.mp4",
+      "poster": "posters/anim_high_knees_run.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "mountain_climber",
+      "titleRu": "Скалолаз",
+      "animationAssetId": "anim_mountain_climber",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_mountain_climber.mp4",
+      "poster": "posters/anim_mountain_climber.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "squat_jump",
+      "titleRu": "Прыжки из приседа",
+      "animationAssetId": "anim_squat_jump",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_squat_jump.mp4",
+      "poster": "posters/anim_squat_jump.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "jump_lunge",
+      "titleRu": "Выпады в прыжке",
+      "animationAssetId": "anim_jump_lunge",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_jump_lunge.mp4",
+      "poster": "posters/anim_jump_lunge.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "burpee",
+      "titleRu": "Бёрпи",
+      "animationAssetId": "anim_burpee",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_burpee.mp4",
+      "poster": "posters/anim_burpee.jpg",
+      "loop": true
     }
   ],
   "packages": [
     "AURA_block_01_home_beginner_v2",
     "AURA_block_02_home_intermediate_v2",
     "AURA_corrections_blocks_01-03_v3_compact",
-    "AURA_block_04_gym_intermediate_v2_compact"
+    "AURA_block_04_gym_intermediate_v2_compact",
+    "AURA_block_05_cardio_home_v1_compact"
   ]
 }

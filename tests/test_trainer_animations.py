@@ -151,7 +151,13 @@ def test_every_picture_opens_to_the_last_byte():
     from PIL import Image
 
     broken = []
-    for path in sorted(TRAINER.rglob("*.png")):
+    pictures = [path for path in sorted(TRAINER.rglob("*"))
+                if path.suffix.lower() in (".png", ".jpg", ".jpeg")]
+    # Заставки приходят в разных форматах: блоки 01-04 прислали PNG,
+    # блок 05 — JPEG. Сторож, знающий одно расширение, промолчал бы о
+    # половине файлов ровно тогда, когда пакет сменил формат.
+    assert len(pictures) >= len(ASSETS), len(pictures)
+    for path in pictures:
         try:
             picture = Image.open(path)
             picture.load()
@@ -309,13 +315,24 @@ BLOCK_04 = {
 }
 
 
+BLOCK_05 = {
+    "jumping_jack": "anim_jumping_jack",
+    "high_knees_run": "anim_high_knees_run",
+    "mountain_climber": "anim_mountain_climber",
+    "squat_jump": "anim_squat_jump",
+    "jump_lunge": "anim_jump_lunge",
+    "burpee": "anim_burpee",
+}
+
+
 def test_the_manifest_remembers_which_packages_it_is_made_of():
     """Иначе после четвёртого пакета никто не скажет, что откуда взялось."""
     assert PACK["packages"] == ["AURA_block_01_home_beginner_v2",
                                 "AURA_block_02_home_intermediate_v2",
                                 "AURA_corrections_blocks_01-03_v3_compact",
-                                "AURA_block_04_gym_intermediate_v2_compact"]
-    assert len(ASSETS) == len(BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04)
+                                "AURA_block_04_gym_intermediate_v2_compact",
+                                "AURA_block_05_cardio_home_v1_compact"]
+    assert len(ASSETS) == len(BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04 | BLOCK_05)
 
 
 def test_the_fourth_block_is_installed_whole():
@@ -332,6 +349,23 @@ def test_the_fourth_block_is_installed_whole():
     programme = {id_for(item[0])
                  for item in PROGRAMS["gym_intermediate"]["exercises"]}
     assert programme == set(BLOCK_04), programme ^ set(BLOCK_04)
+
+
+def test_the_fifth_block_is_installed_whole():
+    """Шесть упражнений «Кардио дома» — все, а не сколько доехало.
+
+    Блок 05 накрывает программу целиком: в «Кардио дома» ровно шесть
+    упражнений, и показ теперь есть у каждого. Сверка идёт с составом
+    программы, а не с числом шесть: пакет, приславший чужое упражнение
+    вместо своего, дал бы то же самое число.
+    """
+    have = {item["exerciseId"]: item["animationAssetId"] for item in ASSETS}
+    for code, asset in BLOCK_05.items():
+        assert have.get(code) == asset, (code, have.get(code))
+
+    programme = {id_for(item[0])
+                 for item in PROGRAMS["home_cardio"]["exercises"]}
+    assert programme == set(BLOCK_05), programme ^ set(BLOCK_05)
 
 
 def test_the_corrections_landed_on_the_right_exercises():
