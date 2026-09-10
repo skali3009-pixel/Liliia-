@@ -347,6 +347,76 @@
       "src": "animations/anim_band_pull_apart.mp4",
       "poster": "posters/anim_band_pull_apart.jpg",
       "loop": true
+    },
+    {
+      "exerciseId": "cat_cow",
+      "titleRu": "Кошка-корова",
+      "animationAssetId": "anim_cat_cow",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_cat_cow.mp4",
+      "poster": "posters/anim_cat_cow.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "downward_dog",
+      "titleRu": "Собака мордой вниз",
+      "animationAssetId": "anim_downward_dog",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_downward_dog.mp4",
+      "poster": "posters/anim_downward_dog.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "warrior_two",
+      "titleRu": "Поза воина II",
+      "animationAssetId": "anim_warrior_two",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_warrior_two.mp4",
+      "poster": "posters/anim_warrior_two.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "tree_pose",
+      "titleRu": "Поза дерева",
+      "animationAssetId": "anim_tree_pose",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_tree_pose.mp4",
+      "poster": "posters/anim_tree_pose.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "standing_forward_fold",
+      "titleRu": "Наклон вперёд стоя",
+      "animationAssetId": "anim_standing_forward_fold",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_standing_forward_fold.mp4",
+      "poster": "posters/anim_standing_forward_fold.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "child_pose",
+      "titleRu": "Поза ребёнка",
+      "animationAssetId": "anim_child_pose",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_child_pose.mp4",
+      "poster": "posters/anim_child_pose.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "savasana",
+      "titleRu": "Шавасана",
+      "animationAssetId": "anim_savasana",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_savasana.mp4",
+      "poster": "posters/anim_savasana.jpg",
+      "loop": true
     }
   ],
   "packages": [
@@ -355,6 +425,7 @@
     "AURA_corrections_blocks_01-03_v3_compact",
     "AURA_block_04_gym_intermediate_v2_compact",
     "AURA_block_05_cardio_home_v1_compact",
-    "AURA_block_06_bands_v1_compact"
+    "AURA_block_06_bands_v1_compact",
+    "AURA_block_07_yoga_v1_compact"
   ]
 }
