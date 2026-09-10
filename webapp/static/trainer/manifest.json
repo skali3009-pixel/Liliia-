@@ -487,6 +487,76 @@
       "src": "animations/anim_wall_calf_stretch.mp4",
       "poster": "posters/anim_wall_calf_stretch.jpg",
       "loop": true
+    },
+    {
+      "exerciseId": "pilates_hundred",
+      "titleRu": "Сотня (The Hundred)",
+      "animationAssetId": "anim_pilates_hundred",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pilates_hundred.mp4",
+      "poster": "posters/anim_pilates_hundred.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "pilates_roll_up",
+      "titleRu": "Роллап",
+      "animationAssetId": "anim_pilates_roll_up",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pilates_roll_up.mp4",
+      "poster": "posters/anim_pilates_roll_up.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "single_leg_stretch",
+      "titleRu": "Одна нога вверх",
+      "animationAssetId": "anim_single_leg_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_single_leg_stretch.mp4",
+      "poster": "posters/anim_single_leg_stretch.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "pilates_pelvic_bridge",
+      "titleRu": "Мостик с подъёмом таза",
+      "animationAssetId": "anim_pilates_pelvic_bridge",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pilates_pelvic_bridge.mp4",
+      "poster": "posters/anim_pilates_pelvic_bridge.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "pilates_swimming",
+      "titleRu": "«Плавание» лёжа на животе",
+      "animationAssetId": "anim_pilates_swimming",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pilates_swimming.mp4",
+      "poster": "posters/anim_pilates_swimming.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "side_plank",
+      "titleRu": "Боковая планка",
+      "animationAssetId": "anim_side_plank",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_side_plank.mp4",
+      "poster": "posters/anim_side_plank.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "lying_scissors",
+      "titleRu": "Ножницы лёжа",
+      "animationAssetId": "anim_lying_scissors",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_lying_scissors.mp4",
+      "poster": "posters/anim_lying_scissors.jpg",
+      "loop": true
     }
   ],
   "packages": [
@@ -497,6 +567,7 @@
     "AURA_block_05_cardio_home_v1_compact",
     "AURA_block_06_bands_v1_compact",
     "AURA_block_07_yoga_v1_compact",
-    "AURA_block_08_stretching_v1_compact"
+    "AURA_block_08_stretching_v1_compact",
+    "AURA_block_09_pilates_v1_compact"
   ]
 }

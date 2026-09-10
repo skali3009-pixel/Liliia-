@@ -358,6 +358,17 @@ BLOCK_08 = {
 }
 
 
+BLOCK_09 = {
+    "pilates_hundred": "anim_pilates_hundred",
+    "pilates_roll_up": "anim_pilates_roll_up",
+    "single_leg_stretch": "anim_single_leg_stretch",
+    "pilates_pelvic_bridge": "anim_pilates_pelvic_bridge",
+    "pilates_swimming": "anim_pilates_swimming",
+    "side_plank": "anim_side_plank",
+    "lying_scissors": "anim_lying_scissors",
+}
+
+
 def test_the_manifest_remembers_which_packages_it_is_made_of():
     """Иначе после четвёртого пакета никто не скажет, что откуда взялось."""
     assert PACK["packages"] == ["AURA_block_01_home_beginner_v2",
@@ -367,10 +378,11 @@ def test_the_manifest_remembers_which_packages_it_is_made_of():
                                 "AURA_block_05_cardio_home_v1_compact",
                                 "AURA_block_06_bands_v1_compact",
                                 "AURA_block_07_yoga_v1_compact",
-                                "AURA_block_08_stretching_v1_compact"]
+                                "AURA_block_08_stretching_v1_compact",
+                                "AURA_block_09_pilates_v1_compact"]
     assert len(ASSETS) == len(
         BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04 | BLOCK_05 | BLOCK_06
-        | BLOCK_07 | BLOCK_08)
+        | BLOCK_07 | BLOCK_08 | BLOCK_09)
 
 
 def test_the_fourth_block_is_installed_whole():
@@ -445,6 +457,31 @@ def test_the_eighth_block_is_installed_whole():
 
     programme = {id_for(item[0]) for item in PROGRAMS["stretching"]["exercises"]}
     assert programme == set(BLOCK_08), programme ^ set(BLOCK_08)
+
+
+def test_the_ninth_block_is_installed_whole():
+    """Семь упражнений «Пилатеса» — все, а не сколько доехало."""
+    have = {item["exerciseId"]: item["animationAssetId"] for item in ASSETS}
+    for code, asset in BLOCK_09.items():
+        assert have.get(code) == asset, (code, have.get(code))
+
+    programme = {id_for(item[0]) for item in PROGRAMS["pilates"]["exercises"]}
+    assert programme == set(BLOCK_09), programme ^ set(BLOCK_09)
+
+
+def test_the_pilates_bridge_never_takes_over_the_home_one():
+    """Два мостика — два разных упражнения и два разных ролика.
+
+    «Ягодичный мостик» из «Дома · Новичок» и «Мостик с подъёмом таза» из
+    «Пилатеса» — движения похожие, коды разные. Подставить пилатесный
+    ролик домашнему легко и незаметно: показ есть, персонаж свой, мостик
+    и правда мостик — просто не тот, который открыли.
+    """
+    have = {item["exerciseId"]: item["animationAssetId"] for item in ASSETS}
+    assert have["glute_bridge"] == "anim_glute_bridge"
+    assert have["pilates_pelvic_bridge"] == "anim_pilates_pelvic_bridge"
+    assert id_for("Ягодичный мостик") == "glute_bridge"
+    assert id_for("Мостик с подъёмом таза") == "pilates_pelvic_bridge"
 
 
 def test_the_corrections_landed_on_the_right_exercises():
