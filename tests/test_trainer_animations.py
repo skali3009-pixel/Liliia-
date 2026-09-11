@@ -155,8 +155,14 @@ def test_every_picture_opens_to_the_last_byte():
                 if path.suffix.lower() in (".png", ".jpg", ".jpeg")]
     # Заставки приходят в разных форматах: блоки 01-04 прислали PNG,
     # блок 05 — JPEG. Сторож, знающий одно расширение, промолчал бы о
-    # половине файлов ровно тогда, когда пакет сменил формат.
-    assert len(pictures) >= len(ASSETS), len(pictures)
+    # половине файлов ровно тогда, когда пакет сменил формат. Считать их
+    # по числу упражнений нельзя: у блока 10 три упражнения делят чужую
+    # заставку. Считаем по самому манифесту — каждая названная в нём
+    # картинка обязана попасть в проверку.
+    названы = {item[key] for item in ASSETS for key in ("src", "poster")
+               if key in item and not item[key].endswith(".mp4")}
+    проверены = {path.relative_to(TRAINER).as_posix() for path in pictures}
+    assert названы <= проверены, названы - проверены
     for path in pictures:
         try:
             picture = Image.open(path)
@@ -379,10 +385,11 @@ def test_the_manifest_remembers_which_packages_it_is_made_of():
                                 "AURA_block_06_bands_v1_compact",
                                 "AURA_block_07_yoga_v1_compact",
                                 "AURA_block_08_stretching_v1_compact",
-                                "AURA_block_09_pilates_v1_compact"]
+                                "AURA_block_09_pilates_v1_compact",
+                                "AURA_block_10_posture_neck_hump_v1"]
     assert len(ASSETS) == len(
         BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04 | BLOCK_05 | BLOCK_06
-        | BLOCK_07 | BLOCK_08 | BLOCK_09)
+        | BLOCK_07 | BLOCK_08 | BLOCK_09 | BLOCK_10_NEW | BLOCK_10_REUSED)
 
 
 def test_the_fourth_block_is_installed_whole():
@@ -484,6 +491,43 @@ def test_the_pilates_bridge_never_takes_over_the_home_one():
     assert id_for("Мостик с подъёмом таза") == "pilates_pelvic_bridge"
 
 
+BLOCK_10_NEW = {
+    "chin_tuck": "anim_chin_tuck",
+    "standing_scapular_squeeze": "anim_standing_scapular_squeeze",
+    "wall_slide": "anim_wall_slide",
+    "wall_chin_tuck": "anim_wall_chin_tuck",
+    "backward_shoulder_circles": "anim_backward_shoulder_circles",
+    "scapular_depression": "anim_scapular_depression",
+}
+
+# Три упражнения блока 10 своих роликов не получили: пакет прямо велит
+# показывать в них уже стоящие ассеты блока 08.
+BLOCK_10_REUSED = {
+    "doorway_chest_opener": "doorway_chest_stretch",
+    "assisted_neck_tilt": "neck_side_tilt",
+    "doorway_pec_stretch": "doorway_chest_stretch",
+}
+
+
+def test_the_tenth_block_is_installed_whole():
+    """Шесть новых роликов плюс три ссылки — и обе программы закрыты.
+
+    «Осанка» и «Холка» — две программы проекта, а пакет пришёл на них
+    один. Сверка идёт с составом обеих программ: если хоть одно их
+    упражнение осталось без показа, это здесь и вскроется.
+    """
+    have = {item["exerciseId"]: item for item in ASSETS}
+    for code, asset in BLOCK_10_NEW.items():
+        assert have[code]["animationAssetId"] == asset, code
+    for code, owner in BLOCK_10_REUSED.items():
+        assert have[code]["reusedFrom"] == owner, code
+        assert have[code]["src"] == have[owner]["src"], code
+
+    for программа in ("posture_daily", "neck_hump"):
+        без_показа = {id_for(item[0]) for item in PROGRAMS[программа]["exercises"]} - set(have)
+        assert not без_показа, (программа, без_показа)
+
+
 def test_the_corrections_landed_on_the_right_exercises():
     """Корректирующий пакет меняет ровно четыре записи и ничего больше."""
     have = {item["exerciseId"]: item["animationAssetId"] for item in ASSETS}
@@ -491,22 +535,40 @@ def test_the_corrections_landed_on_the_right_exercises():
         assert have.get(code) == asset, (code, have.get(code))
 
 
-def test_no_two_exercises_point_at_the_same_file():
+def test_no_two_exercises_point_at_the_same_file_by_accident():
     """Один файл на два упражнения — это человек, который учится не тому.
 
     Ошибка тихая: показ есть, персонаж свой, движение красивое — просто не
     то, что открыли. Поймано тем, что подменили путь одному упражнению на
     файл соседнего, и ни одна проверка не сработала.
+
+    Совпадение бывает и законным: блок 10 прямо просит показывать в
+    «Осанке» и «Холке» ту же дверную растяжку и тот же наклон головы, что
+    стоят в «Стретчинге», — движение одно, названия в программах разные.
+    Такая запись обязана назвать хозяина ассета (`reusedFrom`), и хозяин
+    обязан существовать. Случайное совпадение хозяина не называет, и
+    именно оно здесь и ловится.
     """
+    хозяева = {item["exerciseId"] for item in ASSETS}
     for key in ("animationAssetId", "src", "poster"):
         seen = {}
         for item in ASSETS:
             # Заставки может не быть вовсе: у кадра она и есть сам кадр.
             if key not in item:
                 continue
-            seen.setdefault(item[key], []).append(item["exerciseId"])
-        doubled = {value: who for value, who in seen.items() if len(who) > 1}
-        assert not doubled, (key, doubled)
+            seen.setdefault(item[key], []).append(item)
+        for value, кто in seen.items():
+            if len(кто) == 1:
+                continue
+            свои = [i for i in кто if "reusedFrom" not in i]
+            assert len(свои) == 1, (key, value, [i["exerciseId"] for i in кто])
+            владелец = свои[0]["exerciseId"]
+            for гость in кто:
+                if гость is свои[0]:
+                    continue
+                assert гость["reusedFrom"] == владелец, (
+                    key, гость["exerciseId"], гость.get("reusedFrom"), владелец)
+                assert гость["reusedFrom"] in хозяева, гость["reusedFrom"]
 
 
 def test_the_file_name_matches_the_asset_it_claims_to_be():

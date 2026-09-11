@@ -557,6 +557,99 @@
       "src": "animations/anim_lying_scissors.mp4",
       "poster": "posters/anim_lying_scissors.jpg",
       "loop": true
+    },
+    {
+      "exerciseId": "chin_tuck",
+      "titleRu": "Втягивание подбородка (chin tuck)",
+      "animationAssetId": "anim_chin_tuck",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_chin_tuck.mp4",
+      "poster": "posters/anim_chin_tuck.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "standing_scapular_squeeze",
+      "titleRu": "Сведение лопаток стоя",
+      "animationAssetId": "anim_standing_scapular_squeeze",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_standing_scapular_squeeze.mp4",
+      "poster": "posters/anim_standing_scapular_squeeze.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "wall_slide",
+      "titleRu": "«Стенка»: скольжение руками по стене",
+      "animationAssetId": "anim_wall_slide",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_wall_slide.mp4",
+      "poster": "posters/anim_wall_slide.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "wall_chin_tuck",
+      "titleRu": "Втягивание подбородка у стены",
+      "animationAssetId": "anim_wall_chin_tuck",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_wall_chin_tuck.mp4",
+      "poster": "posters/anim_wall_chin_tuck.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "backward_shoulder_circles",
+      "titleRu": "Круги плечами назад",
+      "animationAssetId": "anim_backward_shoulder_circles",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_backward_shoulder_circles.mp4",
+      "poster": "posters/anim_backward_shoulder_circles.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "scapular_depression",
+      "titleRu": "Сведение лопаток вниз",
+      "animationAssetId": "anim_scapular_depression",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_scapular_depression.mp4",
+      "poster": "posters/anim_scapular_depression.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "doorway_chest_opener",
+      "titleRu": "Раскрытие груди в дверном проёме",
+      "animationAssetId": "anim_doorway_chest_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_doorway_chest_stretch.mp4",
+      "poster": "posters/anim_doorway_chest_stretch.jpg",
+      "loop": true,
+      "reusedFrom": "doorway_chest_stretch"
+    },
+    {
+      "exerciseId": "assisted_neck_tilt",
+      "titleRu": "Наклон головы к плечу с рукой",
+      "animationAssetId": "anim_neck_side_tilt",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_neck_side_tilt.mp4",
+      "poster": "posters/anim_neck_side_tilt.jpg",
+      "loop": true,
+      "reusedFrom": "neck_side_tilt"
+    },
+    {
+      "exerciseId": "doorway_pec_stretch",
+      "titleRu": "Растяжка грудных в дверном проёме",
+      "animationAssetId": "anim_doorway_chest_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_doorway_chest_stretch.mp4",
+      "poster": "posters/anim_doorway_chest_stretch.jpg",
+      "loop": true,
+      "reusedFrom": "doorway_chest_stretch"
     }
   ],
   "packages": [
@@ -568,6 +661,7 @@
     "AURA_block_06_bands_v1_compact",
     "AURA_block_07_yoga_v1_compact",
     "AURA_block_08_stretching_v1_compact",
-    "AURA_block_09_pilates_v1_compact"
+    "AURA_block_09_pilates_v1_compact",
+    "AURA_block_10_posture_neck_hump_v1"
   ]
 }
