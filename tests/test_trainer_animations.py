@@ -386,10 +386,12 @@ def test_the_manifest_remembers_which_packages_it_is_made_of():
                                 "AURA_block_07_yoga_v1_compact",
                                 "AURA_block_08_stretching_v1_compact",
                                 "AURA_block_09_pilates_v1_compact",
-                                "AURA_block_10_posture_neck_hump_v1"]
+                                "AURA_block_10_posture_neck_hump_v1",
+                                "AURA_block_11_dance_warmup_v1_compact"]
     assert len(ASSETS) == len(
         BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04 | BLOCK_05 | BLOCK_06
-        | BLOCK_07 | BLOCK_08 | BLOCK_09 | BLOCK_10_NEW | BLOCK_10_REUSED)
+        | BLOCK_07 | BLOCK_08 | BLOCK_09 | BLOCK_10_NEW | BLOCK_10_REUSED
+        | BLOCK_11_NEW | BLOCK_11_REUSED)
 
 
 def test_the_fourth_block_is_installed_whole():
@@ -526,6 +528,59 @@ def test_the_tenth_block_is_installed_whole():
     for программа in ("posture_daily", "neck_hump"):
         без_показа = {id_for(item[0]) for item in PROGRAMS[программа]["exercises"]} - set(have)
         assert not без_показа, (программа, без_показа)
+
+
+BLOCK_11_NEW = {
+    "marching_in_place": "anim_marching_in_place",
+    "side_step_touch": "anim_side_step_touch",
+    "body_wave": "anim_body_wave",
+    "hip_figure_eight": "anim_hip_figure_eight",
+    "heel_flick_twist": "anim_heel_flick_twist",
+    "standing_side_stretch": "anim_standing_side_stretch",
+}
+
+# Седьмая карточка «Танцевальной разминки» своего ролика не получила:
+# круги плечами уже сняты для «Холки», и пакет велит показывать их же.
+BLOCK_11_REUSED = {"shoulder_circles_chest_open": "backward_shoulder_circles"}
+
+
+def test_the_eleventh_block_is_installed_whole():
+    """Шесть новых роликов плюс одна ссылка — и «Разминка» закрыта."""
+    have = {item["exerciseId"]: item for item in ASSETS}
+    for code, asset in BLOCK_11_NEW.items():
+        assert have[code]["animationAssetId"] == asset, code
+    for code, owner in BLOCK_11_REUSED.items():
+        assert have[code]["reusedFrom"] == owner, code
+        assert have[code]["src"] == have[owner]["src"], code
+        assert have[code]["poster"] == have[owner]["poster"], code
+
+    programme = {id_for(item[0]) for item in PROGRAMS["dance_warmup"]["exercises"]}
+    assert programme == set(BLOCK_11_NEW) | set(BLOCK_11_REUSED), programme
+
+
+def test_every_card_is_named_the_way_the_catalogue_names_it():
+    """Название в манифесте обязано совпадать с каталогом посимвольно.
+
+    Само приложение `titleRu` не читает — показ ищется по коду, — но по
+    этому полю человек и сверяет, то ли упражнение привязано. Разошлись
+    бы они молча: пакет присылает свои названия, каталог живёт своей
+    жизнью, и через пять блоков в манифесте оказался бы справочник,
+    которому нельзя верить.
+    """
+    # Одно исключение, и оно осознанное: подпись супермена. В каталоге
+    # упражнение зовётся «Супермен лёжа» — это ключ к технике, коду и
+    # записям о тренировках, менять его нельзя. А подпись «Половинный
+    # Супермен» Лилия закрепила за роликом и просила не трогать. Обе
+    # строки проверяются здесь, чтобы «исключение» не превратилось в
+    # разрешение звать упражнение как угодно.
+    superman = next(i for i in ASSETS if i["exerciseId"] == "superman_raise")
+    assert superman["titleRu"] == "Половинный Супермен — подъём корпуса и рук"
+    assert id_for("Супермен лёжа") == "superman_raise"
+
+    неверные = {item["exerciseId"]: item["titleRu"] for item in ASSETS
+                if item.get("titleRu") and item["exerciseId"] != "superman_raise"
+                and id_for(item["titleRu"]) != item["exerciseId"]}
+    assert not неверные, неверные
 
 
 def test_the_corrections_landed_on_the_right_exercises():

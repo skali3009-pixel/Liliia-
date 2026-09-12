@@ -650,6 +650,77 @@
       "poster": "posters/anim_doorway_chest_stretch.jpg",
       "loop": true,
       "reusedFrom": "doorway_chest_stretch"
+    },
+    {
+      "exerciseId": "marching_in_place",
+      "titleRu": "Шаги на месте с работой рук",
+      "animationAssetId": "anim_marching_in_place",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_marching_in_place.mp4",
+      "poster": "posters/anim_marching_in_place.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "side_step_touch",
+      "titleRu": "Приставной шаг вправо-влево",
+      "animationAssetId": "anim_side_step_touch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_side_step_touch.mp4",
+      "poster": "posters/anim_side_step_touch.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "shoulder_circles_chest_open",
+      "titleRu": "Круги плечами и раскрытие груди",
+      "animationAssetId": "anim_backward_shoulder_circles",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_backward_shoulder_circles.mp4",
+      "poster": "posters/anim_backward_shoulder_circles.jpg",
+      "loop": true,
+      "reusedFrom": "backward_shoulder_circles"
+    },
+    {
+      "exerciseId": "body_wave",
+      "titleRu": "Волна корпусом",
+      "animationAssetId": "anim_body_wave",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_body_wave.mp4",
+      "poster": "posters/anim_body_wave.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "hip_figure_eight",
+      "titleRu": "Восьмёрка бёдрами",
+      "animationAssetId": "anim_hip_figure_eight",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_hip_figure_eight.mp4",
+      "poster": "posters/anim_hip_figure_eight.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "heel_flick_twist",
+      "titleRu": "Захлёст голени с поворотом",
+      "animationAssetId": "anim_heel_flick_twist",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_heel_flick_twist.mp4",
+      "poster": "posters/anim_heel_flick_twist.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "standing_side_stretch",
+      "titleRu": "Растяжка боков стоя",
+      "animationAssetId": "anim_standing_side_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_standing_side_stretch.mp4",
+      "poster": "posters/anim_standing_side_stretch.jpg",
+      "loop": true
     }
   ],
   "packages": [
@@ -662,6 +733,7 @@
     "AURA_block_07_yoga_v1_compact",
     "AURA_block_08_stretching_v1_compact",
     "AURA_block_09_pilates_v1_compact",
-    "AURA_block_10_posture_neck_hump_v1"
+    "AURA_block_10_posture_neck_hump_v1",
+    "AURA_block_11_dance_warmup_v1_compact"
   ]
 }
