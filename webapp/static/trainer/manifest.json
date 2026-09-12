@@ -1,0 +1,739 @@
+{
+  "backgroundColor": "#151126",
+  "assets": [
+    {
+      "exerciseId": "bodyweight_squat",
+      "titleRu": "Приседания с собственным весом",
+      "animationAssetId": "anim_squat_bodyweight",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_squat_bodyweight.mp4",
+      "poster": "posters/anim_squat_bodyweight.png",
+      "loop": true
+    },
+    {
+      "programId": "home_beginner",
+      "exerciseId": "knee_pushup",
+      "titleRu": "Отжимания с колен",
+      "animationAssetId": "anim_pushup_knee",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pushup_knee.mp4",
+      "poster": "posters/anim_pushup_knee.png",
+      "loop": true,
+      "replaceExisting": true
+    },
+    {
+      "exerciseId": "glute_bridge",
+      "titleRu": "Ягодичный мостик",
+      "animationAssetId": "anim_glute_bridge",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_glute_bridge.mp4",
+      "poster": "posters/anim_glute_bridge.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "bottle_bent_over_row",
+      "titleRu": "Тяга в наклоне с бутылками воды",
+      "animationAssetId": "anim_bent_over_row",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_bent_over_row.mp4",
+      "poster": "posters/anim_bent_over_row.png",
+      "loop": true
+    },
+    {
+      "programId": "home_beginner",
+      "exerciseId": "forearm_plank",
+      "titleRu": "Планка на локтях",
+      "animationAssetId": "anim_plank_forearm",
+      "animationType": "static_hold",
+      "format": "png",
+      "src": "static/anim_plank_forearm.png",
+      "loop": false,
+      "replaceExisting": true
+    },
+    {
+      "exerciseId": "lying_leg_raise",
+      "titleRu": "Подъёмы ног лёжа",
+      "animationAssetId": "anim_leg_raise_lying",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_leg_raise_lying.mp4",
+      "poster": "posters/anim_leg_raise_lying.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "plie_squat",
+      "titleRu": "Приседания-плие",
+      "animationAssetId": "anim_plie_squat",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_plie_squat.mp4",
+      "poster": "posters/anim_plie_squat.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "standard_pushup",
+      "titleRu": "Отжимания классические",
+      "animationAssetId": "anim_pushup_standard",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pushup_standard.mp4",
+      "poster": "posters/anim_pushup_standard.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "alternating_reverse_lunge",
+      "titleRu": "Выпады назад поочерёдно",
+      "animationAssetId": "anim_reverse_lunge_alternating",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_reverse_lunge_alternating.mp4",
+      "poster": "posters/anim_reverse_lunge_alternating.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "single_leg_glute_bridge",
+      "titleRu": "Ягодичный мостик на одной ноге",
+      "animationAssetId": "anim_glute_bridge_single_leg",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_glute_bridge_single_leg.mp4",
+      "poster": "posters/anim_glute_bridge_single_leg.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "superman_raise",
+      "titleRu": "Половинный Супермен — подъём корпуса и рук",
+      "animationAssetId": "anim_superman_raise",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_superman_raise.mp4",
+      "poster": "posters/anim_superman_raise.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "plank_arm_raise",
+      "titleRu": "Планка с подъёмом руки",
+      "animationAssetId": "anim_plank_arm_raise",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_plank_arm_raise.mp4",
+      "poster": "posters/anim_plank_arm_raise.png",
+      "loop": true
+    },
+    {
+      "programId": "home_intermediate",
+      "exerciseId": "bicycle_crunch",
+      "titleRu": "Скручивания «велосипед»",
+      "animationAssetId": "anim_bicycle_crunch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_bicycle_crunch.mp4",
+      "poster": "posters/anim_bicycle_crunch.png",
+      "loop": true,
+      "replaceExisting": true
+    },
+    {
+      "programId": "gym_beginner",
+      "exerciseId": "machine_leg_press",
+      "titleRu": "Жим ногами в тренажёре",
+      "animationAssetId": "anim_machine_leg_press",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_machine_leg_press.mp4",
+      "poster": "posters/anim_machine_leg_press.png",
+      "loop": true,
+      "replaceExisting": true
+    },
+    {
+      "exerciseId": "barbell_squat",
+      "titleRu": "Приседания со штангой",
+      "animationAssetId": "anim_barbell_squat",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_barbell_squat.mp4",
+      "poster": "posters/anim_barbell_squat.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "dumbbell_romanian_deadlift",
+      "titleRu": "Румынская тяга с гантелями",
+      "animationAssetId": "anim_dumbbell_romanian_deadlift",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_dumbbell_romanian_deadlift.mp4",
+      "poster": "posters/anim_dumbbell_romanian_deadlift.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "dumbbell_bench_press",
+      "titleRu": "Жим гантелей лёжа",
+      "animationAssetId": "anim_dumbbell_bench_press",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_dumbbell_bench_press.mp4",
+      "poster": "posters/anim_dumbbell_bench_press.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "single_arm_dumbbell_row",
+      "titleRu": "Тяга гантели в наклоне",
+      "animationAssetId": "anim_single_arm_dumbbell_row",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_single_arm_dumbbell_row.mp4",
+      "poster": "posters/anim_single_arm_dumbbell_row.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "dumbbell_lunge",
+      "titleRu": "Выпады с гантелями",
+      "animationAssetId": "anim_dumbbell_lunge",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_dumbbell_lunge.mp4",
+      "poster": "posters/anim_dumbbell_lunge.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "seated_dumbbell_shoulder_press",
+      "titleRu": "Жим гантелей сидя",
+      "animationAssetId": "anim_seated_dumbbell_shoulder_press",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_seated_dumbbell_shoulder_press.mp4",
+      "poster": "posters/anim_seated_dumbbell_shoulder_press.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "bench_crunch",
+      "titleRu": "Скручивания на скамье",
+      "animationAssetId": "anim_bench_crunch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_bench_crunch.mp4",
+      "poster": "posters/anim_bench_crunch.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "jumping_jack",
+      "titleRu": "Джампинг-джек",
+      "animationAssetId": "anim_jumping_jack",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_jumping_jack.mp4",
+      "poster": "posters/anim_jumping_jack.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "high_knees_run",
+      "titleRu": "Бег на месте с высоким подниманием колен",
+      "animationAssetId": "anim_high_knees_run",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_high_knees_run.mp4",
+      "poster": "posters/anim_high_knees_run.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "mountain_climber",
+      "titleRu": "Скалолаз",
+      "animationAssetId": "anim_mountain_climber",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_mountain_climber.mp4",
+      "poster": "posters/anim_mountain_climber.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "squat_jump",
+      "titleRu": "Прыжки из приседа",
+      "animationAssetId": "anim_squat_jump",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_squat_jump.mp4",
+      "poster": "posters/anim_squat_jump.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "jump_lunge",
+      "titleRu": "Выпады в прыжке",
+      "animationAssetId": "anim_jump_lunge",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_jump_lunge.mp4",
+      "poster": "posters/anim_jump_lunge.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "burpee",
+      "titleRu": "Бёрпи",
+      "animationAssetId": "anim_burpee",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_burpee.mp4",
+      "poster": "posters/anim_burpee.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "band_squat",
+      "titleRu": "Приседания с резинкой над коленями",
+      "animationAssetId": "anim_band_squat",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_band_squat.mp4",
+      "poster": "posters/anim_band_squat.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "standing_hip_abduction",
+      "titleRu": "Отведение ноги в сторону стоя",
+      "animationAssetId": "anim_standing_hip_abduction",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_standing_hip_abduction.mp4",
+      "poster": "posters/anim_standing_hip_abduction.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "side_lying_clamshell",
+      "titleRu": "«Ракушка» лёжа на боку",
+      "animationAssetId": "anim_side_lying_clamshell",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_side_lying_clamshell.mp4",
+      "poster": "posters/anim_side_lying_clamshell.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "band_glute_bridge",
+      "titleRu": "Ягодичный мостик с резинкой",
+      "animationAssetId": "anim_band_glute_bridge",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_band_glute_bridge.mp4",
+      "poster": "posters/anim_band_glute_bridge.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "band_lateral_walk",
+      "titleRu": "Шаги в стороны с резинкой",
+      "animationAssetId": "anim_band_lateral_walk",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_band_lateral_walk.mp4",
+      "poster": "posters/anim_band_lateral_walk.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "seated_band_row",
+      "titleRu": "Тяга резинки к поясу сидя",
+      "animationAssetId": "anim_seated_band_row",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_seated_band_row.mp4",
+      "poster": "posters/anim_seated_band_row.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "band_pull_apart",
+      "titleRu": "Разведение рук с резинкой",
+      "animationAssetId": "anim_band_pull_apart",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_band_pull_apart.mp4",
+      "poster": "posters/anim_band_pull_apart.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "cat_cow",
+      "titleRu": "Кошка-корова",
+      "animationAssetId": "anim_cat_cow",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_cat_cow.mp4",
+      "poster": "posters/anim_cat_cow.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "downward_dog",
+      "titleRu": "Собака мордой вниз",
+      "animationAssetId": "anim_downward_dog",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_downward_dog.mp4",
+      "poster": "posters/anim_downward_dog.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "warrior_two",
+      "titleRu": "Поза воина II",
+      "animationAssetId": "anim_warrior_two",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_warrior_two.mp4",
+      "poster": "posters/anim_warrior_two.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "tree_pose",
+      "titleRu": "Поза дерева",
+      "animationAssetId": "anim_tree_pose",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_tree_pose.mp4",
+      "poster": "posters/anim_tree_pose.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "standing_forward_fold",
+      "titleRu": "Наклон вперёд стоя",
+      "animationAssetId": "anim_standing_forward_fold",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_standing_forward_fold.mp4",
+      "poster": "posters/anim_standing_forward_fold.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "child_pose",
+      "titleRu": "Поза ребёнка",
+      "animationAssetId": "anim_child_pose",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_child_pose.mp4",
+      "poster": "posters/anim_child_pose.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "savasana",
+      "titleRu": "Шавасана",
+      "animationAssetId": "anim_savasana",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_savasana.mp4",
+      "poster": "posters/anim_savasana.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "seated_forward_bend",
+      "titleRu": "Наклон к прямым ногам сидя",
+      "animationAssetId": "anim_seated_forward_bend",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_seated_forward_bend.mp4",
+      "poster": "posters/anim_seated_forward_bend.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "standing_quad_stretch",
+      "titleRu": "Растяжка квадрицепса стоя",
+      "animationAssetId": "anim_standing_quad_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_standing_quad_stretch.mp4",
+      "poster": "posters/anim_standing_quad_stretch.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "pigeon_pose",
+      "titleRu": "Поза голубя",
+      "animationAssetId": "anim_pigeon_pose",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pigeon_pose.mp4",
+      "poster": "posters/anim_pigeon_pose.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "doorway_chest_stretch",
+      "titleRu": "Растяжка груди в дверном проёме",
+      "animationAssetId": "anim_doorway_chest_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_doorway_chest_stretch.mp4",
+      "poster": "posters/anim_doorway_chest_stretch.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "supine_spinal_twist",
+      "titleRu": "Скручивание лёжа",
+      "animationAssetId": "anim_supine_spinal_twist",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_supine_spinal_twist.mp4",
+      "poster": "posters/anim_supine_spinal_twist.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "neck_side_tilt",
+      "titleRu": "Наклоны головы к плечу",
+      "animationAssetId": "anim_neck_side_tilt",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_neck_side_tilt.mp4",
+      "poster": "posters/anim_neck_side_tilt.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "wall_calf_stretch",
+      "titleRu": "Растяжка икр у стены",
+      "animationAssetId": "anim_wall_calf_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_wall_calf_stretch.mp4",
+      "poster": "posters/anim_wall_calf_stretch.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "pilates_hundred",
+      "titleRu": "Сотня (The Hundred)",
+      "animationAssetId": "anim_pilates_hundred",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pilates_hundred.mp4",
+      "poster": "posters/anim_pilates_hundred.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "pilates_roll_up",
+      "titleRu": "Роллап",
+      "animationAssetId": "anim_pilates_roll_up",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pilates_roll_up.mp4",
+      "poster": "posters/anim_pilates_roll_up.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "single_leg_stretch",
+      "titleRu": "Одна нога вверх",
+      "animationAssetId": "anim_single_leg_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_single_leg_stretch.mp4",
+      "poster": "posters/anim_single_leg_stretch.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "pilates_pelvic_bridge",
+      "titleRu": "Мостик с подъёмом таза",
+      "animationAssetId": "anim_pilates_pelvic_bridge",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pilates_pelvic_bridge.mp4",
+      "poster": "posters/anim_pilates_pelvic_bridge.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "pilates_swimming",
+      "titleRu": "«Плавание» лёжа на животе",
+      "animationAssetId": "anim_pilates_swimming",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_pilates_swimming.mp4",
+      "poster": "posters/anim_pilates_swimming.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "side_plank",
+      "titleRu": "Боковая планка",
+      "animationAssetId": "anim_side_plank",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_side_plank.mp4",
+      "poster": "posters/anim_side_plank.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "lying_scissors",
+      "titleRu": "Ножницы лёжа",
+      "animationAssetId": "anim_lying_scissors",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_lying_scissors.mp4",
+      "poster": "posters/anim_lying_scissors.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "chin_tuck",
+      "titleRu": "Втягивание подбородка (chin tuck)",
+      "animationAssetId": "anim_chin_tuck",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_chin_tuck.mp4",
+      "poster": "posters/anim_chin_tuck.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "standing_scapular_squeeze",
+      "titleRu": "Сведение лопаток стоя",
+      "animationAssetId": "anim_standing_scapular_squeeze",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_standing_scapular_squeeze.mp4",
+      "poster": "posters/anim_standing_scapular_squeeze.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "wall_slide",
+      "titleRu": "«Стенка»: скольжение руками по стене",
+      "animationAssetId": "anim_wall_slide",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_wall_slide.mp4",
+      "poster": "posters/anim_wall_slide.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "wall_chin_tuck",
+      "titleRu": "Втягивание подбородка у стены",
+      "animationAssetId": "anim_wall_chin_tuck",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_wall_chin_tuck.mp4",
+      "poster": "posters/anim_wall_chin_tuck.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "backward_shoulder_circles",
+      "titleRu": "Круги плечами назад",
+      "animationAssetId": "anim_backward_shoulder_circles",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_backward_shoulder_circles.mp4",
+      "poster": "posters/anim_backward_shoulder_circles.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "scapular_depression",
+      "titleRu": "Сведение лопаток вниз",
+      "animationAssetId": "anim_scapular_depression",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_scapular_depression.mp4",
+      "poster": "posters/anim_scapular_depression.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "doorway_chest_opener",
+      "titleRu": "Раскрытие груди в дверном проёме",
+      "animationAssetId": "anim_doorway_chest_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_doorway_chest_stretch.mp4",
+      "poster": "posters/anim_doorway_chest_stretch.jpg",
+      "loop": true,
+      "reusedFrom": "doorway_chest_stretch"
+    },
+    {
+      "exerciseId": "assisted_neck_tilt",
+      "titleRu": "Наклон головы к плечу с рукой",
+      "animationAssetId": "anim_neck_side_tilt",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_neck_side_tilt.mp4",
+      "poster": "posters/anim_neck_side_tilt.jpg",
+      "loop": true,
+      "reusedFrom": "neck_side_tilt"
+    },
+    {
+      "exerciseId": "doorway_pec_stretch",
+      "titleRu": "Растяжка грудных в дверном проёме",
+      "animationAssetId": "anim_doorway_chest_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_doorway_chest_stretch.mp4",
+      "poster": "posters/anim_doorway_chest_stretch.jpg",
+      "loop": true,
+      "reusedFrom": "doorway_chest_stretch"
+    },
+    {
+      "exerciseId": "marching_in_place",
+      "titleRu": "Шаги на месте с работой рук",
+      "animationAssetId": "anim_marching_in_place",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_marching_in_place.mp4",
+      "poster": "posters/anim_marching_in_place.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "side_step_touch",
+      "titleRu": "Приставной шаг вправо-влево",
+      "animationAssetId": "anim_side_step_touch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_side_step_touch.mp4",
+      "poster": "posters/anim_side_step_touch.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "shoulder_circles_chest_open",
+      "titleRu": "Круги плечами и раскрытие груди",
+      "animationAssetId": "anim_backward_shoulder_circles",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_backward_shoulder_circles.mp4",
+      "poster": "posters/anim_backward_shoulder_circles.jpg",
+      "loop": true,
+      "reusedFrom": "backward_shoulder_circles"
+    },
+    {
+      "exerciseId": "body_wave",
+      "titleRu": "Волна корпусом",
+      "animationAssetId": "anim_body_wave",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_body_wave.mp4",
+      "poster": "posters/anim_body_wave.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "hip_figure_eight",
+      "titleRu": "Восьмёрка бёдрами",
+      "animationAssetId": "anim_hip_figure_eight",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_hip_figure_eight.mp4",
+      "poster": "posters/anim_hip_figure_eight.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "heel_flick_twist",
+      "titleRu": "Захлёст голени с поворотом",
+      "animationAssetId": "anim_heel_flick_twist",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_heel_flick_twist.mp4",
+      "poster": "posters/anim_heel_flick_twist.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "standing_side_stretch",
+      "titleRu": "Растяжка боков стоя",
+      "animationAssetId": "anim_standing_side_stretch",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_standing_side_stretch.mp4",
+      "poster": "posters/anim_standing_side_stretch.jpg",
+      "loop": true
+    }
+  ],
+  "packages": [
+    "AURA_block_01_home_beginner_v2",
+    "AURA_block_02_home_intermediate_v2",
+    "AURA_corrections_blocks_01-03_v3_compact",
+    "AURA_block_04_gym_intermediate_v2_compact",
+    "AURA_block_05_cardio_home_v1_compact",
+    "AURA_block_06_bands_v1_compact",
+    "AURA_block_07_yoga_v1_compact",
+    "AURA_block_08_stretching_v1_compact",
+    "AURA_block_09_pilates_v1_compact",
+    "AURA_block_10_posture_neck_hump_v1",
+    "AURA_block_11_dance_warmup_v1_compact"
+  ]
+}

@@ -1,0 +1,1180 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Дневник</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,300;1,400;1,500&family=Manrope:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+<div id="loading" class="center">Загружаю…</div>
+
+<div id="app" hidden>
+  <main id="screen-today" class="screen">
+
+    <!-- Шапка как в макете: крупное «СЕГОДНЯ» разрядкой, гепард справа,
+         приветствие и строка состояния дня. -->
+    <section class="hero">
+      <div class="hero-art" data-art="hero"></div>
+      <!-- Профиль живёт под шестерёнкой в углу шапки: место, где его ищут в
+           любом приложении. Раньше анкету можно было поправить только в чате. -->
+      <button class="hero-gear" id="profile-open" aria-label="Профиль и настройки">⚙️</button>
+      <div class="hero-body">
+        <h1 class="hero-title">Сегодня</h1>
+        <div class="eyebrow">Твоя ежедневная редакция</div>
+
+        <p class="hero-greeting" id="hero-greeting">Доброе утро.</p>
+
+        <!-- Гепард ничего не советует — он реагирует. Одна строка, не карточка:
+             экран «Сегодня» и так плотный. -->
+        <p class="cheetah" id="cheetah" hidden>
+          <span class="cheetah-emoji" id="cheetah-emoji"></span>
+          <span id="cheetah-line"></span>
+        </p>
+
+        <!-- Фраза дня: первое, что читается на экране. Меняется раз в
+             сутки и зависит от цели. -->
+        <figure class="day-line" id="day-line" hidden>
+          <blockquote id="day-line-text"></blockquote>
+        </figure>
+
+        <div class="hero-state">
+          <span class="hero-state-icon" id="hero-state-icon">☀️</span>
+          <div>
+            <div class="hero-state-title" id="hero-title">Новый день</div>
+            <div class="hero-state-sub" id="hero-sub"></div>
+          </div>
+        </div>
+
+        <div class="hud">
+          <svg class="crystal" id="crystal" viewBox="0 0 44 60" data-stage="1" aria-hidden="true">
+            <defs>
+              <linearGradient id="crystal-gradient" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#C4B5FD"/>
+                <stop offset="55%" stop-color="#8B5CF6"/>
+                <stop offset="100%" stop-color="#4F46E5"/>
+              </linearGradient>
+              <!-- Блик: узкая светлая полоса, которая едет по граням. -->
+              <linearGradient id="crystal-sheen" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="#fff" stop-opacity="0"/>
+                <stop offset="45%" stop-color="#fff" stop-opacity=".85"/>
+                <stop offset="55%" stop-color="#fff" stop-opacity=".85"/>
+                <stop offset="100%" stop-color="#fff" stop-opacity="0"/>
+              </linearGradient>
+              <clipPath id="crystal-shape">
+                <path d="M22 2 L38 20 L33 46 L22 58 L11 46 L6 20 Z"/>
+              </clipPath>
+            </defs>
+            <path class="c-face c-left" d="M22 2 L6 20 L11 46 L22 58 Z"/>
+            <path class="c-face c-right" d="M22 2 L38 20 L33 46 L22 58 Z"/>
+            <path class="c-face c-top" d="M22 2 L6 20 L22 25 L38 20 Z"/>
+            <g clip-path="url(#crystal-shape)">
+              <rect class="c-sheen" x="-26" y="0" width="18" height="60"
+                    fill="url(#crystal-sheen)"/>
+            </g>
+            <g class="sparks">
+              <circle cx="5" cy="9" r="1.6"/>
+              <circle cx="40" cy="13" r="1.2"/>
+              <circle cx="35" cy="53" r="1.4"/>
+            </g>
+          </svg>
+          <div class="hud-main">
+            <div class="hud-top">
+              <span class="hud-level" id="hud-level">Уровень 1</span>
+              <span class="hud-streak" id="hud-streak"></span>
+            </div>
+            <div class="xp-track"><i id="xp-fill"></i></div>
+            <div class="hud-sub">
+              <span id="xp-text">0 / 100 💎</span>
+              <span class="hud-gain" id="xp-today"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- «Твой ход»: одно действие, которое сейчас полезнее всего. Стоит сразу
+         под шапкой — до цифр, потому что отвечает на следующий за ними
+         вопрос. Пусто, когда предлагать нечего: тишина лучше выдуманного
+         совета. -->
+    <section class="turn" id="turn" hidden>
+      <div class="turn-head">
+        <span class="turn-mark">🐆</span>
+        <span class="eyebrow">Твой ход</span>
+      </div>
+      <p class="turn-text" id="turn-text"></p>
+      <button class="btn primary" id="turn-cta"></button>
+    </section>
+
+    <!-- Быстрые действия: четыре самых частых шага одним касанием. Раньше
+         на их месте стоял большой блок записи с волной — он занимал экран
+         целиком ради одной кнопки. -->
+    <section class="quick">
+      <button class="quick-act" id="quick-food" aria-label="Что съесть">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/>
+          <path d="M12 3v18M4 7.5l8 4.5 8-4.5"/></svg>
+        <span>Еда</span>
+      </button>
+      <button class="quick-act" id="moment-open" aria-label="Рассказать, что происходит">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-8 8H5l1.5-3A8 8 0 1 1 20 12z"/>
+          <path d="M9 11h6M9 14h4"/></svg>
+        <span>Голос</span>
+      </button>
+      <button class="quick-act" id="quick-water" aria-label="Добавить стакан воды">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3s6 6.5 6 10.5A6 6 0 0 1 6 13.5C6 9.5 12 3 12 3z"/></svg>
+        <span>Вода</span>
+      </button>
+      <button class="quick-act" id="quick-move" aria-label="Внести шаги">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14" cy="4.5" r="2"/>
+          <path d="M10.5 21l2-6-2.5-2.5 1-4.5 3-1 2 3 2.5 1"/>
+          <path d="M12.5 15l-3 1.5L7 21"/></svg>
+        <span>Движение</span>
+      </button>
+    </section>
+
+    <!-- Кольцо стоит первым после шапки: «сколько осталось» — то, ради чего
+         приложение открывают, и оно должно попадать на первый экран. -->
+    <section class="ring-card">
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+          <defs>
+            <linearGradient id="ring-gradient" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#C4B5FD"/>
+              <stop offset="100%" stop-color="#8B5CF6"/>
+            </linearGradient>
+          </defs>
+          <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+          <circle id="ring-fill" class="ring-fill" cx="60" cy="60" r="52"></circle>
+        </svg>
+        <div class="ring-center">
+          <div id="kcal-left" class="kcal-value">—</div>
+          <div class="kcal-label">ккал осталось</div>
+        </div>
+      </div>
+      <div id="kcal-sub" class="muted"></div>
+
+      <div class="dials">
+        <div class="dial" data-key="p">
+          <div class="dial-wrap">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dial-bg" cx="22" cy="22" r="18"></circle>
+              <circle class="dial-fill" id="dial-p" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <div class="dial-val" id="val-p">—</div>
+          </div>
+          <div class="dial-name">Белки</div>
+          <div class="dial-norm" id="norm-p"></div>
+        </div>
+        <div class="dial" data-key="f">
+          <div class="dial-wrap">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dial-bg" cx="22" cy="22" r="18"></circle>
+              <circle class="dial-fill" id="dial-f" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <div class="dial-val" id="val-f">—</div>
+          </div>
+          <div class="dial-name">Жиры</div>
+          <div class="dial-norm" id="norm-f"></div>
+        </div>
+        <div class="dial" data-key="c">
+          <div class="dial-wrap">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dial-bg" cx="22" cy="22" r="18"></circle>
+              <circle class="dial-fill" id="dial-c" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <div class="dial-val" id="val-c">—</div>
+          </div>
+          <div class="dial-name">Углеводы</div>
+          <div class="dial-norm" id="norm-c"></div>
+        </div>
+        <div class="dial" data-key="fib">
+          <div class="dial-wrap">
+            <svg viewBox="0 0 44 44" aria-hidden="true">
+              <circle class="dial-bg" cx="22" cy="22" r="18"></circle>
+              <circle class="dial-fill" id="dial-fib" cx="22" cy="22" r="18"></circle>
+            </svg>
+            <div class="dial-val" id="val-fib">—</div>
+          </div>
+          <div class="dial-name">Клетчатка</div>
+          <div class="dial-norm" id="norm-fib"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Шаги. Отдельным кольцом, а не циферкой в ряду: это то, что человек
+         открывает посмотреть само по себе. Число вносит он сам — телефон
+         приложению внутри Telegram шаги не отдаёт. -->
+    <section class="card steps-card">
+      <div class="card-head"><h2>Шаги</h2>
+        <span class="muted" id="steps-streak"></span></div>
+
+      <div class="steps-body">
+        <div class="ring-wrap steps-ring">
+          <svg class="ring small" viewBox="0 0 120 120" aria-hidden="true">
+            <defs>
+              <linearGradient id="steps-gradient" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#FDE68A"/>
+                <stop offset="100%" stop-color="#F59E0B"/>
+              </linearGradient>
+            </defs>
+            <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+            <circle id="steps-fill" class="ring-fill steps" cx="60" cy="60" r="52"></circle>
+          </svg>
+          <div class="ring-center">
+            <div id="steps-value" class="kcal-value">—</div>
+            <div class="kcal-label" id="steps-goal-label">шагов</div>
+          </div>
+        </div>
+        <div class="steps-side">
+          <p class="steps-left" id="steps-left"></p>
+          <p class="hint" id="steps-week"></p>
+          <button class="btn ghost" id="steps-add">Внести шаги</button>
+        </div>
+      </div>
+      <p class="hint" id="steps-hint">Число — в «Здоровье» на телефоне: сам он его
+        сюда не отдаёт.</p>
+      <!-- Вбивать руками каждый день не будет почти никто — и тогда всё, что
+           стоит на шагах, не работает. Телефон умеет присылать их сам. -->
+      <button class="btn ghost" id="steps-sync">Шаги с телефона</button>
+      <p class="hint" id="steps-synced" hidden></p>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Задания дня</h2><span id="quest-count" class="muted"></span></div>
+      <div id="quests"></div>
+      <!-- Остальные задания под кнопкой: показывать сразу семь строк значит
+           не показать ни одной. -->
+      <div id="quests-more" hidden></div>
+      <button class="link-btn" id="quests-toggle" hidden>Ещё задания</button>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Вода</h2><span id="water-val" class="muted"></span></div>
+      <div class="bar big"><i id="bar-water"></i></div>
+      <div class="row">
+        <button class="chip" data-water="250">250 мл</button>
+        <button class="chip" data-water="350">350 мл</button>
+        <button class="chip" data-water="500">500 мл</button>
+        <button class="chip ghost" id="water-undo">↩︎</button>
+      </div>
+    </section>
+
+    <section class="state-grid" id="state-grid"></section>
+
+    <!-- Повтор привычной еды. Стоит выше ленты: записать проще, чем
+         посмотреть, и это самое частое действие в дневнике. -->
+    <section class="card" id="frequent-card" hidden>
+      <div class="card-head"><h2>Ешь как обычно</h2>
+        <span class="muted">нажми — запишу</span></div>
+      <div id="frequent"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Приём на сегодня</h2>
+        <button class="link-btn" id="pill-form-toggle">добавить</button></div>
+      <div id="pills"></div>
+
+      <div id="pill-form" hidden>
+        <input id="pill-name" class="input" placeholder="Например: Витамин D">
+        <input id="pill-dose" class="input" placeholder="Дозировка: 5000 МЕ">
+        <select id="pill-schedule" class="input">
+          <option value="daily">Каждый день</option>
+          <option value="weekdays">По дням недели</option>
+          <option value="interval">Раз в несколько дней</option>
+        </select>
+        <div id="weekday-picker" class="row wrap" hidden></div>
+        <input id="pill-interval" class="input" type="number" min="2" max="90"
+               placeholder="Раз в сколько дней (например, 7)" hidden>
+        <input id="pill-time" class="input" type="time" placeholder="Напоминание">
+        <button id="pill-add" class="btn">Добавить препарат</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Лента дня</h2><span id="timeline-count" class="muted"></span></div>
+      <div id="timeline"></div>
+    </section>
+
+  </main>
+
+
+  <main id="screen-world" class="screen" hidden>
+
+    <section class="world-hero">
+      <div class="world-art" data-art="world"></div>
+      <div class="world-body">
+        <div class="eyebrow">Мой мир</div>
+        <h1 class="world-title" id="world-title">Место силы</h1>
+        <p class="world-sub" id="world-sub">Растёт с каждым закрытым заданием.</p>
+        <p class="world-level" id="world-level"></p>
+        <p class="cheetah" id="world-cheetah" hidden>
+          <span class="cheetah-emoji" id="world-cheetah-emoji"></span>
+          <span id="world-cheetah-line"></span>
+        </p>
+      </div>
+    </section>
+
+    <!-- Ближайшее открытие — то, ради чего на эту вкладку возвращаются:
+         видно, что до следующего места осталось немного. -->
+    <section class="card" id="world-next-card" hidden>
+      <div class="eyebrow">Ближайшее открытие</div>
+      <div class="zone-head">
+        <span class="zone-icon" id="world-next-icon"></span>
+        <div>
+          <h2 class="zone-title" id="world-next-title"></h2>
+          <p class="zone-hint" id="world-next-hint"></p>
+        </div>
+      </div>
+      <div class="q-track"><i id="world-next-bar"></i></div>
+    </section>
+
+    <!-- Событие дня. Есть не каждый день — иначе это уже не событие. -->
+    <section class="card story" id="world-event" hidden>
+      <div class="zone-head">
+        <span class="zone-icon" id="event-icon"></span>
+        <div>
+          <h2 class="zone-title" id="event-title"></h2>
+          <p class="zone-hint" id="event-hint"></p>
+        </div>
+      </div>
+      <p class="story-text" id="event-text"></p>
+      <div class="q-track"><i id="event-bar"></i></div>
+    </section>
+
+    <!-- Команда. Личный счётчик шагов забрасывают через неделю: смотреть в
+         него незачем. Работает другое — что тебя видят. -->
+    <section class="card" id="team-card">
+      <div class="card-head"><h2>Команда</h2>
+        <span id="team-total" class="muted"></span></div>
+
+      <div id="team-none">
+        <p class="hint">Общий счёт за неделю и своя таблица. Соревнуемся
+          только шагами.</p>
+        <input class="input" id="team-name" type="text" maxlength="40"
+               placeholder="Название команды">
+        <button class="btn" id="team-create">Создать команду</button>
+        <p class="hint">Или вступи по коду из присланной ссылки:</p>
+        <input class="input" id="team-code" type="text" maxlength="16"
+               placeholder="Код команды">
+        <button class="btn ghost" id="team-join">Вступить</button>
+      </div>
+
+      <div id="team-mine" hidden>
+        <h3 class="team-name" id="team-name-view"></h3>
+        <div id="team-rows"></div>
+        <div class="cube-actions">
+          <button class="btn" id="team-invite">Позвать в команду</button>
+          <button class="btn ghost" id="team-leave">Выйти</button>
+        </div>
+      </div>
+
+      <!-- Друзья свернуты внутрь команды: два соревнования подряд читались
+           как одно и то же слово, сказанное дважды. Команда считает шаги,
+           друзья — кристаллы, и обычно человеку нужна именно команда. -->
+      <div class="card-head sub-head"><h3>Друзья</h3>
+        <button class="link-btn" id="friends-toggle">показать</button></div>
+      <div id="friends-box" hidden>
+        <p class="hint" id="friends-count"></p>
+
+        <div id="challenge" hidden>
+          <p class="challenge-hint" id="challenge-hint"></p>
+          <div class="q-track"><i id="challenge-bar"></i></div>
+        </div>
+
+        <div id="friends-list"></div>
+
+        <p class="hint">Друг видит кристаллы, уровень и серию. Вес,
+          замеры, фотографии и дневник еды не видит никто, кроме тебя.</p>
+        <div class="cube-actions">
+          <button class="btn" id="friends-invite">Позвать друга</button>
+          <button class="btn ghost" id="friends-renew">Сменить ссылку</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Рейтинг по всему приложению. Он же объясняет потолок: без этого
+         первое место выглядит как чужое враньё. -->
+    <section class="card" id="top-card">
+      <div class="card-head"><h2>Неделя приложения</h2>
+        <span id="top-place" class="muted"></span></div>
+      <div id="top-rows"></div>
+      <p class="hint" id="top-last"></p>
+      <p class="hint" id="top-hint"></p>
+    </section>
+
+    <!-- Места мира. Каждое растёт ступенями, а не просто «открыто/закрыто». -->
+    <section class="card">
+      <div class="card-head"><h2>Места</h2><span id="world-count" class="muted"></span></div>
+      <div id="world-zones"></div>
+    </section>
+
+    <section class="card discovery">
+      <div class="eyebrow">Последнее открытие</div>
+      <h2 class="discovery-title" id="discovery-title">Пока закрыто</h2>
+      <dl class="discovery-why">
+        <div><dt>Почему</dt><dd id="discovery-why">—</dd></div>
+        <div><dt>Дальше</dt><dd id="discovery-next">—</dd></div>
+      </dl>
+      <div class="steps" id="discovery-steps"></div>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Открытия</h2><span id="award-count" class="muted"></span></div>
+      <div id="awards" class="awards"></div>
+      <p class="hint" id="award-next"></p>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Как это устроено</h2></div>
+      <p class="note">Задание — кристаллы, кристаллы — уровень, уровень — мир.
+        Отмечать вручную нечего.</p>
+    </section>
+
+
+  </main>
+
+
+  <main id="screen-progress" class="screen" hidden>
+    <section class="hero slim">
+      <div class="hero-art" data-art="sky"></div>
+      <div class="hero-body">
+        <h1 class="hero-title">Прогресс</h1>
+        <div class="eyebrow">Вес, объёмы и фото по неделям</div>
+      </div>
+    </section>
+
+    <section class="stats">
+      <div class="stat"><div id="stat-weight" class="stat-value">—</div>
+        <div class="stat-label">сейчас, кг</div></div>
+      <div class="stat"><div id="stat-change" class="stat-value">—</div>
+        <div class="stat-label">изменение</div></div>
+      <div class="stat"><div id="stat-streak" class="stat-value">—</div>
+        <div class="stat-label" id="stat-streak-label">дней подряд</div></div>
+    </section>
+
+    <section class="card body-card">
+      <div class="card-head">
+        <h2>Твоё тело</h2>
+        <span id="body-note" class="muted"></span>
+      </div>
+      <div class="seg" id="body-switch">
+        <button class="seg-btn active" data-body="goal">Сейчас и цель</button>
+        <button class="seg-btn" data-body="zones">Зоны</button>
+      </div>
+      <div id="body-stage" class="body-stage"></div>
+      <div id="body-zones" class="chips" hidden></div>
+      <div id="body-insights" class="insights"></div>
+    </section>
+
+    <div class="filters">
+      <!-- Замеров больше, чем помещается в переключатель, — ряд прокручивается. -->
+      <div class="chips" id="metric-switch">
+        <button class="chip-btn active" data-metric="weight">Вес</button>
+        <button class="chip-btn" data-metric="calories">Калории</button>
+        <button class="chip-btn" data-metric="waist">Талия</button>
+        <button class="chip-btn" data-metric="hips">Бёдра</button>
+        <button class="chip-btn" data-metric="thigh">Нога</button>
+        <button class="chip-btn" data-metric="chest">Грудь</button>
+        <button class="chip-btn" data-metric="arm">Рука</button>
+      </div>
+      <div class="seg" id="period-switch">
+        <button class="seg-btn" data-period="week">Неделя</button>
+        <button class="seg-btn active" data-period="month">Месяц</button>
+      </div>
+    </div>
+
+    <section class="card">
+      <div class="card-head">
+        <h2 id="chart-title">Вес</h2>
+        <button id="table-toggle" class="link-btn">таблица</button>
+      </div>
+      <div id="chart-box"></div>
+      <div id="chart-table" hidden></div>
+    </section>
+
+    <!-- Женский календарь. Стоит рядом с весом намеренно: он здесь не ради
+         самого календаря, а чтобы объяснить прибавку перед месячными в ту
+         минуту, когда человек смотрит на график. -->
+    <section class="card" id="cycle-card" hidden>
+      <div class="card-head">
+        <h2>Цикл</h2>
+        <span id="cycle-day" class="muted"></span>
+      </div>
+      <p id="cycle-phase" class="cycle-phase"></p>
+      <p id="cycle-note" class="hint"></p>
+      <p id="cycle-weight" class="cycle-weight" hidden></p>
+      <div id="cycle-strip" class="cycle-strip"></div>
+      <button id="cycle-mark" class="btn">Отметить начало месячных</button>
+      <p id="cycle-next" class="hint"></p>
+      <p class="hint" id="cycle-disclaimer"></p>
+    </section>
+
+    <!-- Дошла до цели. Показывается один раз: приложение обязано это
+         заметить, а заодно спросить, что дальше — иначе оно продолжит
+         держать в дефиците того, кому худеть уже некуда. -->
+    <section class="card arrival" id="arrival" hidden>
+      <p class="arrival-text" id="arrival-text"></p>
+      <div class="cube-actions">
+        <button class="btn" id="arrival-switch">Перейти на поддержание</button>
+        <button class="btn ghost" id="arrival-close">Оставить как есть</button>
+      </div>
+    </section>
+
+    <!-- Чаще всего записывают только вес. Пять полей объёмов открываются
+         по кнопке, а как мерить — под «как мерить»: пять строк объяснений
+         над кнопкой сохранения читал один человек из десяти. -->
+    <section class="card">
+      <div class="card-head"><h2>Новый замер</h2>
+        <button class="link-btn" id="measure-more">объёмы</button></div>
+      <input id="m-weight" class="input" type="number" step="0.1" placeholder="Вес, кг">
+      <div class="grid2" id="measure-extra" hidden>
+        <input id="m-waist" class="input" type="number" step="0.5" placeholder="Талия, см">
+        <input id="m-hips" class="input" type="number" step="0.5"
+               placeholder="Бёдра по ягодицам, см">
+        <input id="m-thigh" class="input" type="number" step="0.5"
+               placeholder="Одна нога вверху, см">
+        <input id="m-chest" class="input" type="number" step="0.5" placeholder="Грудь, см">
+        <input id="m-arm" class="input" type="number" step="0.5"
+               placeholder="Одна рука (бицепс), см">
+      </div>
+      <button id="m-save" class="btn primary">Сохранить замер</button>
+      <p class="hint">Заполни то, что мерила — остальное можно пропустить.
+        <button class="link-btn" id="measure-help">как мерить</button></p>
+      <p class="hint" id="measure-help-text" hidden>«Бёдра» — вокруг таза по
+        самой широкой точке ягодиц, это один обхват на двоих. «Одна нога» —
+        вокруг одного бедра под ягодицей, «одна рука» — вокруг бицепса. Ногу
+        и руку меряй всегда одну и ту же, иначе замеры не сравнить между
+        собой.</p>
+    </section>
+
+    <section class="card">
+      <div class="card-head"><h2>Фото прогресса</h2>
+        <label class="link-btn" for="photo-input">добавить</label></div>
+      <input id="photo-input" type="file" accept="image/*" hidden>
+      <div id="photo-compare"></div>
+      <p class="hint" id="photo-hint">Снимай в одинаковой позе и при одном свете — так разница видна честнее.</p>
+    </section>
+  </main>
+
+
+  <main id="screen-gym" class="screen" hidden>
+    <section class="hero slim">
+      <div class="hero-art" data-art="gym"></div>
+      <div class="hero-body">
+        <h1 class="hero-title">Спорт</h1>
+        <div class="eyebrow">Тело, лицо, глаза, осанка</div>
+      </div>
+    </section>
+
+    <!-- Подбор вместо выбора: тринадцать программ, четыре направления и семь
+         форм — это выбор, а не занятие. Человек отвечает на один вопрос и
+         получает одно занятие. Ниже остаётся весь каталог для тех, кто хочет
+         выбрать сам — но каталог больше не встречает на входе. -->
+    <section class="decide" id="pick-card">
+      <div class="eyebrow">Подобрать мне</div>
+      <p class="decide-text">Сколько у тебя времени?</p>
+      <div class="chips" id="pick-time"></div>
+      <div id="pick-result"></div>
+    </section>
+
+    <!-- Занятия плитками, а не списком: двенадцать строк с описанием — это
+         половина страницы. Показываем шесть, остальные под кнопкой: даже
+         плитками двенадцать штук — это стена. -->
+    <section class="card" id="cardio-card">
+      <div class="card-head"><h2>Я занималась сама</h2></div>
+      <p class="hint">Бег, бассейн, урок танцев, дорога пешком — отметь, и
+        я посчитаю время и расход.</p>
+      <div class="chips wrap" id="cardio-list"></div>
+      <div class="chips wrap" id="cardio-more" hidden></div>
+      <button class="link-btn" id="cardio-toggle" hidden>Ещё занятия</button>
+      <!-- Кнопка живёт здесь же: отметила занятие — подтвердила, не
+           пролистывая до конца каталога упражнений. -->
+      <button id="finish-cardio" class="btn" hidden>Записать занятие</button>
+    </section>
+
+    <!-- Кнопки выбора идут сразу за подбором: человек либо отвечает на
+         один вопрос, либо выбирает сам — и второе не должно лежать за
+         экраном. Раньше между ними стоял список занятий в 1180 точек, и
+         фильтры начинались на 1626-й: замерено в браузере. -->
+    <div class="filters">
+      <div class="chips" id="category-switch"></div>
+      <div class="chips" id="style-switch"></div>
+    </div>
+
+    <div class="chips programs" id="program-switch"></div>
+
+    <section class="card">
+      <div class="card-head"><h2 id="program-title">Программа</h2>
+        <span id="program-sub" class="muted"></span></div>
+      <p id="program-note" class="note" hidden></p>
+      <!-- Личная тема открывается только после того, как человек прочитал
+           предупреждение и согласился. До этого упражнений не видно. -->
+      <div id="gym-warning" class="gym-warning" hidden>
+        <p id="gym-warning-text"></p>
+        <button class="btn" id="gym-warning-ok">Понятно, показать</button>
+      </div>
+      <!-- Три числа, по которым человек решает: сколько это займёт, из
+           скольких упражнений и во что обойдётся. -->
+      <p class="prog-facts" id="program-facts"></p>
+      <button class="btn" id="start-workout">Начать тренировку</button>
+      <div id="exercises"></div>
+      <!-- Остальные упражнения под кнопкой: шесть подряд — это стена, а
+           решение принимают по первым трём. -->
+      <div id="exercises-more" hidden></div>
+      <button class="link-btn" id="exercises-toggle" hidden>Показать все</button>
+      <button id="finish-workout" class="btn" hidden>Записать тренировку</button>
+    </section>
+
+    <!-- Итог недели внизу: он не управляет ничем, а места наверху занимал. -->
+    <section class="stats">
+      <div class="stat"><div id="gym-count" class="stat-value">—</div>
+        <div class="stat-label" id="gym-count-label">тренировок</div></div>
+      <div class="stat"><div id="gym-kcal" class="stat-value">—</div>
+        <div class="stat-label">ккал за неделю</div></div>
+    </section>
+
+
+  </main>
+
+  <!-- Одно окно на все числа, которые спрашивает приложение: минуты
+     занятия, шаги за день, граммы в порции. Раньше каждое из них
+     спрашивало системное окно браузера: чужое на вид, обрезает текст на
+     телефоне, не умеет подсказать привычные варианты и открывает обычную
+     клавиатуру вместо цифровой. -->
+<div id="number-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="number-title">Сколько?</h2>
+      <button class="icon-btn" id="number-close" aria-label="Закрыть">✕</button>
+    </div>
+    <p class="hint" id="number-hint" hidden></p>
+    <div class="state-options" id="number-choices"></div>
+    <label class="prof-row">
+      <span id="number-label">Своё число</span>
+      <input class="input tight" id="number-own" type="number" inputmode="numeric">
+    </label>
+    <button class="btn" id="number-save">Записать</button>
+  </div>
+</div>
+
+  <!-- «Точно?» — тоже своим окном. У системного окна браузера кнопки
+     называются «ОК» и «Отмена»: они не говорят, что именно случится,
+     стоят в разном порядке на разных телефонах, и «ОК» на удаление
+     нажимают не глядя. Здесь на кнопке написано само действие. -->
+<div id="confirm-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="confirm-title">Точно?</h2>
+      <button class="icon-btn" id="confirm-close" aria-label="Закрыть">✕</button>
+    </div>
+    <p class="hint" id="confirm-text" hidden></p>
+    <button class="btn" id="confirm-yes">Да</button>
+    <button class="btn ghost" id="confirm-no">Отмена</button>
+  </div>
+</div>
+
+<!-- Проводник по тренировке. Отдельный экран поверх всего: во время
+     подхода на экране должно быть только то, что делаешь сейчас — показ
+     движения, счёт подходов и таймер. Остальное мешает. -->
+<div id="player" class="player" hidden>
+  <div class="player-bar"><div id="player-done-bar"></div></div>
+  <div class="player-head">
+    <span class="player-step" id="player-step"></span>
+    <div class="player-tools">
+      <button class="icon-btn" id="player-sound" aria-label="Звук">🔔</button>
+      <button class="icon-btn" id="player-close" aria-label="Завершить">✕</button>
+    </div>
+  </div>
+
+  <div class="player-body" id="player-work">
+    <div class="how-demo empty" id="player-demo">
+      <img id="player-image" alt="" hidden>
+      <div class="fig-slot" id="player-figure"></div>
+      <p class="how-soon" id="player-soon">Анимация техники готовится</p>
+    </div>
+    <div class="player-phase" id="player-phase"></div>
+    <h2 class="player-name" id="player-name"></h2>
+    <p class="player-set" id="player-set"></p>
+    <div class="player-ring" id="player-ring" hidden>
+      <svg viewBox="0 0 120 120" aria-hidden="true">
+        <circle class="ring-bg" cx="60" cy="60" r="52"></circle>
+        <circle class="ring-fill plain" id="player-fill" cx="60" cy="60" r="52"></circle>
+      </svg>
+      <div class="player-time" id="player-time">0</div>
+    </div>
+    <p class="player-hint" id="player-hint"></p>
+  </div>
+
+  <!-- Итог. Кристаллы, серия и задания пересчитываются сами: запись
+       уходит тем же путём, что и раньше. -->
+  <div class="player-body" id="player-finish" hidden>
+    <div class="player-phase">Тренировка завершена</div>
+    <h2 class="player-name" id="finish-time">0:00</h2>
+    <p class="player-set" id="finish-facts"></p>
+    <p class="player-hint" id="finish-note"></p>
+  </div>
+
+  <div class="player-controls" id="player-controls">
+    <button class="btn" id="player-main">Готово</button>
+    <div class="player-row">
+      <button class="btn ghost" id="player-pause">Пауза</button>
+      <button class="btn ghost" id="player-skip">Пропустить</button>
+    </div>
+  </div>
+</div>
+
+<div id="rest-overlay" class="overlay" hidden>
+    <div class="rest-card">
+      <div class="rest-label">Отдых</div>
+      <div id="rest-time" class="rest-time">60</div>
+      <button id="rest-skip" class="btn">Пропустить</button>
+    </div>
+  </div>
+
+
+  <!-- Кубик: что съесть прямо сейчас, если готовить негде. Человек в
+       магазине не знает свой остаток калорий — он знает, насколько голоден
+       и чего хочется. Спрашиваем именно это. -->
+  <main id="screen-cube" class="screen" hidden>
+    <section class="hero slim">
+      <div class="hero-art" data-art="food"></div>
+      <div class="hero-body">
+        <div class="eyebrow">Еда</div>
+        <h1 class="hero-title">Что съесть?</h1>
+        <p class="hero-sub" id="food-hint"></p>
+      </div>
+    </section>
+
+    <!-- Четыре ответа на один вопрос. Кубик — про «не готовить вовсе»,
+         остальные три — вопросы к одной книге рецептов. -->
+    <div class="food-modes" id="food-modes"></div>
+
+    <!-- Главный блок экрана: ответ без единого вопроса. Всё, что ниже, —
+         для тех, кто хочет выбрать сам. -->
+    <section class="decide">
+      <div class="eyebrow">Не хочу выбирать</div>
+      <p class="decide-text" id="decide-text">Дам один вариант — без вопросов.</p>
+      <button class="btn primary" id="decide-btn">Реши за меня</button>
+    </section>
+
+    <div id="cube-mode">
+
+    <!-- Быстрый путь: человек уже стоит у полки, вопросы задавать некогда. -->
+    <button id="cube-shop" class="cube-shop">Я уже в магазине</button>
+
+    <!-- Второй вопрос этого пути и он же единственный. -->
+    <section class="card" id="cube-shop-ask" hidden>
+      <h2 class="cube-q">Что сейчас хочется?</h2>
+      <div class="chips" id="cube-shop-cravings"></div>
+    </section>
+
+    <!-- Третий путь: ничего не отмечать руками, а просто показать полку. -->
+    <section class="card" id="cube-shelf-card">
+      <h2 class="cube-q">Сфоткай полку</h2>
+      <p class="hint">Сними холодильник или пакет с покупками — соберу только из
+        того, что узнаю.</p>
+      <label class="btn ghost" for="shelf-input">Сфоткать полку</label>
+      <input id="shelf-input" type="file" accept="image/*" capture="environment" hidden>
+      <div id="shelf-found" hidden></div>
+    </section>
+
+    <section class="card" id="cube-basket-card">
+      <div class="card-head"><h2 class="cube-q">Что у тебя в корзине</h2>
+        <button class="link-btn" id="cube-basket-toggle">показать</button></div>
+      <p class="hint">Отметь, что уже нашла — соберу только из этого.</p>
+      <div id="cube-basket" hidden></div>
+    </section>
+
+    <section class="card" id="cube-ask">
+      <h2 class="cube-q">Насколько голодна?</h2>
+      <div class="cube-levels" id="cube-levels"></div>
+
+      <h2 class="cube-q">Чего хочется?</h2>
+      <div class="chips" id="cube-cravings"></div>
+
+      <label class="cube-switch">
+        <input type="checkbox" id="cube-nospoon" checked>
+        <span>Без ложки и вилки</span>
+      </label>
+      <p class="hint">Показываем только то, что едят руками или пьют.</p>
+
+      <button id="cube-go" class="btn">Собрать кубик</button>
+    </section>
+
+    <p class="cube-needs" id="cube-needs" hidden></p>
+    <div id="cube-results"></div>
+    </div>
+
+    <!-- Подбор блюда: та же книга рецептов, разные вопросы к ней. -->
+    <div id="menu-mode" hidden>
+      <!-- Заготовки: её главный принцип — приготовить один раз и собирать
+           разное всю неделю. Видны только в своём режиме: в остальных они
+           отвечали бы на вопрос, которого человек не задавал. -->
+      <section class="card" id="preps-card" hidden>
+        <div class="card-head"><h2>Что приготовить впрок</h2>
+          <button class="link-btn" id="preps-toggle">показать</button></div>
+        <p class="hint" id="preps-hint">Готовим один раз — собираем несколько дней.
+          Здесь видно, сколько что хранится.</p>
+        <div id="preps-list" hidden></div>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h2>Что приготовить</h2>
+          <span id="gap-hint" class="muted"></span></div>
+
+        <!-- Приём пищи выбирается явно: по времени бот угадывает, но человек
+             может собираться готовить ужин днём. -->
+        <div class="meal-tabs" id="meal-tabs">
+          <button class="meal-tab" data-meal="breakfast">Завтрак</button>
+          <button class="meal-tab" data-meal="lunch">Обед</button>
+          <button class="meal-tab" data-meal="dinner">Ужин</button>
+          <button class="meal-tab" data-meal="snack">Перекус</button>
+        </div>
+
+        <div class="budget-line" id="budget-line"></div>
+        <p class="hint plate-hint" id="plate-hint"></p>
+
+        <button id="suggest-btn" class="btn ghost">Подобрать блюдо</button>
+        <div id="suggestions"></div>
+      </section>
+    </div>
+  </main>
+
+  <nav class="tabs">
+    <button class="tab active" data-screen="today">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/>
+        <path d="M12 4a8 8 0 0 1 7 4"/></svg>Сегодня</button>
+    <button class="tab" data-screen="world">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 6-2.5 10h-9L5 9z"/>
+        <path d="M12 3v18M5 9h14"/></svg>Мой мир</button>
+    <button class="tab" data-screen="gym">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6M8 7v10M16 7v10M20 9v6M8 12h8"/></svg>Спорт</button>
+    <button class="tab" data-screen="cube">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/>
+        <path d="M12 3v18M4 7.5l8 4.5 8-4.5"/></svg>Еда</button>
+    <button class="tab" data-screen="progress">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l5-5 4 3 7-8"/>
+        <path d="M4 20h16"/></svg>Прогресс</button>
+  </nav>
+</div>
+
+<!-- Ввод момента: сначала распознаём, показываем факты, и только потом
+     сохраняем — догадки модели человек должен видеть до записи. -->
+<div id="moment-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="moment-head">Что происходит?</h2>
+      <button class="icon-btn" id="moment-close" aria-label="Закрыть">✕</button>
+    </div>
+
+    <div id="moment-input">
+      <textarea id="moment-text" class="input area" rows="3"
+                placeholder="Позавтракала, выпила кофе и чувствую себя бодрее"></textarea>
+      <button class="btn" id="moment-send">Распознать</button>
+      <p class="hint">Голосом — отправь голосовое боту в чат: он поймёт так же,
+        а сюда всё придёт само.</p>
+    </div>
+
+    <div id="moment-result" hidden>
+      <div class="eyebrow">Твоя фраза</div>
+      <div class="quote" id="moment-quote"></div>
+
+      <div class="eyebrow ruled">Распознанные факты</div>
+      <div class="facts" id="moment-facts"></div>
+
+      <div class="trust">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v6c0 4-3 7-7 9-4-2-7-5-7-9V6z"/>
+          <path d="M9 12l2 2 4-4"/></svg>
+        <div>
+          <div class="eyebrow">Уверенность</div>
+          <div class="trust-value" id="moment-trust">Высокая</div>
+          <div class="trust-note" id="moment-trust-note">Эти данные точно отражают твоё сообщение.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <button class="chip" id="moment-edit">Исправить</button>
+        <button class="btn narrow" id="moment-save">Всё верно</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Отметить состояние в два тапа: раньше это можно было только рассказать
+     словами, и плитки стояли пустыми. -->
+<!-- Экран подписки: закрыт доступ — данные остаются, но приложение просит
+     вернуться в чат, потому что счёт выставляет бот. -->
+<div id="paywall" class="pop" hidden>
+  <div class="pop-card wide">
+    <div class="pop-icon">🔒</div>
+    <div class="pop-title" id="paywall-title">Доступ закрыт</div>
+    <p class="pop-text" id="paywall-text"></p>
+    <button class="btn" id="paywall-open">Открыть чат и продлить</button>
+  </div>
+</div>
+
+<div id="state-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="state-head">Энергия</h2>
+      <button class="icon-btn" id="state-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div id="state-options" class="state-options"></div>
+    <p class="hint" id="state-hint"></p>
+  </div>
+</div>
+
+<!-- Профиль целиком в приложении: выбор — тапом, числа и аллергии — полем.
+     Каждая правка сохраняется сразу, кнопки «Сохранить» нет намеренно:
+     полшага меньше, и нельзя уйти, потеряв изменения. -->
+<div id="profile-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2>Профиль</h2>
+      <button class="icon-btn" id="profile-close" aria-label="Закрыть">✕</button>
+    </div>
+
+    <div class="prof-norms">
+      <div class="eyebrow">Твоя норма в день</div>
+      <div class="prof-norms-value" id="prof-norms">—</div>
+      <div class="prof-norms-sub" id="prof-norms-sub"></div>
+    </div>
+
+    <div class="eyebrow ruled">Цель</div>
+    <div class="state-options" id="prof-goal"></div>
+
+    <div class="eyebrow ruled">Активность</div>
+    <div class="state-options" id="prof-activity"></div>
+
+    <div class="eyebrow ruled">Питание</div>
+    <div class="state-options" id="prof-diet"></div>
+
+    <div class="eyebrow ruled">Цифры</div>
+    <!-- Поля текстовые, а не number: на русской клавиатуре дробное пишут через
+         запятую, а number-поле молча отдаёт пустое значение — правка исчезала
+         бы без единого слова. Разбирает число сервер, он же и проверяет. -->
+    <label class="prof-row">
+      <span>Рост, см</span>
+      <input class="input tight" id="prof-height" type="text" inputmode="decimal">
+    </label>
+    <label class="prof-row">
+      <span>Возраст</span>
+      <input class="input tight" id="prof-age" type="text" inputmode="numeric">
+    </label>
+    <label class="prof-row">
+      <span>Вес цели, кг</span>
+      <input class="input tight" id="prof-target" type="text" inputmode="decimal">
+    </label>
+    <p class="hint" id="prof-weight-hint"></p>
+
+    <div class="eyebrow ruled">Цель по шагам</div>
+    <div class="state-options" id="prof-steps"></div>
+    <label class="prof-row">
+      <span>Своё число</span>
+      <input class="input tight" id="prof-steps-own" type="text" inputmode="numeric">
+    </label>
+    <p class="hint">Это не медицинская норма, а договорённость с собой. Лучше
+      взять то число, которое точно получится каждый день.</p>
+
+    <div class="eyebrow ruled">Женский календарь</div>
+    <div class="prof-row switch" id="prof-cycle-row">
+      <span>Показывать цикл</span>
+      <button class="chip" id="prof-cycle">включён</button>
+    </div>
+    <p class="hint">Живёт на «Прогрессе», рядом с весом. Нужен затем, чтобы
+      объяснять прибавку перед месячными, а не пугать ею.</p>
+
+    <div class="eyebrow ruled">Аллергии и что не ешь</div>
+    <input class="input" id="prof-allergies" type="text" maxlength="200"
+           placeholder="Например: орехи, лактоза. Или «нет»">
+
+    <div class="eyebrow ruled">Напоминания</div>
+    <div class="prof-row switch">
+      <span id="prof-reminders-label">Мягкие напоминания</span>
+      <button class="chip" id="prof-reminders">включены</button>
+    </div>
+    <p class="hint">Бот пишет сам, только когда есть что предложить: обычно одно
+      сообщение в день, часто ни одного. Ночью молчит.</p>
+
+    <!-- Настройки разворачиваются по кнопке: семь галочек, показанные всем
+         сразу, превращают профиль в анкету. -->
+    <button class="btn ghost" id="notif-toggle">Настроить подробнее</button>
+    <div id="notif-box" hidden>
+      <div class="eyebrow ruled">О чём писать</div>
+      <div class="state-options" id="notif-kinds"></div>
+
+      <div class="eyebrow ruled">Как часто</div>
+      <div class="state-options" id="notif-pace"></div>
+
+      <div class="eyebrow ruled">Тихие часы</div>
+      <label class="prof-row">
+        <span>Не писать с</span>
+        <select class="input tight" id="notif-from"></select>
+      </label>
+      <label class="prof-row">
+        <span>до</span>
+        <select class="input tight" id="notif-to"></select>
+      </label>
+      <p class="hint">Ночью бот молчит. Напоминания о добавках это не трогает —
+        их время ты назначаешь сама.</p>
+    </div>
+
+    <div class="eyebrow ruled">Мои данные</div>
+    <button class="btn" id="prof-export">📦 Выгрузить всё одним файлом</button>
+    <p class="hint">Придёт в чат: таблицы с едой, водой, весом, тренировками и
+      самочувствием — открываются в Numbers и Excel. Данные твои, забрать их
+      можно в любой момент.</p>
+
+    <!-- Пишется прямо здесь, а не в чате: человек споткнулся на этом экране,
+         и выгонять его отсюда ради жалобы — значит не получить жалобу. -->
+    <div class="eyebrow ruled">Что-то не так</div>
+    <textarea class="input" id="prof-problem" rows="3" maxlength="1000"
+      placeholder="Что нажала, что ожидала увидеть и что увидела вместо этого"></textarea>
+    <button class="btn ghost" id="prof-problem-send">✍️ Рассказать</button>
+    <p class="hint" id="prof-problem-hint">Прочтёт живой человек. Если понадобится
+      уточнить, ответят прямо в чат боту.</p>
+  </div>
+</div>
+
+<div id="recipe-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="recipe-title">Рецепт</h2>
+      <button class="icon-btn" id="recipe-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="recipe-macros" id="recipe-macros"></div>
+    <div class="eyebrow ruled">Состав на порцию</div>
+    <ul class="recipe-parts" id="recipe-parts"></ul>
+    <div class="eyebrow ruled">Как приготовить</div>
+    <p class="recipe-steps" id="recipe-steps"></p>
+    <p class="hint" id="recipe-source"></p>
+    <button class="btn" id="recipe-eat">Съела это</button>
+  </div>
+</div>
+
+<!-- Присылка шагов с телефона: единственный способ не вбивать их руками. -->
+<!-- Шаги с телефона. Первая версия была полотном мелкого текста с
+     неверными названиями действий iOS — по ней не собралось ни у кого.
+     Теперь три действия на виду (скопировать, инструкция, проверить), а
+     сама инструкция — карточками по одному шагу. -->
+<div id="sync-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2>Шаги с телефона</h2>
+      <button class="icon-btn" id="sync-close" aria-label="Закрыть">✕</button>
+    </div>
+    <p class="hint" id="sync-why"></p>
+
+    <button class="btn" id="sync-copy">Скопировать личную ссылку</button>
+    <p class="hint" id="sync-warn">Ссылка твоя. Не пересылай её другим и не
+      показывай на скриншотах.</p>
+
+    <!-- Готовая команда. Кнопки нет, пока в настройках сервера не задан
+         адрес: пустая кнопка хуже отсутствующей. -->
+    <button class="btn ghost" id="sync-ready" hidden>Готовая команда для айфона</button>
+    <button class="btn ghost" id="sync-guide">Пошаговая инструкция</button>
+    <button class="btn ghost" id="sync-check">Проверить подключение</button>
+    <button class="btn ghost" id="sync-now" hidden>Обновить шаги сейчас</button>
+
+    <div class="sync-state" id="sync-state" hidden>
+      <div class="sync-state-title" id="sync-state-title"></div>
+      <p class="hint" id="sync-state-note"></p>
+    </div>
+
+    <!-- Ссылка спрятана нарочно: её показывают на скриншотах, не думая, что
+         это ключ. Копировать можно и не видя. -->
+    <div class="eyebrow ruled">Твоя ссылка</div>
+    <p class="sync-link" id="sync-link"></p>
+    <button class="btn ghost" id="sync-show">Показать ссылку</button>
+
+    <div class="eyebrow ruled">Android</div>
+    <pre class="sync-steps" id="sync-android"></pre>
+    <p class="hint" id="sync-safety"></p>
+    <button class="btn ghost" id="sync-renew">Сменить ссылку</button>
+  </div>
+</div>
+
+<!-- Как делать упражнение — внутри приложения, а не на поиске в YouTube.
+     Наверху место под анимацию: короткая петля с фирменным персонажем.
+     Пока файла нет, на его месте спокойная заглушка, а не обещание. -->
+<div id="how-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="how-title">Как делать</h2>
+      <button class="icon-btn" id="how-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="how-demo" id="how-demo">
+      <img id="how-image" alt="" hidden>
+      <div class="fig-slot" id="how-figure"></div>
+      <p class="how-soon" id="how-soon">Анимация техники готовится</p>
+    </div>
+    <p class="hint" id="how-meta"></p>
+    <ol class="guide-steps" id="how-steps"></ol>
+    <div class="eyebrow ruled" id="how-mistakes-head" hidden>Частые ошибки</div>
+    <ul class="how-mistakes" id="how-mistakes"></ul>
+  </div>
+</div>
+
+<!-- Инструкция по одному шагу за раз. Полотном её не читают: там десять
+     непривычных названий подряд, и человек теряет место после третьего. -->
+<div id="guide-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="guide-title">Шаг</h2>
+      <button class="icon-btn" id="guide-close" aria-label="Закрыть">✕</button>
+    </div>
+    <p class="hint" id="guide-lead"></p>
+    <ol class="guide-steps" id="guide-steps"></ol>
+    <p class="guide-note" id="guide-note" hidden></p>
+    <!-- Ссылка на готовую команду живёт в чужом облаке и однажды может
+         перестать открываться. Без этого выхода человек остался бы совсем
+         без шагов: карточек сборки в короткой инструкции нет. -->
+    <button class="btn ghost" id="guide-manual" hidden>Не открылось — собрать вручную</button>
+    <div class="guide-nav">
+      <button class="btn ghost" id="guide-back">Назад</button>
+      <button class="btn" id="guide-next">Дальше</button>
+    </div>
+    <div class="guide-count" id="guide-count"></div>
+  </div>
+</div>
+
+<!-- Рецепт: состав пересчитан под порцию человека, а не под авторскую. -->
+
+<!-- Карточка заготовки: состав на партию, сроки хранения и что из неё собрать. -->
+<div id="prep-sheet" class="sheet" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="prep-title">Заготовка</h2>
+      <button class="icon-btn" id="prep-close" aria-label="Закрыть">✕</button>
+    </div>
+    <div class="recipe-macros" id="prep-macros"></div>
+    <div class="prep-storage" id="prep-storage"></div>
+    <div class="eyebrow ruled">Состав партии</div>
+    <ul class="recipe-parts" id="prep-parts"></ul>
+    <div class="eyebrow ruled">Как приготовить</div>
+    <p class="recipe-steps" id="prep-steps"></p>
+    <p class="hint" id="prep-ideas"></p>
+  </div>
+</div>
+
+<div id="award-pop" class="pop" hidden>
+  <div class="pop-card">
+    <div class="pop-icon" id="pop-icon">🏆</div>
+    <div class="pop-title" id="pop-title"></div>
+    <div class="pop-sub" id="pop-sub">Новое открытие</div>
+    <button class="btn" id="pop-close">Класс</button>
+  </div>
+</div>
+
+<!-- Слой частиц: конфетти наград, искры закрытого задания, вспышка нового
+     места. Лежит поверх всего и ничего не ловит — только рисует. -->
+<div id="sparkle" class="sparkle" aria-hidden="true"></div>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

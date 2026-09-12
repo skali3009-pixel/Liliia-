@@ -1,0 +1,91 @@
+"""Тесты мини-миграций: новое поле не должно ломать работающую базу."""
+
+import asyncio
+
+from sqlalchemy import inspect, text
+from sqlalchemy.ext.asyncio import create_async_engine
+
+from migrations import COLUMN_ADDITIONS, apply_column_additions
+
+
+def _columns(sync_connection, table):
+    return {c["name"] for c in inspect(sync_connection).get_columns(table)}
+
+
+def test_missing_column_is_added_and_rerun_is_safe():
+    async def scenario():
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.begin() as conn:
+            # Старая таблица — такая, какой она была до появления часового пояса.
+            await conn.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY, age INTEGER)"))
+
+            applied = await apply_column_additions(conn)
+            # Все колонки users, добавленные после первого релиза. Список
+            # берём из самих миграций: забытая здесь колонка означала бы, что
+            # обновление молча оставило базу без неё.
+            assert applied == [
+                f"users.{column}"
+                for table, column, _ in COLUMN_ADDITIONS
+                if table == "users" and column != "age"
+            ]
+            assert "timezone" in await conn.run_sync(_columns, "users")
+
+            # Повторный запуск ничего не делает и не падает.
+            assert await apply_column_additions(conn) == []
+        await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_existing_column_is_left_alone():
+    async def scenario():
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.begin() as conn:
+            await conn.execute(
+                text("CREATE TABLE users (id INTEGER PRIMARY KEY, timezone VARCHAR(64))")
+            )
+            await conn.execute(text("INSERT INTO users VALUES (1, 'Asia/Yekaterinburg')"))
+
+            # Существующую колонку не трогаем — добавляем только недостающие.
+            assert "users.timezone" not in await apply_column_additions(conn)
+            # Значение не затёрто значением по умолчанию.
+            value = (await conn.execute(text("SELECT timezone FROM users"))).scalar_one()
+            assert value == "Asia/Yekaterinburg"
+        await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_no_table_means_no_migration():
+    async def scenario():
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.begin() as conn:
+            assert await apply_column_additions(conn) == []
+        await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_a_cleanup_skips_a_column_that_never_existed():
+    """На свежей базе колонки может не быть — и это не повод падать.
+
+    Уборка «обнулить ссылки на фото» осмысленна только там, где эта колонка
+    когда-то была. На новой установке её нет, и попытка выполнить запрос
+    валила запуск целиком — вместе со всеми миграциями.
+    """
+    async def scenario():
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.begin() as conn:
+            # Таблица есть, колонки photo_file_id нет — как на новой базе.
+            await conn.execute(text(
+                "CREATE TABLE meals (id INTEGER PRIMARY KEY, user_id BIGINT,"
+                " name VARCHAR(255), calories FLOAT)"))
+            await conn.execute(text(
+                "INSERT INTO meals (user_id, name, calories) VALUES (1, 'каша', 300)"))
+            # Не должно бросить исключение.
+            await apply_column_additions(conn)
+            left = (await conn.execute(text("SELECT count(*) FROM meals"))).scalar_one()
+            assert left == 1, "уборка не должна трогать данные"
+        await engine.dispose()
+
+    asyncio.run(scenario())
