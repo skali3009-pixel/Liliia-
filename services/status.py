@@ -1,0 +1,189 @@
+"""Что сейчас с ботом: режим доступа, люди, документы, версия.
+
+Отвечает на вопрос «открыт бот всем или уже закрыт?» одной командой, без
+лазанья по .env и базе. Запускается скриптом status.sh.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import subprocess
+
+from sqlalchemy import func, select
+
+import config
+from db import async_session_maker
+from scheduler import DAILY_REPORT_TIME, WEEKLY_REPORT_TIME
+from services import notifications
+from services import buttons
+from services.owner_reports import _button_lines, _notification_lines
+from models import Payment, Subscription, SubscriptionStatus, User
+from services.legal import LEGAL_VERSION
+from services.subscriptions import now, stats
+
+YES, NO = "да", "нет"
+
+
+DAILY_AT = DAILY_REPORT_TIME.strftime("%H:%M")
+WEEKLY_AT = WEEKLY_REPORT_TIME.strftime("%H:%M")
+
+
+def _git_version() -> str:
+    try:
+        out = subprocess.run(
+            ["git", "log", "-1", "--format=%h · %cd", "--date=format:%d.%m %H:%M"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return out.stdout.strip() or "неизвестно"
+    except (OSError, subprocess.SubprocessError):
+        return "неизвестно"
+
+
+def _access_mode() -> list[str]:
+    """Главный вопрос: пускает бот всех подряд или только по подписке."""
+    if config.PAYWALL:
+        return [
+            "🔒 Платный доступ: ВКЛЮЧЁН",
+            f"   Пробный период: {config.TRIAL_DAYS} дн., дальше {config.SUB_PRICE_STARS} ⭐ в месяц",
+            f"   Владельцы: {', '.join(str(i) for i in sorted(config.ADMIN_IDS))}",
+        ]
+
+    reason = (
+        "в .env стоит PAYWALL=1, но не заполнен ADMIN_IDS — без владельца "
+        "оплата не включается"
+        if not config.ADMIN_IDS
+        else "так и задумано: бот дорабатывается и бесплатен для всех"
+    )
+    return [
+        "🔓 Платный доступ: ВЫКЛЮЧЕН — ботом может пользоваться любой",
+        f"   Причина: {reason}",
+        f"   Пробный период людям выдаётся ({config.TRIAL_DAYS} дн.), но пока ни на что не влияет",
+        "   Включить оплату, когда решишь: bash set-paywall.sh on",
+    ]
+
+
+def _art_lines() -> list[str]:
+    """Какие фоновые картинки не скачались.
+
+    Приложение без них не ломается — на месте картинки остаётся соседний
+    арт или градиент, — но знать об этом полезно.
+    """
+    from services.artwork import absent, stale
+
+    gone, old = absent(), stale()
+    if not gone and not old:
+        return ["🖼 Картинки: все на месте"]
+
+    lines = []
+    if gone:
+        lines += [
+            f"🖼 Картинки: не хватает {len(gone)} — {', '.join(gone)}",
+            "   На их месте пока соседний арт или градиент.",
+        ]
+    # Устаревшая картинка выглядит не как пустое место, а как старая
+    # картинка: посоветовать тут «покажем соседний арт» значит сбить с толку.
+    if old:
+        lines += [
+            f"🖼 Картинки: устарели {len(old)} — {', '.join(old)}",
+            "   Экран пока показывает прежние.",
+        ]
+    lines.append("   Обновить: bash fetch-art.sh")
+    return lines
+
+
+def _invite_lines() -> list[str]:
+    """Работают ли ссылки-приглашения — от них зависят друзья и команда."""
+    if config.BOT_USERNAME:
+        return [f"🔗 Приглашения: работают (@{config.BOT_USERNAME})"]
+    return [
+        "🔗 Приглашения: НЕ РАБОТАЮТ — бот не знает своего имени",
+        "   Кнопки «Позвать друга» и «Позвать в команду» ничего не пришлют.",
+        "   Обычно имя узнаётся само при запуске; если нет — впиши в .env "
+        "строку BOT_USERNAME=имя_бота",
+    ]
+
+
+def _legal_lines() -> list[str]:
+    filled = all((config.LEGAL_OWNER, config.LEGAL_EMAIL))
+    lines = [f"📄 Документы: редакция {LEGAL_VERSION}, реквизиты заполнены — "
+             f"{YES if filled else NO}"]
+    if not filled:
+        lines.append("   Заполнить: bash set-legal.sh — спросит имя, реквизиты и почту")
+    if not config.WEBAPP_URL:
+        lines.append("   Нет WEBAPP_URL — ссылки на документы в боте не показываются")
+    return lines
+
+
+async def collect() -> str:
+    async with async_session_maker() as session:
+        people = int((await session.execute(
+            select(func.count()).select_from(User)
+        )).scalar_one())
+        onboarded = int((await session.execute(
+            select(func.count()).select_from(User).where(User.onboarding_completed.is_(True))
+        )).scalar_one())
+        data = await stats(session)
+        paid_ever = int((await session.execute(
+            select(func.count()).select_from(Payment)
+        )).scalar_one())
+        trial_now = int((await session.execute(
+            select(func.count()).select_from(Subscription).where(
+                Subscription.status == SubscriptionStatus.TRIAL,
+                Subscription.expires_at > now(),
+            )
+        )).scalar_one())
+
+    from services import usage as usage_service
+    from utils.disk import usage as disk_usage
+
+    async with async_session_maker() as session:
+        spend = await usage_service.spent_today(session)
+        # Те же цифры, что в недельном отчёте, но по требованию: когда
+        # переписал текст сообщения, ждать пятницы незачем.
+        notes = await notifications.stats(session, days=30)
+        button_use = await buttons.usage(session)
+        button_since = await buttons.counting_since(session)
+    disk = disk_usage()
+
+    lines = [
+        f"Версия: {_git_version()}",
+        "",
+        *_access_mode(),
+        "",
+        "👥 Люди",
+        f"   Заходили: {people}, дошли до конца анкеты: {onboarded}",
+        f"   Сейчас на пробном: {trial_now}",
+        f"   С бесплатным доступом навсегда: {data['lifetime']}",
+        f"   С оплаченной подпиской: {data['active']}",
+        f"   Доступ закончился: {data['expired']}",
+        f"   Платежей всего: {paid_ever} (звёзд за 30 дней: {data['stars_30d']})",
+        "",
+        "💰 Расход на модель сегодня",
+        f"   Потрачено: {spend.total_usd:.2f} $ из {config.DAILY_COST_LIMIT_USD:.0f} $ "
+        f"({spend.calls} запросов)",
+        f"   Осталось до потолка: {spend.left_usd:.2f} $",
+        f"   Модель для фото: {config.VISION_MODEL}",
+        "",
+        "📬 Отчёты владельцу",
+        f"   Сводка за сутки: каждый день в {DAILY_AT}",
+        f"   Итоги недели: по пятницам в {WEEKLY_AT}",
+        "   Срочное (бот упал, диск, потолок расходов) — сразу, как случится",
+        "",
+        "💾 Диск",
+        f"   Занято {disk.percent}% — {disk.used_gb} из {disk.total_gb} ГБ, "
+        f"свободно {disk.free_gb} ГБ",
+        "",
+        *_notification_lines(notes),
+        *_button_lines(button_use, button_since),
+        "",
+        *_art_lines(),
+        "",
+        *_invite_lines(),
+        "",
+        *_legal_lines(),
+    ]
+    return "\n".join(lines)
+
+
+if __name__ == "__main__":
+    print(asyncio.run(collect()))

@@ -1,0 +1,29 @@
+# Пример systemd-юнита для запуска бота питания на VPS в режиме 24/7.
+#
+# Установка:
+#   1. sudo cp nutrition-bot.service /etc/systemd/system/
+#   2. Отредактируйте User, WorkingDirectory, ExecStart и EnvironmentFile
+#      под свой сервер (замените REPLACE_WITH_YOUR_USER).
+#   3. sudo systemctl daemon-reload
+#   4. sudo systemctl enable --now nutrition-bot
+#
+# Полезные команды:
+#   sudo systemctl status nutrition-bot   — статус
+#   sudo journalctl -u nutrition-bot -f   — логи в реальном времени
+#   sudo systemctl restart nutrition-bot  — перезапуск после обновления кода
+
+[Unit]
+Description=Nutrition & fitness Telegram bot
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=REPLACE_WITH_YOUR_USER
+WorkingDirectory=/home/REPLACE_WITH_YOUR_USER/nutrition-bot
+ExecStart=/home/REPLACE_WITH_YOUR_USER/nutrition-bot/.venv/bin/python bot.py
+Restart=on-failure
+RestartSec=5
+EnvironmentFile=/home/REPLACE_WITH_YOUR_USER/nutrition-bot/.env
+
+[Install]
+WantedBy=multi-user.target
