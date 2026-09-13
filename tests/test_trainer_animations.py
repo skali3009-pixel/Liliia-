@@ -387,11 +387,12 @@ def test_the_manifest_remembers_which_packages_it_is_made_of():
                                 "AURA_block_08_stretching_v1_compact",
                                 "AURA_block_09_pilates_v1_compact",
                                 "AURA_block_10_posture_neck_hump_v1",
-                                "AURA_block_11_dance_warmup_v1_compact"]
+                                "AURA_block_11_dance_warmup_v1_compact",
+                                "AURA_block_12_face_yoga_v1_compact"]
     assert len(ASSETS) == len(
         BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04 | BLOCK_05 | BLOCK_06
         | BLOCK_07 | BLOCK_08 | BLOCK_09 | BLOCK_10_NEW | BLOCK_10_REUSED
-        | BLOCK_11_NEW | BLOCK_11_REUSED)
+        | BLOCK_11_NEW | BLOCK_11_REUSED | BLOCK_12)
 
 
 def test_the_fourth_block_is_installed_whole():
@@ -581,6 +582,50 @@ def test_every_card_is_named_the_way_the_catalogue_names_it():
                 if item.get("titleRu") and item["exerciseId"] != "superman_raise"
                 and id_for(item["titleRu"]) != item["exerciseId"]}
     assert not неверные, неверные
+
+
+BLOCK_12 = {
+    "forehead_smoothing": "anim_forehead_smoothing",
+    "orbicularis_eye_exercise": "anim_orbicularis_eye_exercise",
+    "cheek_air_roll": "anim_cheek_air_roll",
+    "resisted_smile": "anim_resisted_smile",
+    "lion_tongue_stretch": "anim_lion_tongue_stretch",
+    "jaw_thrust_head_back": "anim_jaw_thrust_head_back",
+    "neck_lengthening": "anim_neck_lengthening",
+}
+
+
+def test_the_twelfth_block_is_installed_whole():
+    """Шесть роликов и один кадр — вся «Фейс-йога»."""
+    have = {item["exerciseId"]: item for item in ASSETS}
+    for code, asset in BLOCK_12.items():
+        assert have[code]["animationAssetId"] == asset, code
+
+    programme = {id_for(item[0]) for item in PROGRAMS["face_yoga"]["exercises"]}
+    assert programme == set(BLOCK_12), programme ^ set(BLOCK_12)
+
+
+def test_the_neck_stays_a_still_picture():
+    """Вытягивание шеи — кадр, и он обязан остаться кадром.
+
+    Видеоверсии этого упражнения отклонены: они запрокидывали голову
+    назад, а это ровно то, чего делать нельзя. Подменить кадр роликом
+    легко и незаметно — показ появится, движение будет красивым и
+    неверным. Поэтому здесь заперты и формат, и то, что файл лежит
+    рядом с планкой, а не среди роликов.
+    """
+    шея = next(i for i in ASSETS if i["exerciseId"] == "neck_lengthening")
+    assert шея["format"] == "png", шея["format"]
+    assert шея["src"] == "static/anim_neck_lengthening.png", шея["src"]
+    assert шея["poster"] == шея["src"], шея["poster"]
+    assert шея["loop"] is False, шея["loop"]
+    assert not (TRAINER / "animations" / "anim_neck_lengthening.mp4").exists()
+
+    # Движение разрешено только контейнеру: у типов со словом hold код
+    # вешает дыхание свечения на сам контейнер, а изображение не трогает.
+    assert "hold" in шея["animationType"], шея["animationType"]
+    body = component()
+    assert "const still = !motion() || item.format !== 'mp4';" in body
 
 
 def test_the_corrections_landed_on_the_right_exercises():

@@ -721,6 +721,77 @@
       "src": "animations/anim_standing_side_stretch.mp4",
       "poster": "posters/anim_standing_side_stretch.jpg",
       "loop": true
+    },
+    {
+      "exerciseId": "forehead_smoothing",
+      "titleRu": "Разглаживание лба против сопротивления пальцев",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_forehead_smoothing.mp4",
+      "poster": "posters/anim_forehead_smoothing.jpg",
+      "loop": true,
+      "animationAssetId": "anim_forehead_smoothing"
+    },
+    {
+      "exerciseId": "orbicularis_eye_exercise",
+      "titleRu": "Упражнение для круговой мышцы глаза",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_orbicularis_eye_exercise.mp4",
+      "poster": "posters/anim_orbicularis_eye_exercise.jpg",
+      "loop": true,
+      "animationAssetId": "anim_orbicularis_eye_exercise"
+    },
+    {
+      "exerciseId": "cheek_air_roll",
+      "titleRu": "Надувание щёк с перекатом воздуха",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_cheek_air_roll.mp4",
+      "poster": "posters/anim_cheek_air_roll.jpg",
+      "loop": true,
+      "animationAssetId": "anim_cheek_air_roll"
+    },
+    {
+      "exerciseId": "resisted_smile",
+      "titleRu": "Улыбка с сопротивлением уголков губ",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_resisted_smile.mp4",
+      "poster": "posters/anim_resisted_smile.jpg",
+      "loop": true,
+      "animationAssetId": "anim_resisted_smile"
+    },
+    {
+      "exerciseId": "lion_tongue_stretch",
+      "titleRu": "Вытягивание языка вниз («лев»)",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_lion_tongue_stretch.mp4",
+      "poster": "posters/anim_lion_tongue_stretch.jpg",
+      "loop": true,
+      "animationAssetId": "anim_lion_tongue_stretch"
+    },
+    {
+      "exerciseId": "jaw_thrust_head_back",
+      "titleRu": "Выдвижение челюсти с запрокинутой головой",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_jaw_thrust_head_back.mp4",
+      "poster": "posters/anim_jaw_thrust_head_back.jpg",
+      "loop": true,
+      "animationAssetId": "anim_jaw_thrust_head_back"
+    },
+    {
+      "exerciseId": "neck_lengthening",
+      "titleRu": "Вытягивание шеи вверх",
+      "animationType": "static_hold",
+      "format": "png",
+      "src": "static/anim_neck_lengthening.png",
+      "poster": "static/anim_neck_lengthening.png",
+      "loop": false,
+      "uiMotion": "container_glow_only",
+      "animationAssetId": "anim_neck_lengthening"
     }
   ],
   "packages": [
@@ -734,6 +805,7 @@
     "AURA_block_08_stretching_v1_compact",
     "AURA_block_09_pilates_v1_compact",
     "AURA_block_10_posture_neck_hump_v1",
-    "AURA_block_11_dance_warmup_v1_compact"
+    "AURA_block_11_dance_warmup_v1_compact",
+    "AURA_block_12_face_yoga_v1_compact"
   ]
 }
