@@ -822,6 +822,46 @@
       "src": "animations/anim_neck_lymph_drainage.mp4",
       "poster": "posters/anim_neck_lymph_drainage.jpg",
       "loop": true
+    },
+    {
+      "exerciseId": "under_eye_two_finger_glide",
+      "titleRu": "Мягкое разглаживание области под глазами двумя пальцами",
+      "animationAssetId": "anim_under_eye_two_finger_glide",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_under_eye_two_finger_glide.mp4",
+      "poster": "posters/anim_under_eye_two_finger_glide.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "cheek_glide",
+      "titleRu": "Массаж щёк от носа к ушам",
+      "animationAssetId": "anim_cheek_glide",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_cheek_glide.mp4",
+      "poster": "posters/anim_cheek_glide.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "temple_circles",
+      "titleRu": "Мягкие круговые движения на висках",
+      "animationAssetId": "anim_temple_circles",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_temple_circles.mp4",
+      "poster": "posters/anim_temple_circles.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "jawline_glide",
+      "titleRu": "Массаж по линии нижней челюсти",
+      "animationAssetId": "anim_jawline_glide",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_jawline_glide.mp4",
+      "poster": "posters/anim_jawline_glide.jpg",
+      "loop": true
     }
   ],
   "packages": [
@@ -837,6 +877,6 @@
     "AURA_block_10_posture_neck_hump_v1",
     "AURA_block_11_dance_warmup_v1_compact",
     "AURA_block_12_face_yoga_v1_compact",
-    "AURA_block_13_face_self_massage_v1_compact (три из семи)"
+    "AURA_block_13_face_self_massage_v1_compact"
   ]
 }

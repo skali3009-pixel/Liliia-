@@ -389,12 +389,11 @@ def test_the_manifest_remembers_which_packages_it_is_made_of():
                                 "AURA_block_10_posture_neck_hump_v1",
                                 "AURA_block_11_dance_warmup_v1_compact",
                                 "AURA_block_12_face_yoga_v1_compact",
-                                "AURA_block_13_face_self_massage_v1_compact"
-                                " (три из семи)"]
+                                "AURA_block_13_face_self_massage_v1_compact"]
     assert len(ASSETS) == len(
         BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04 | BLOCK_05 | BLOCK_06
         | BLOCK_07 | BLOCK_08 | BLOCK_09 | BLOCK_10_NEW | BLOCK_10_REUSED
-        | BLOCK_11_NEW | BLOCK_11_REUSED | BLOCK_12 | BLOCK_13_INSTALLED)
+        | BLOCK_11_NEW | BLOCK_11_REUSED | BLOCK_12 | BLOCK_13)
 
 
 def test_the_fourth_block_is_installed_whole():
@@ -630,47 +629,50 @@ def test_the_neck_stays_a_still_picture():
     assert "const still = !motion() || item.format !== 'mp4';" in body
 
 
-# Блок 13 «Самомассаж лица» пришёл на другую программу, чем та, что в
-# приложении: ни один его exerciseId в каталоге не существует, а названия
-# упражнений описывают другую технику. Поставлены только три, где ролик и
-# написанные шаги совпадают целиком.
-BLOCK_13_INSTALLED = {
+# Блок 13 «Самомассаж лица» пришёл на другую программу, чем та, что была в
+# приложении: ни один его exerciseId в каталоге не существовал, а половина
+# названий описывала другую технику. По решению Лилии приложение приведено
+# к пакету — переименованы три упражнения, одно заменено, тексты техники
+# переписаны под ролики.
+BLOCK_13 = {
     "palm_warmup": "anim_palm_warmup",
     "forehead_stroking": "anim_forehead_stroking",
     "neck_lymph_drainage": "anim_neck_lymph_drainage",
-}
-
-# Эти четыре ждут решения Лилии: у трёх ролик показывает не ту технику,
-# что написана в шагах, а седьмому ролику («круги на висках») в программе
-# вовсе нет упражнения.
-BLOCK_13_HELD = {
-    "under_eye_circles": "два пальца скольжением вместо безымянного кругами",
-    "cheekbone_kneading": "ладонями к ушам вместо подушечек мелкими кругами",
-    "jawline_knuckle_massage": "плоскими пальцами вместо костяшек",
-    "nasolabial_massage": "ролика нет вовсе",
+    "under_eye_two_finger_glide": "anim_under_eye_two_finger_glide",
+    "cheek_glide": "anim_cheek_glide",
+    "temple_circles": "anim_temple_circles",
+    "jawline_glide": "anim_jawline_glide",
 }
 
 
-def test_the_thirteenth_block_installed_only_what_matches_the_text():
-    """Ролик не должен учить не тому, что написано в шагах.
-
-    Так уже было с суперменом: текст говорил одно, ролик показывал
-    другое, и чинить пришлось текст. Здесь поймано до установки — три
-    упражнения «Самомассажа» получили показ, четыре ждут решения.
-    Если однажды эти четыре привяжут, тест придётся менять осознанно, а
-    не молча: в том и смысл.
-    """
+def test_the_thirteenth_block_is_installed_whole():
+    """Семь роликов «Самомассажа лица» — все, и под своими названиями."""
     have = {item["exerciseId"]: item for item in ASSETS}
-    for code, asset in BLOCK_13_INSTALLED.items():
+    for code, asset in BLOCK_13.items():
         assert have[code]["animationAssetId"] == asset, code
-        assert have[code]["titleRu"] == next(
-            n for n, v in EXERCISE_IDS.items() if v == code), code
 
-    for code in BLOCK_13_HELD:
-        assert code not in have, (code, BLOCK_13_HELD[code])
-    for файл in ("anim_under_eye_two_finger_glide", "anim_cheek_glide",
-                 "anim_jawline_glide", "anim_temple_circles"):
-        assert not (TRAINER / "animations" / f"{файл}.mp4").exists(), файл
+    programme = {id_for(item[0]) for item in PROGRAMS["face_massage"]["exercises"]}
+    assert programme == set(BLOCK_13), programme ^ set(BLOCK_13)
+
+
+def test_the_renamed_exercises_do_not_leave_ghosts_behind():
+    """Переименование без карты в загрузчике оставило бы вторую строку.
+
+    Загрузчик ищет упражнение по названию и никогда ничего не удаляет: на
+    строки ссылаются записи о тренировках. Значит, новое имя он принял бы
+    за новое упражнение и добавил бы его рядом со старым — в программе
+    стало бы восемь карточек, и у восьмой не нашлось бы ни техники, ни
+    ролика. Поэтому старые имена перечислены явно.
+    """
+    from seed.loader import RENAMED, RETIRED
+
+    каталог = {item[0] for program in PROGRAMS.values()
+               for item in program["exercises"]}
+    for старое, новое in RENAMED.items():
+        assert старое not in каталог, старое
+        assert новое in каталог, новое
+    for убранное in RETIRED:
+        assert убранное not in каталог, убранное
 
 
 def test_the_corrections_landed_on_the_right_exercises():
