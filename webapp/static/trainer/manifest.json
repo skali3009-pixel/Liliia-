@@ -874,6 +874,102 @@
       "holdSeconds": 5,
       "hintRu": "Прижми язык к нёбу · удерживай 5 секунд",
       "loop": false
+    },
+    {
+      "exerciseId": "supine_diaphragmatic_breathing",
+      "titleRu": "Диафрагмальное дыхание лёжа",
+      "animationAssetId": "anim_diaphragmatic_breathing",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_diaphragmatic_breathing.mp4",
+      "poster": "posters/anim_diaphragmatic_breathing.jpg",
+      "loop": true,
+      "uiMode": "diaphragm",
+      "cuesRu": [
+        "Вдох носом · живот мягко поднимается",
+        "Выдох · живот спокойно возвращается"
+      ]
+    },
+    {
+      "exerciseId": "rib_breathing_360",
+      "titleRu": "Дыхание рёбрами на 360°",
+      "animationAssetId": "anim_360_rib_breathing",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_360_rib_breathing.mp4",
+      "poster": "posters/anim_360_rib_breathing.jpg",
+      "loop": true,
+      "uiMode": "rib360",
+      "cuesRu": [
+        "Вдох · рёбра расширяются в стороны и назад",
+        "Выдох · рёбра мягко возвращаются"
+      ]
+    },
+    {
+      "exerciseId": "full_pelvic_release",
+      "titleRu": "Расслабление тазового дна на вдохе",
+      "animationAssetId": "anim_diaphragmatic_breathing",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_diaphragmatic_breathing.mp4",
+      "poster": "posters/anim_diaphragmatic_breathing.jpg",
+      "loop": true,
+      "uiMode": "pelvic_relax",
+      "cuesRu": [
+        "Вдох · мягко расслабь и отпусти",
+        "Выдох · сохрани ощущение лёгкости"
+      ],
+      "warningRu": "Не тужься и не выталкивай мышцы вниз.",
+      "reusedFrom": "supine_diaphragmatic_breathing"
+    },
+    {
+      "exerciseId": "quick_pelvic_squeeze",
+      "titleRu": "Подъём на выдохе — расслабление на вдохе",
+      "animationAssetId": "anim_diaphragmatic_breathing",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_diaphragmatic_breathing.mp4",
+      "poster": "posters/anim_diaphragmatic_breathing.jpg",
+      "loop": true,
+      "uiMode": "pelvic_coordinate",
+      "cuesRu": [
+        "Вдох · полностью расслабь",
+        "Выдох · мягко подтяни вверх"
+      ],
+      "warningRu": "Не сжимай ягодицы и бёдра, не задерживай дыхание.",
+      "reusedFrom": "supine_diaphragmatic_breathing"
+    },
+    {
+      "exerciseId": "glute_bridge_with_breath",
+      "titleRu": "Ягодичный мостик с выдохом на подъёме",
+      "animationAssetId": "anim_glute_bridge",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_glute_bridge.mp4",
+      "poster": "posters/anim_glute_bridge.png",
+      "loop": true,
+      "uiMode": "bridge_breath",
+      "cuesRu": [
+        "Выдох · мягкий подъём",
+        "Вдох · контролируемое опускание"
+      ],
+      "reusedFrom": "glute_bridge"
+    },
+    {
+      "exerciseId": "child_pose_breathing",
+      "titleRu": "Дыхание в позе ребёнка",
+      "animationAssetId": "anim_child_pose",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_child_pose.mp4",
+      "poster": "posters/anim_child_pose.jpg",
+      "loop": true,
+      "uiMode": "child_pose",
+      "cuesRu": [
+        "Вдох · расширь спину и бока",
+        "Выдох · отпусти напряжение"
+      ],
+      "reusedFrom": "child_pose"
     }
   ],
   "packages": [
@@ -890,6 +986,8 @@
     "AURA_block_11_dance_warmup_v1_compact",
     "AURA_block_12_face_yoga_v1_compact",
     "AURA_block_13_face_self_massage_v1_compact",
-    "AURA_block_15_double_chin_v1_compact"
-  ]
+    "AURA_block_15_double_chin_v1_compact",
+    "AURA_block_16_pelvic_floor_breathing_v1_compact"
+  ],
+  "breathCycleSeconds": 5.041667
 }

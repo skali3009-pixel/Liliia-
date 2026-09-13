@@ -10,6 +10,7 @@
 этом от Лилии, а не от кода.
 """
 
+import hashlib
 import json
 import re
 import struct
@@ -390,11 +391,13 @@ def test_the_manifest_remembers_which_packages_it_is_made_of():
                                 "AURA_block_11_dance_warmup_v1_compact",
                                 "AURA_block_12_face_yoga_v1_compact",
                                 "AURA_block_13_face_self_massage_v1_compact",
-                                "AURA_block_15_double_chin_v1_compact"]
+                                "AURA_block_15_double_chin_v1_compact",
+                                "AURA_block_16_pelvic_floor_breathing_v1_compact"]
     assert len(ASSETS) == len(
         BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04 | BLOCK_05 | BLOCK_06
         | BLOCK_07 | BLOCK_08 | BLOCK_09 | BLOCK_10_NEW | BLOCK_10_REUSED
-        | BLOCK_11_NEW | BLOCK_11_REUSED | BLOCK_12 | BLOCK_13 | BLOCK_15)
+        | BLOCK_11_NEW | BLOCK_11_REUSED | BLOCK_12 | BLOCK_13 | BLOCK_15
+        | BLOCK_16)
 
 
 def test_the_fourth_block_is_installed_whole():
@@ -707,6 +710,203 @@ def test_the_fifteenth_block_reuses_instead_of_copying():
     for лишний in ("anim_chin_tuck_wall", "anim_neck_strokes_to_collarbones"):
         assert not (TRAINER / "animations" / f"{лишний}.mp4").exists(), лишний
         assert not (TRAINER / "posters" / f"{лишний}.jpg").exists(), лишний
+
+
+# Блок 16 «Тазовое дно и дыхание». Своих роликов здесь всего два: работа
+# тазового дна внутренняя, и показывать её выдуманным движением тела пакет
+# отказался сам. Остальные четыре карточки берут уже снятое.
+BLOCK_16 = {
+    "supine_diaphragmatic_breathing": "anim_diaphragmatic_breathing",
+    "rib_breathing_360": "anim_360_rib_breathing",
+    "full_pelvic_release": "anim_diaphragmatic_breathing",
+    "quick_pelvic_squeeze": "anim_diaphragmatic_breathing",
+    "glute_bridge_with_breath": "anim_glute_bridge",
+    "child_pose_breathing": "anim_child_pose",
+}
+
+# Что у какой карточки написано в кольце. Подсказки — единственное, чем
+# три карточки на одном ролике отличаются друг от друга: перепутай их
+# местами, и человек на вдохе будет делать то, что нужно на выдохе.
+BLOCK_16_CUES = {
+    "supine_diaphragmatic_breathing": ("diaphragm", "живот мягко поднимается"),
+    "rib_breathing_360": ("rib360", "рёбра расширяются"),
+    "full_pelvic_release": ("pelvic_relax", "мягко расслабь"),
+    "quick_pelvic_squeeze": ("pelvic_coordinate", "полностью расслабь"),
+    "glute_bridge_with_breath": ("bridge_breath", "мягкий подъём"),
+    "child_pose_breathing": ("child_pose", "расширь спину"),
+}
+
+
+def test_the_sixteenth_block_installs_two_and_borrows_four():
+    """Шесть карточек программы — и только два новых файла на них.
+
+    Пакет прислал ещё и резервные копии мостика и позы ребёнка: положи их
+    рядом под новыми именами — всё заработает, а весить будет вдвое, и
+    правка потом уедет в один экземпляр из двух. Сверено по SHA-256: копии
+    байт в байт совпадали с уже установленными, копировать было нечего.
+    """
+    have = {item["exerciseId"]: item for item in ASSETS}
+    programme = {id_for(item[0])
+                 for item in PROGRAMS["pelvic_floor"]["exercises"]}
+    assert programme == set(BLOCK_16), programme ^ set(BLOCK_16)
+    for code, asset in BLOCK_16.items():
+        assert have[code]["animationAssetId"] == asset, code
+
+    # Свои у блока ровно два файла, остальные четыре карточки — гости.
+    новые = {"anim_diaphragmatic_breathing", "anim_360_rib_breathing"}
+    свои = {code for code, item in have.items()
+            if code in BLOCK_16 and "reusedFrom" not in item}
+    assert свои == {"supine_diaphragmatic_breathing", "rib_breathing_360"}, свои
+    for файл in новые:
+        assert (TRAINER / "animations" / f"{файл}.mp4").exists(), файл
+        assert (TRAINER / "posters" / f"{файл}.jpg").exists(), файл
+
+    # Второго экземпляра в папке не появилось — и это сверяется по
+    # содержимому, а не по имени: копия ляжет под любым названием, а
+    # «мостик на одной ноге» и «мостик с резинкой» — совсем другие
+    # упражнения, и по имени их от копии не отличить.
+    for папка in ("animations", "posters"):
+        по_содержимому = {}
+        for файл in sorted((TRAINER / папка).iterdir()):
+            if файл.is_file():
+                по_содержимому.setdefault(
+                    hashlib.sha256(файл.read_bytes()).hexdigest(), []).append(файл.name)
+        двойники = {ключ: имена for ключ, имена in по_содержимому.items()
+                    if len(имена) > 1}
+        assert двойники == {}, (папка, двойники)
+
+
+def test_the_three_cards_on_one_clip_say_different_things():
+    """Один ролик, три карточки — и вся разница в двух строках.
+
+    Диафрагмальное дыхание, расслабление и подъём на выдохе показывают
+    один и тот же ролик: пакет объясняет почему — работа тазового дна
+    внутренняя, и рисовать ей движение значило бы учить не тому. Значит,
+    единственное, что отличает карточки, — подсказки и место кольца.
+    Слипнутся они молча: показ есть, персонаж дышит, а человек делает не то.
+    """
+    have = {item["exerciseId"]: item for item in ASSETS}
+    на_одном = [code for code, asset in BLOCK_16.items()
+                if asset == "anim_diaphragmatic_breathing"]
+    assert len(на_одном) == 3, на_одном
+
+    режимы, строки = set(), set()
+    for code, (режим, кусок) in BLOCK_16_CUES.items():
+        item = have[code]
+        assert item["uiMode"] == режим, (code, item.get("uiMode"))
+        assert len(item["cuesRu"]) == 2, code
+        assert item["cuesRu"][0].startswith("Вдох") or item["cuesRu"][0].startswith("Выдох"), code
+        assert кусок in " ".join(item["cuesRu"]), (code, item["cuesRu"])
+        режимы.add(режим)
+        строки.add(tuple(item["cuesRu"]))
+    assert len(режимы) == len(BLOCK_16_CUES)
+    assert len(строки) == len(BLOCK_16_CUES)
+
+
+def test_the_breathing_ring_keeps_time_with_the_clip():
+    """Кольцо считает ровно тот цикл, что снят: 5,041667 секунды.
+
+    Число здесь не украшение. Возьми круглые пять секунд — и кольцо уйдёт
+    от персонажа на сорок миллисекунд за круг: к третьей минуте это уже
+    целый вдох, и подсказка велит вдыхать, когда персонаж выдыхает.
+    """
+    ролик = mp4_facts(TRAINER / "animations" / "anim_diaphragmatic_breathing.mp4")
+    assert abs(ролик["seconds"] - 5.041667) < 0.01, ролик["seconds"]
+    assert PACK["breathCycleSeconds"] == 5.041667
+
+    движение = STYLES.split("Движение\n", 1)[1]
+    for правило in (".breath-ring { animation: breath-cycle 5.041667s",
+                    ".breath-cue.inhale { animation: breath-inhale 5.041667s",
+                    ".breath-cue.exhale { animation: breath-exhale 5.041667s"):
+        assert правило in движение, правило
+
+    # Ход начинается не раньше самого ролика: браузер запускает его когда
+    # получится, и кольцо считало бы свой вдох, а персонаж — свой.
+    body = component()
+    assert "box.classList.add('breath-waiting');" in body
+    assert "'playing'" in body
+    assert ".breath-waiting .breath-ring" in движение
+
+
+def test_the_breathing_overlay_never_touches_the_clip():
+    """Анимируется интерфейс, а не снятое движение.
+
+    Растянуть или подвинуть ролик под кольцо — значит подменить то, что
+    сняли, тем, что дорисовали. Здесь это запрещено прямо: ни у контейнера
+    показа, ни у самого кадра нет ни трансформаций, ни фильтров.
+    """
+    слой = STYLES.split(".breath-ring {", 1)[1].split(".fig-slot:empty", 1)[0]
+    for запрет in ("object-fit: cover", "filter:"):
+        assert запрет not in слой, запрет
+
+    кадр = STYLES.split(".exercise-technique-media {", 1)[1].split("}", 1)[0]
+    assert "object-fit: contain" in кадр
+    for запрет in ("transform:", "animation:", "filter:"):
+        assert запрет not in кадр, запрет
+
+    # Обе подсказки стоят столбиком и видны всегда: при выключенном
+    # движении переключение остановилось бы, и вторая не появилась бы
+    # никогда — человек прочитал бы только «вдох».
+    строка = STYLES.split(".breath-cue {", 1)[1].split("}", 1)[0]
+    assert "animation:" not in строка
+    assert "opacity" not in строка
+    столбик = STYLES.split(".breath-cues {", 1)[1].split("}", 1)[0]
+    assert "flex-direction: column" in столбик
+
+
+def test_the_pelvic_floor_program_never_tells_to_bear_down():
+    """Ни «тужься», ни «держи напряжённым», ни обещаний вылечить.
+
+    Пакет запрещает это прямым текстом, и не зря: неверная подсказка здесь
+    не «неудобно», а вред. Проверяются и подсказки в кольце, и заметка под
+    программой, и тексты техники — всё, что человек прочитает.
+    """
+    from seed.exercise_technique import TECHNIQUE
+
+    программа = PROGRAMS["pelvic_floor"]
+    слова = [программа["note"]]
+    for имя, *_ in программа["exercises"]:
+        техника = TECHNIQUE[имя]
+        слова.extend(техника.steps)
+        слова.extend(техника.mistakes)
+    have = {item["exerciseId"]: item for item in ASSETS}
+    for code in BLOCK_16:
+        слова.extend(have[code]["cuesRu"])
+        if have[code].get("warningRu"):
+            слова.append(have[code]["warningRu"])
+
+    целиком = " ".join(слова).lower()
+    for запрет in ("натуживай", "вылеч", "избавит", "гарантирова", "укрепит",
+                   "похуде", "устранит", "держи напряж", "постоянно напряж"):
+        assert запрет not in целиком, запрет
+    # Запрещена команда, а не предостережение: сам пакет пишет «не тужься»
+    # и «без натуживания», и вычеркнуть эти слова значило бы вычеркнуть
+    # предупреждение. Поэтому корень разрешён только под отрицанием — и
+    # отрицание должно стоять рядом, в том же куске фразы.
+    корень = [m.start() for m in re.finditer(r"туж", целиком)]
+    assert корень, "предостережение про натуживание пропало из текстов"
+    for место in корень:
+        начало = целиком[:место]
+        assert re.search(r"(?:^|\W)(?:не|без)\W[^.!?]{0,40}$", начало), (
+            целиком[max(0, место - 60):место + 20])
+
+    # А то, ради чего заметка и написана, сказано.
+    for обязательно in ("без задержки дыхания", "полностью расслабляй",
+                        "специалисту"):
+        assert обязательно in программа["note"], обязательно
+
+
+def test_the_personal_topic_hides_its_note_too():
+    """Заметка — часть программы, а не подпись к экрану.
+
+    У тазового дна она говорит про него прямым текстом. Показать её до
+    «понятно» — значит начать разговор о теле, которого человек не начинал,
+    ровно тем способом, от которого предупреждение и защищает.
+    """
+    гейт = APP_JS.split("function renderGymWarning(", 1)[1].split("\n}", 1)[0]
+    assert "const note = document.getElementById('program-note');" in гейт
+    assert "if (needed) note.hidden = true;" in гейт
+    assert "note.hidden = !data.note;" in гейт
 
 
 def test_the_hold_with_a_timer_never_moves_the_picture():

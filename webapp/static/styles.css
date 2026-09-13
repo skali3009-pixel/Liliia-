@@ -1204,6 +1204,52 @@ select.fact-input { text-align: left; width: 130px; }
   border: 2px solid rgba(196, 181, 253, .82); border-radius: 50%;
   box-shadow: 0 0 18px rgba(139, 92, 246, .5);
 }
+
+/* Дыхание (блок 16). Кольцо стоит над тем местом, которым дышат: живот,
+   рёбра, таз. Оно рисуется поверх ролика и никогда не трогает его самого —
+   ни масштаба, ни сдвига, ни фильтра: движение в ролике снято, а не
+   дорисовано здесь.
+
+   Подсказок две, и они стоят столбиком, а не одна поверх другой: налезть
+   друг на друга им нечем. Яркость переключается внутри «уменьшить
+   движение», и обе строки читаются при любой настройке. */
+.breath-ring {
+  position: absolute; left: 50%; top: 57%; z-index: 2;
+  width: 78px; height: 78px; margin: -39px 0 0 -39px;
+  border: 2px solid rgba(196, 181, 253, .78); border-radius: 50%;
+  background: radial-gradient(circle, rgba(139, 92, 246, .14), transparent 66%);
+  box-shadow: 0 0 22px rgba(139, 92, 246, .4);
+  pointer-events: none;
+}
+/* Рёбра выше и шире живота, таз ниже — кольцо на живот в дыхании рёбрами
+   показывало бы не то место. */
+.breath-ring[data-mode="rib360"] {
+  top: 43%; width: 108px; height: 66px; margin: -33px 0 0 -54px;
+}
+.breath-ring[data-mode="pelvic_relax"],
+.breath-ring[data-mode="pelvic_coordinate"] {
+  top: 64%; width: 94px; height: 54px; margin: -27px 0 0 -47px;
+}
+.breath-ring[data-mode="child_pose"] { top: 47%; }
+
+.breath-cues {
+  position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  pointer-events: none;
+}
+.breath-cue {
+  margin: 0; max-width: 100%; padding: 6px 12px;
+  border: 1px solid rgba(196, 181, 253, .42); border-radius: 999px;
+  background: rgba(10, 9, 18, .82); color: var(--text);
+  font-size: 12px; font-weight: 600; line-height: 1.25; text-align: center;
+}
+/* Предостережение упражнения: золотом, как всё, что про осторожность. */
+.breath-care {
+  margin: 0; max-width: 100%; padding: 5px 12px;
+  border-radius: 999px; background: rgba(10, 9, 18, .82);
+  color: var(--gold); font-size: 11px; font-weight: 600;
+  line-height: 1.25; text-align: center;
+}
 .fig-slot:empty { display: none; }
 .mover { width: 100%; height: 100%; display: flex; align-items: center;
          justify-content: center; }
@@ -1584,6 +1630,17 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
   /* Пять секунд удержания — ровно столько, сколько написано в подсказке. */
   .hold-ring { animation: hold-count 5s ease-in-out infinite; }
 
+  /* Дыхание: период — ровно длина ролика блока 16, 5,041667 секунды.
+     Любое другое число означало бы, что кольцо и персонаж расходятся —
+     сначала на полвздоха, к третьей минуте на целый. */
+  .breath-ring { animation: breath-cycle 5.041667s ease-in-out infinite; }
+  .breath-cue.inhale { animation: breath-inhale 5.041667s ease-in-out infinite; }
+  .breath-cue.exhale { animation: breath-exhale 5.041667s ease-in-out infinite; }
+  /* Ждём, пока ролик действительно пойдёт: иначе кольцо считает свой вдох,
+     а персонаж — свой. */
+  .breath-waiting .breath-ring,
+  .breath-waiting .breath-cue { animation-play-state: paused; }
+
   /* Лицо и глаза: качание головы вместо фигуры — там движение размером с
      подбородок, и стик-фигура его не показывает. */
   .head-only .mv-portrait { animation: head-sway 3s ease-in-out infinite;
@@ -1852,6 +1909,26 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
   0%        { transform: scale(.74); opacity: .25; }
   20%, 80%  { opacity: .9; }
   100%      { transform: scale(1.24); opacity: .25; }
+}
+
+/* Вдох — расширение, выдох — возвращение. Кольцо только дышит на месте:
+   ни поворота, ни сдвига, ни тени на самом ролике. */
+@keyframes breath-cycle {
+  0%   { transform: scale(.82); opacity: .5; }
+  48%  { transform: scale(1.1); opacity: .96; }
+  100% { transform: scale(.82); opacity: .5; }
+}
+/* Обе строки видны всегда; ярче та, чья сейчас фаза. Начало и конец
+   одинаковы, иначе на стыке круга подсказка дёргалась бы. */
+@keyframes breath-inhale {
+  0%, 46% { opacity: 1; }
+  54%, 92% { opacity: .34; }
+  100% { opacity: 1; }
+}
+@keyframes breath-exhale {
+  0%, 46% { opacity: .34; }
+  54%, 92% { opacity: 1; }
+  100% { opacity: .34; }
 }
 
 @keyframes hold-breath {

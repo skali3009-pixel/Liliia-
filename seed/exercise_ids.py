@@ -116,11 +116,11 @@ EXERCISE_IDS: dict[str, str] = {
     'Сведение лопаток вниз': 'scapular_depression',
     'Растяжка грудных в дверном проёме': 'doorway_pec_stretch',
     'Диафрагмальное дыхание лёжа': 'supine_diaphragmatic_breathing',
-    'Короткие сжатия': 'quick_pelvic_squeeze',
-    'Долгое удержание': 'long_pelvic_hold',
-    '«Лифт»: подъём по ступеням': 'pelvic_elevator',
-    'Полное расслабление': 'full_pelvic_release',
-    'Ягодичный мостик с дыханием': 'glute_bridge_with_breath',
+    'Дыхание рёбрами на 360°': 'rib_breathing_360',
+    'Расслабление тазового дна на вдохе': 'full_pelvic_release',
+    'Подъём на выдохе — расслабление на вдохе': 'quick_pelvic_squeeze',
+    'Ягодичный мостик с выдохом на подъёме': 'glute_bridge_with_breath',
+    'Дыхание в позе ребёнка': 'child_pose_breathing',
 }
 
 

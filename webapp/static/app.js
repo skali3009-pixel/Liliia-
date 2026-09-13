@@ -2210,6 +2210,11 @@ function renderGymWarning(data) {
   const needed = data.warning && !agreedPrograms().has(data.selected);
   box.hidden = !needed;
   list.hidden = !!needed;
+  // Заметка программы — такая же её часть, как упражнения. У личной темы
+  // она говорит про тазовое дно прямым текстом, и до «понятно» ей на
+  // экране не место: разговор о теле человек ещё не начинал.
+  const note = document.getElementById('program-note');
+  if (needed) note.hidden = true;
   // Кнопку записи прячет updateFinishButton — она вызывается следом и
   // иначе открыла бы её обратно. Двое хозяев у одной кнопки — это спор,
   // который однажды проигрывает предупреждение.
@@ -2220,6 +2225,7 @@ function renderGymWarning(data) {
     rememberAgreement(data.selected);
     box.hidden = true;
     list.hidden = false;
+    note.hidden = !data.note;
   };
 }
 
@@ -2987,6 +2993,49 @@ function pauseTrainer(box) {
   for (const video of box.querySelectorAll('video')) video.pause();
 }
 
+/* Дыхательный слой (блок 16). Работа тазового дна внутренняя: показать её
+   движением тела нельзя, и пакет намеренно ставит одному ролику разные
+   подсказки. Поэтому «что именно делать» здесь говорит не картинка, а две
+   строки и кольцо над нужным местом — животом, рёбрами или тазом.
+
+   Подсказки не сменяют друг друга по очереди, а меняют яркость, и обе
+   видны всегда. Перемигивание выключается вместе со всем движением — и
+   тогда вторая строка не появилась бы никогда: человек с чувствительностью
+   к движению прочитал бы только «вдох». Заодно они физически не могут
+   наложиться друг на друга: это две строки столбиком, а не две в одном месте.
+
+   Кольцо трогает только себя: ни ролик, ни персонаж не масштабируются и не
+   сдвигаются — это была бы подмена снятого движения нарисованным. */
+function BreathOverlay(box, item) {
+  const cues = Array.isArray(item.cuesRu) ? item.cuesRu : [];
+  if (cues.length === 0) return null;
+
+  const ring = document.createElement('span');
+  ring.className = 'breath-ring';
+  ring.setAttribute('aria-hidden', 'true');
+  if (item.uiMode) ring.dataset.mode = item.uiMode;
+
+  const strip = document.createElement('div');
+  strip.className = 'breath-cues';
+  cues.slice(0, 2).forEach((text, index) => {
+    const line = document.createElement('p');
+    line.className = `breath-cue ${index === 0 ? 'inhale' : 'exhale'}`;
+    line.textContent = text;
+    strip.appendChild(line);
+  });
+  // Предостережение упражнения — золотой строкой под подсказками. В окне
+  // техники оно есть и словами, но во время подхода техники не читают.
+  if (item.warningRu) {
+    const care = document.createElement('p');
+    care.className = 'breath-care';
+    care.textContent = item.warningRu;
+    strip.appendChild(care);
+  }
+
+  box.append(ring, strip);
+  return ring;
+}
+
 /* Показ техники в отведённом месте.
    Возвращает true, если что-то показано: строку «готовится» показывает
    вызывающий, и она не должна висеть поверх картинки. */
@@ -3018,6 +3067,7 @@ function ExerciseTrainerAnimation(box, exerciseId) {
       hint.textContent = item.hintRu;
       box.append(ring, hint);
     }
+    BreathOverlay(box, item);
     return true;
   }
 
@@ -3039,6 +3089,26 @@ function ExerciseTrainerAnimation(box, exerciseId) {
   source.type = 'video/mp4';
   video.appendChild(source);
   box.appendChild(video);
+
+  /* Кольцо считает тот же цикл, что снят в ролике (5,04 секунды), но
+     пойти оно должно не раньше самого ролика: браузер запускает его не в
+     ту же миллисекунду, а через сколько получится — и тогда «вдох» в
+     кольце пришёлся бы на выдох персонажа. Поэтому слой ждёт паузой и
+     трогается с места по первому же «пошло». */
+  const ring = BreathOverlay(box, item);
+  if (ring) {
+    box.classList.add('breath-waiting');
+    const пошло = () => {
+      clearTimeout(ждём);
+      box.classList.remove('breath-waiting');
+    };
+    video.addEventListener('playing', пошло, { once: true });
+    /* Ролик может не пойти вовсе — не докачался, кончилось место, телефон
+       не умеет этот формат. Ждать его молча нельзя: кольцо так и застынет,
+       а застывшее кольцо хуже кольца, разошедшегося с роликом на полвздоха.
+       Через полторы секунды считаем и отпускаем в любом случае. */
+    const ждём = setTimeout(пошло, 1500);
+  }
   return true;
 }
 

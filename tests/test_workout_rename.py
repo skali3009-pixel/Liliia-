@@ -53,6 +53,11 @@ def run(scenario):
     "Произнесение «И — У» с напряжением": "chin_line",
     "Наклон головы назад с движением челюсти": "chin_line",
     "Растяжка передней поверхности шеи": "chin_line",
+    "Полное расслабление": "pelvic_floor",
+    "Короткие сжатия": "pelvic_floor",
+    "Ягодичный мостик с дыханием": "pelvic_floor",
+    "Долгое удержание": "pelvic_floor",
+    "«Лифт»: подъём по ступеням": "pelvic_floor",
 }
 
 
@@ -106,7 +111,7 @@ def test_the_program_does_not_grow_a_ghost_card():
             await старая_база(session)
             await seed_workouts(session)
 
-            for код in ("face_massage", "chin_line"):
+            for код in ("face_massage", "chin_line", "pelvic_floor"):
                 строки = (await session.execute(
                     select(Workout).where(Workout.program_code == код)
                 )).scalars().all()
