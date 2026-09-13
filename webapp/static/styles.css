@@ -1187,7 +1187,23 @@ select.fact-input { text-align: left; width: 130px; }
    .figure успел стать и группой на «Прогрессе», и рамкой показа движения,
    и правило «.figure circle { fill: none }» гасило заливку плеча на
    «Прогрессе». Разведено. */
-.fig-slot { width: 100%; height: 100%; }
+.fig-slot { position: relative; width: 100%; height: 100%; }
+
+/* Удержание с отсчётом (язык к нёбу). Подсказка — это текст, она видна
+   всегда; движется только колечко, и то внутри «уменьшить движение». */
+.hold-hint {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+  z-index: 2; margin: 0; max-width: calc(100% - 28px); padding: 8px 14px;
+  border: 1px solid rgba(196, 181, 253, .42); border-radius: 999px;
+  background: rgba(10, 9, 18, .8); color: var(--text);
+  font-size: 12px; font-weight: 600; line-height: 1.25; text-align: center;
+}
+.hold-ring {
+  position: absolute; left: 50%; bottom: 56px; z-index: 2;
+  width: 34px; height: 34px; margin-left: -17px; opacity: .5;
+  border: 2px solid rgba(196, 181, 253, .82); border-radius: 50%;
+  box-shadow: 0 0 18px rgba(139, 92, 246, .5);
+}
 .fig-slot:empty { display: none; }
 .mover { width: 100%; height: 100%; display: flex; align-items: center;
          justify-content: center; }
@@ -1565,6 +1581,8 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
      делает только очень слабое дыхание свечения самого контейнера.
      Изображение при этом не трогается вовсе — ни масштаба, ни фильтра. */
   .how-demo.trainer-hold { animation: hold-breath 4.8s ease-in-out infinite; }
+  /* Пять секунд удержания — ровно столько, сколько написано в подсказке. */
+  .hold-ring { animation: hold-count 5s ease-in-out infinite; }
 
   /* Лицо и глаза: качание головы вместо фигуры — там движение размером с
      подбородок, и стик-фигура его не показывает. */
@@ -1828,6 +1846,12 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
 }
 .gym-warning p {
   margin: 0 0 12px; font-size: 14px; line-height: 1.5; white-space: pre-line;
+}
+
+@keyframes hold-count {
+  0%        { transform: scale(.74); opacity: .25; }
+  20%, 80%  { opacity: .9; }
+  100%      { transform: scale(1.24); opacity: .25; }
 }
 
 @keyframes hold-breath {

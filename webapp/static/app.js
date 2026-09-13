@@ -3006,6 +3006,18 @@ function ExerciseTrainerAnimation(box, exerciseId) {
     shot.src = motion() ? trainerUrl(item.src) : poster;
     shot.alt = item.titleRu || '';
     box.appendChild(shot);
+    // Удержание с отсчётом: само фото неподвижно, считает только колечко.
+    // Двигать картинку здесь нельзя — это подмена упражнения движением,
+    // которого в нём нет.
+    if (item.hintRu) {
+      const ring = document.createElement('span');
+      ring.className = 'hold-ring';
+      ring.setAttribute('aria-hidden', 'true');
+      const hint = document.createElement('p');
+      hint.className = 'hold-hint';
+      hint.textContent = item.hintRu;
+      box.append(ring, hint);
+    }
     return true;
   }
 

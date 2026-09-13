@@ -389,11 +389,12 @@ def test_the_manifest_remembers_which_packages_it_is_made_of():
                                 "AURA_block_10_posture_neck_hump_v1",
                                 "AURA_block_11_dance_warmup_v1_compact",
                                 "AURA_block_12_face_yoga_v1_compact",
-                                "AURA_block_13_face_self_massage_v1_compact"]
+                                "AURA_block_13_face_self_massage_v1_compact",
+                                "AURA_block_15_double_chin_v1_compact"]
     assert len(ASSETS) == len(
         BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04 | BLOCK_05 | BLOCK_06
         | BLOCK_07 | BLOCK_08 | BLOCK_09 | BLOCK_10_NEW | BLOCK_10_REUSED
-        | BLOCK_11_NEW | BLOCK_11_REUSED | BLOCK_12 | BLOCK_13)
+        | BLOCK_11_NEW | BLOCK_11_REUSED | BLOCK_12 | BLOCK_13 | BLOCK_15)
 
 
 def test_the_fourth_block_is_installed_whole():
@@ -673,6 +674,64 @@ def test_the_renamed_exercises_do_not_leave_ghosts_behind():
         assert новое in каталог, новое
     for убранное in RETIRED:
         assert убранное not in каталог, убранное
+
+
+# Блок 15 «Второй подбородок» не принёс почти ничего своего: пять
+# упражнений уже сняты в блоках 10, 12 и 13, и пакет прямо велит взять их
+# ассеты, а не класть рядом копии. Новый файл ровно один — кадр удержания.
+BLOCK_15 = {
+    "wall_chin_tuck": "anim_wall_chin_tuck",
+    "neck_lengthening": "anim_neck_lengthening",
+    "jaw_thrust_head_back": "anim_jaw_thrust_head_back",
+    "tongue_palate_chin_lift": "anim_tongue_palate_chin_lift",
+    "jawline_glide": "anim_jawline_glide",
+    "neck_lymph_drainage": "anim_neck_lymph_drainage",
+}
+
+
+def test_the_fifteenth_block_reuses_instead_of_copying():
+    """Шесть карточек «Второго подбородка», и только одна своя.
+
+    Соблазн здесь простой: положить присланные резервные файлы рядом под
+    новыми именами — и получить пять одинаковых роликов в двух экземплярах
+    каждый. Работать будет, весить будет вдвое, а правка потом уедет в один
+    из двух. Поэтому проверяется и то, что показ есть у всех шести, и то,
+    что лишних файлов не появилось.
+    """
+    have = {item["exerciseId"]: item for item in ASSETS}
+    programme = {id_for(item[0]) for item in PROGRAMS["chin_line"]["exercises"]}
+    assert programme == set(BLOCK_15), programme ^ set(BLOCK_15)
+    for code, asset in BLOCK_15.items():
+        assert have[code]["animationAssetId"] == asset, code
+
+    for лишний in ("anim_chin_tuck_wall", "anim_neck_strokes_to_collarbones"):
+        assert not (TRAINER / "animations" / f"{лишний}.mp4").exists(), лишний
+        assert not (TRAINER / "posters" / f"{лишний}.jpg").exists(), лишний
+
+
+def test_the_hold_with_a_timer_never_moves_the_picture():
+    """Отсчёт показывает колечко, а не кадр.
+
+    Пакет прислал свой CSS, в котором картинка растянута `object-fit: cover`
+    и обрезается по краям. Взяли из него только смысл: неподвижное фото,
+    пульсирующий индикатор и подпись на пять секунд — ровно столько, сколько
+    в подписи и написано.
+    """
+    язык = next(i for i in ASSETS if i["exerciseId"] == "tongue_palate_chin_lift")
+    assert язык["format"] == "png", язык["format"]
+    assert язык["holdSeconds"] == 5
+    assert "5 секунд" in язык["hintRu"], язык["hintRu"]
+    assert "hold" in язык["animationType"], язык["animationType"]
+
+    body = component()
+    assert "ring.className = 'hold-ring';" in body
+    assert "hint.textContent = item.hintRu;" in body
+    # Двигаться разрешено только колечку, и только внутри «уменьшить движение».
+    движение = STYLES.split("Движение\n", 1)[1]
+    assert ".hold-ring { animation: hold-count 5s" in движение
+    for правило in ("transform: scale", "animation:"):
+        кадр = STYLES.split(".hold-hint {", 1)[1].split("}", 1)[0]
+        assert правило not in кадр, правило
 
 
 def test_the_corrections_landed_on_the_right_exercises():

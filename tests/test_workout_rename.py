@@ -40,14 +40,31 @@ def run(scenario):
     asyncio.run(scenario())
 
 
+# Где эти названия лежали до правок. Класть всё в одну программу нельзя:
+# тогда тест сравнивал бы её состав с чужими строками и падал бы не по делу.
+ГДЕ_ЛЕЖАЛИ = {
+    "Лёгкие круги под глазами безымянным пальцем": "face_massage",
+    "Разминание скул подушечками пальцев": "face_massage",
+    "Массаж линии челюсти костяшками": "face_massage",
+    "Проработка носогубных складок": "face_massage",
+    "«Жираф»: вытяжение шеи вверх": "chin_line",
+    "Язык к нёбу с наклоном головы": "chin_line",
+    "Сопротивление ладонью под подбородком": "chin_line",
+    "Произнесение «И — У» с напряжением": "chin_line",
+    "Наклон головы назад с движением челюсти": "chin_line",
+    "Растяжка передней поверхности шеи": "chin_line",
+}
+
+
 async def старая_база(session):
-    """База, залитая до переименования: со старыми названиями."""
+    """База, залитая до переименований: со старыми названиями."""
     старые = list(RENAMED) + list(RETIRED)
+    assert set(старые) == set(ГДЕ_ЛЕЖАЛИ), set(старые) ^ set(ГДЕ_ЛЕЖАЛИ)
     for position, name in enumerate(старые):
         session.add(Workout(
             name=name, workout_type=WorkoutTypeEnum.STRENGTH,
             location=LocationEnum.HOME, level=LevelEnum.BEGINNER,
-            program_code="face_massage", category="face", position=position,
+            program_code=ГДЕ_ЛЕЖАЛИ[name], category="face", position=position,
             sets=2, reps=1, rest_seconds=10, met_value=1.5,
         ))
     await session.commit()
@@ -89,14 +106,15 @@ def test_the_program_does_not_grow_a_ghost_card():
             await старая_база(session)
             await seed_workouts(session)
 
-            строки = (await session.execute(
-                select(Workout).where(Workout.program_code == "face_massage")
-            )).scalars().all()
-            имена = [row.name for row in строки]
-            assert sorted(имена) == sorted(
-                item[0] for item in PROGRAMS["face_massage"]["exercises"]), имена
-            for старое in RENAMED:
-                assert старое not in имена, старое
+            for код in ("face_massage", "chin_line"):
+                строки = (await session.execute(
+                    select(Workout).where(Workout.program_code == код)
+                )).scalars().all()
+                имена = [row.name for row in строки]
+                assert sorted(имена) == sorted(
+                    item[0] for item in PROGRAMS[код]["exercises"]), (код, имена)
+                for старое in RENAMED:
+                    assert старое not in имена, (код, старое)
     run(scenario)
 
 

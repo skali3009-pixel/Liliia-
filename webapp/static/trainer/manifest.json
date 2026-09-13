@@ -862,6 +862,18 @@
       "src": "animations/anim_jawline_glide.mp4",
       "poster": "posters/anim_jawline_glide.jpg",
       "loop": true
+    },
+    {
+      "exerciseId": "tongue_palate_chin_lift",
+      "titleRu": "Язык к нёбу с мягким подъёмом подбородка",
+      "animationAssetId": "anim_tongue_palate_chin_lift",
+      "animationType": "static_hold_with_timer",
+      "format": "png",
+      "src": "static/anim_tongue_palate_chin_lift.png",
+      "poster": "static/anim_tongue_palate_chin_lift.png",
+      "holdSeconds": 5,
+      "hintRu": "Прижми язык к нёбу · удерживай 5 секунд",
+      "loop": false
     }
   ],
   "packages": [
@@ -877,6 +889,7 @@
     "AURA_block_10_posture_neck_hump_v1",
     "AURA_block_11_dance_warmup_v1_compact",
     "AURA_block_12_face_yoga_v1_compact",
-    "AURA_block_13_face_self_massage_v1_compact"
+    "AURA_block_13_face_self_massage_v1_compact",
+    "AURA_block_15_double_chin_v1_compact"
   ]
 }
