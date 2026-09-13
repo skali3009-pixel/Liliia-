@@ -792,6 +792,36 @@
       "loop": false,
       "uiMotion": "container_glow_only",
       "animationAssetId": "anim_neck_lengthening"
+    },
+    {
+      "exerciseId": "palm_warmup",
+      "titleRu": "Разогрев ладонями",
+      "animationAssetId": "anim_palm_warmup",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_palm_warmup.mp4",
+      "poster": "posters/anim_palm_warmup.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "forehead_stroking",
+      "titleRu": "Поглаживание от центра лба к вискам",
+      "animationAssetId": "anim_forehead_stroking",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_forehead_stroking.mp4",
+      "poster": "posters/anim_forehead_stroking.jpg",
+      "loop": true
+    },
+    {
+      "exerciseId": "neck_lymph_drainage",
+      "titleRu": "Отток по шее вниз к ключицам",
+      "animationAssetId": "anim_neck_lymph_drainage",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_neck_lymph_drainage.mp4",
+      "poster": "posters/anim_neck_lymph_drainage.jpg",
+      "loop": true
     }
   ],
   "packages": [
@@ -806,6 +836,7 @@
     "AURA_block_09_pilates_v1_compact",
     "AURA_block_10_posture_neck_hump_v1",
     "AURA_block_11_dance_warmup_v1_compact",
-    "AURA_block_12_face_yoga_v1_compact"
+    "AURA_block_12_face_yoga_v1_compact",
+    "AURA_block_13_face_self_massage_v1_compact (три из семи)"
   ]
 }
