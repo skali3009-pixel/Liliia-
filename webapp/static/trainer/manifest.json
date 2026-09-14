@@ -970,6 +970,126 @@
         "Выдох · отпусти напряжение"
       ],
       "reusedFrom": "child_pose"
+    },
+    {
+      "exerciseId": "lat_pulldown",
+      "titleRu": "Тяга верхнего блока к груди",
+      "animationAssetId": "anim_lat_pulldown",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_lat_pulldown.mp4",
+      "poster": "posters/anim_lat_pulldown.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "machine_chest_press",
+      "titleRu": "Жим в грудном тренажёре",
+      "animationAssetId": "anim_machine_chest_press",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_machine_chest_press.mp4",
+      "poster": "posters/anim_machine_chest_press.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "machine_leg_curl",
+      "titleRu": "Сгибание ног в тренажёре",
+      "animationAssetId": "anim_machine_leg_curl",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_machine_leg_curl.mp4",
+      "poster": "posters/anim_machine_leg_curl.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "back_extension",
+      "titleRu": "Гиперэкстензия",
+      "animationAssetId": "anim_back_extension",
+      "animationType": "cycle",
+      "format": "mp4",
+      "src": "animations/anim_back_extension.mp4",
+      "poster": "posters/anim_back_extension.png",
+      "loop": true
+    },
+    {
+      "exerciseId": "gaze_vertical",
+      "titleRu": "Движения взглядом вверх-вниз",
+      "animationAssetId": "eye_guide_character",
+      "animationType": "ui_guide_dot",
+      "format": "png",
+      "src": "static/eye_guide_character.png",
+      "poster": "static/eye_guide_character.png",
+      "loop": true,
+      "motionClass": "eye-vertical",
+      "durationSeconds": 5
+    },
+    {
+      "exerciseId": "gaze_horizontal",
+      "titleRu": "Движения взглядом влево-вправо",
+      "animationAssetId": "eye_guide_character",
+      "animationType": "ui_guide_dot",
+      "format": "png",
+      "src": "static/eye_guide_character.png",
+      "poster": "static/eye_guide_character.png",
+      "loop": true,
+      "motionClass": "eye-horizontal",
+      "durationSeconds": 5,
+      "reusedFrom": "gaze_vertical"
+    },
+    {
+      "exerciseId": "gaze_diagonals",
+      "titleRu": "Диагонали: угол к углу",
+      "animationAssetId": "eye_guide_character",
+      "animationType": "ui_guide_dot",
+      "format": "png",
+      "src": "static/eye_guide_character.png",
+      "poster": "static/eye_guide_character.png",
+      "loop": true,
+      "motionClass": "eye-diagonal",
+      "durationSeconds": 5,
+      "reusedFrom": "gaze_vertical"
+    },
+    {
+      "exerciseId": "gaze_circles",
+      "titleRu": "Круговые движения глазами",
+      "animationAssetId": "eye_guide_character",
+      "animationType": "ui_guide_dot",
+      "format": "png",
+      "src": "static/eye_guide_character.png",
+      "poster": "static/eye_guide_character.png",
+      "loop": true,
+      "motionClass": "eye-circles",
+      "durationSeconds": 10,
+      "motionNoteRu": "Первый круг по часовой стрелке, следующий против часовой стрелки.",
+      "reusedFrom": "gaze_vertical"
+    },
+    {
+      "exerciseId": "near_far_focus",
+      "titleRu": "Перевод взгляда с близкого на дальнее",
+      "animationAssetId": "focus_near_far",
+      "animationType": "ui_timed_focus_cues",
+      "format": "png",
+      "src": "static/focus_near_far.png",
+      "poster": "static/focus_near_far.png",
+      "loop": true,
+      "durationSeconds": 5,
+      "cuesRu": [
+        {
+          "from": 0,
+          "to": 2,
+          "text": "Фокус на пальце"
+        },
+        {
+          "from": 2,
+          "to": 4,
+          "text": "Взгляд вдаль"
+        },
+        {
+          "from": 4,
+          "to": 5,
+          "text": "Фокус на пальце"
+        }
+      ]
     }
   ],
   "packages": [
@@ -987,7 +1107,8 @@
     "AURA_block_12_face_yoga_v1_compact",
     "AURA_block_13_face_self_massage_v1_compact",
     "AURA_block_15_double_chin_v1_compact",
-    "AURA_block_16_pelvic_floor_breathing_v1_compact"
+    "AURA_block_16_pelvic_floor_breathing_v1_compact",
+    "AURA_recovery_missing_assets_v1"
   ],
   "breathCycleSeconds": 5.041667
 }

@@ -3007,7 +3007,10 @@ function pauseTrainer(box) {
    Кольцо трогает только себя: ни ролик, ни персонаж не масштабируются и не
    сдвигаются — это была бы подмена снятого движения нарисованным. */
 function BreathOverlay(box, item) {
-  const cues = Array.isArray(item.cuesRu) ? item.cuesRu : [];
+  // Только строки: у глаз в cuesRu лежат окна со временем, и они рисуются
+  // своим слоем. Без этой проверки на экран вышло бы «[object Object]».
+  const cues = (Array.isArray(item.cuesRu) ? item.cuesRu : [])
+    .filter((cue) => typeof cue === 'string');
   if (cues.length === 0) return null;
 
   const ring = document.createElement('span');
@@ -3034,6 +3037,56 @@ function BreathOverlay(box, item) {
 
   box.append(ring, strip);
   return ring;
+}
+
+/* Глаза: показ — это ход точки, а не кадр.
+   Снять гимнастику для глаз роликом нельзя: движение там размером со
+   зрачок, и на кадре высотой в палец его не видно вовсе. Поэтому кадр
+   здесь фон — ровный портрет, — а упражнение показывает светящаяся точка,
+   которую ведут взглядом. Направление у каждого упражнения своё и живёт в
+   `motionClass`: перепутай классы, и человек будет водить глазами не туда,
+   а картинка при этом останется той же.
+
+   Точка ходит в своём слое: двигается он, а не портрет. Портрет не
+   масштабируется, не сдвигается и не подкрашивается — как и все кадры в
+   проекте. */
+function EyeGuideOverlay(box, item) {
+  const вид = item.animationType || '';
+  if (!вид.startsWith('ui_')) return false;
+
+  if (вид === 'ui_timed_focus_cues') {
+    // Подсказки сменяются по окнам из манифеста. Порядок в разметке — их
+    // порядок во времени: первая видна и тогда, когда движение выключено.
+    const strip = document.createElement('div');
+    strip.className = 'eye-cues';
+    (item.cuesRu || []).forEach((cue, index) => {
+      const line = document.createElement('p');
+      line.className = `eye-cue eye-cue-${index + 1}`;
+      line.textContent = cue.text;
+      strip.appendChild(line);
+    });
+    box.appendChild(strip);
+    return true;
+  }
+
+  const track = document.createElement('span');
+  track.className = 'eye-track';
+  track.setAttribute('aria-hidden', 'true');
+  if (item.motionClass) track.dataset.move = item.motionClass;
+  const dot = document.createElement('span');
+  dot.className = 'eye-dot';
+  track.appendChild(dot);
+  box.appendChild(track);
+
+  // Направление круга словами. Оно нужно и зрячему глазу, и тому, у кого
+  // движение выключено: там точка стоит, и сказать об этом больше нечем.
+  if (item.motionNoteRu) {
+    const note = document.createElement('p');
+    note.className = 'eye-note';
+    note.textContent = item.motionNoteRu;
+    box.appendChild(note);
+  }
+  return true;
 }
 
 /* Показ техники в отведённом месте.
@@ -3067,7 +3120,7 @@ function ExerciseTrainerAnimation(box, exerciseId) {
       hint.textContent = item.hintRu;
       box.append(ring, hint);
     }
-    BreathOverlay(box, item);
+    if (!EyeGuideOverlay(box, item)) BreathOverlay(box, item);
     return true;
   }
 

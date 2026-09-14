@@ -392,12 +392,13 @@ def test_the_manifest_remembers_which_packages_it_is_made_of():
                                 "AURA_block_12_face_yoga_v1_compact",
                                 "AURA_block_13_face_self_massage_v1_compact",
                                 "AURA_block_15_double_chin_v1_compact",
-                                "AURA_block_16_pelvic_floor_breathing_v1_compact"]
+                                "AURA_block_16_pelvic_floor_breathing_v1_compact",
+                                "AURA_recovery_missing_assets_v1"]
     assert len(ASSETS) == len(
         BLOCK_01 | BLOCK_02 | CORRECTED | BLOCK_04 | BLOCK_05 | BLOCK_06
         | BLOCK_07 | BLOCK_08 | BLOCK_09 | BLOCK_10_NEW | BLOCK_10_REUSED
         | BLOCK_11_NEW | BLOCK_11_REUSED | BLOCK_12 | BLOCK_13 | BLOCK_15
-        | BLOCK_16)
+        | BLOCK_16 | RECOVERY_GYM | RECOVERY_EYES)
 
 
 def test_the_fourth_block_is_installed_whole():
@@ -907,6 +908,201 @@ def test_the_personal_topic_hides_its_note_too():
     assert "const note = document.getElementById('program-note');" in гейт
     assert "if (needed) note.hidden = true;" in гейт
     assert "note.hidden = !data.note;" in гейт
+
+
+# Восстановительный пакет. Новых съёмок в нём нет: это материалы, которые
+# уже были сделаны, но не доехали до проекта — у блока 03 не было пакета
+# вовсе, а у глаз коды упражнений в прежней сборке назывались иначе.
+RECOVERY_GYM = {
+    "lat_pulldown": "anim_lat_pulldown",
+    "machine_chest_press": "anim_machine_chest_press",
+    "machine_leg_curl": "anim_machine_leg_curl",
+    "back_extension": "anim_back_extension",
+}
+# У глаз показ — не кадр, а ход точки: движение там размером со зрачок, и
+# роликом его не снять. Картинка одна на все четыре, а отличает их ход.
+RECOVERY_EYES = {
+    "gaze_vertical": "eye-vertical",
+    "gaze_horizontal": "eye-horizontal",
+    "gaze_diagonals": "eye-diagonal",
+    "gaze_circles": "eye-circles",
+    "near_far_focus": None,     # у этого не точка, а подсказки по времени
+}
+# Коды глаз из прежней сборки. Пакет прямо запрещает их заводить: каталог
+# живёт на своих, и вторая пара кодов на те же семь упражнений означала бы
+# два справочника, расходящихся молча.
+EYE_IDS_FORBIDDEN = {
+    "eye_gaze_vertical", "eye_gaze_horizontal", "eye_gaze_diagonal",
+    "eye_circle_clockwise", "eye_circle_counterclockwise",
+    "eye_focus_near_far", "eye_soft_blink",
+}
+
+
+def test_the_recovery_pack_closed_the_gym_beginner():
+    """Шесть упражнений «Зала · Новичок» — все.
+
+    Блока 03 не присылали вовсе, и до этого пакета показ был у двух из
+    шести. Два прежних трогать было нельзя: жим ногами доехал внутри
+    корректирующего пакета, планка стоит ещё с блока 01.
+    """
+    have = {item["exerciseId"]: item for item in ASSETS}
+    programme = {id_for(item[0])
+                 for item in PROGRAMS["gym_beginner"]["exercises"]}
+    assert programme == set(RECOVERY_GYM) | {"machine_leg_press", "forearm_plank"}
+
+    for code, asset in RECOVERY_GYM.items():
+        assert have[code]["animationAssetId"] == asset, code
+        assert (TRAINER / "animations" / f"{asset}.mp4").is_file(), asset
+        assert (TRAINER / "posters" / f"{asset}.png").is_file(), asset
+
+    # Два прежних показа остались ровно теми же.
+    assert have["machine_leg_press"]["src"] == "animations/anim_machine_leg_press.mp4"
+    assert have["forearm_plank"]["src"] == "static/anim_plank_forearm.png"
+
+
+def test_the_eye_guides_share_one_backdrop_but_never_one_movement():
+    """Картинка одна, а упражнения четыре — вся разница в ходе точки.
+
+    Снять гимнастику для глаз роликом нельзя: движение там размером со
+    зрачок. Поэтому кадр здесь фон, а показывает упражнение точка, и
+    отличает четыре карточки только её траектория. Слипнутся классы —
+    показ останется, портрет будет тот же, а человек станет водить глазами
+    не туда. Заметить это было бы некому.
+    """
+    have = {item["exerciseId"]: item for item in ASSETS}
+    точки = {code: класс for code, класс in RECOVERY_EYES.items() if класс}
+
+    фоны = {have[code]["src"] for code in точки}
+    assert фоны == {"static/eye_guide_character.png"}, фоны
+    assert (TRAINER / "static" / "eye_guide_character.png").is_file()
+
+    классы = set()
+    for code, класс in точки.items():
+        item = have[code]
+        assert item["animationType"] == "ui_guide_dot", code
+        assert item["motionClass"] == класс, (code, item.get("motionClass"))
+        классы.add(item["motionClass"])
+    assert len(классы) == len(точки), классы
+
+    # Хозяин картинки назван: иначе совпадение путей сошло бы за случайное.
+    свои = [code for code in точки if "reusedFrom" not in have[code]]
+    assert свои == ["gaze_vertical"], свои
+
+    # У каждого класса есть свой ход, и все они внутри «уменьшить движение».
+    движение = STYLES.split("Движение\n", 1)[1]
+    разрешено = движение.split("@media (prefers-reduced-motion: no-preference)", 1)[1]
+    for класс in классы:
+        # Правило у круга многострочное: там ещё направление и темп.
+        хвост = разрешено.split(f'.eye-track[data-move="{класс}"] {{', 1)
+        assert len(хвост) == 2, класс
+        assert "animation-name: eye-guide-" in хвост[1].split("}", 1)[0], класс
+    assert "круг" in have["gaze_circles"]["motionNoteRu"].lower()
+
+
+def test_the_guide_dot_moves_the_layer_and_never_the_portrait():
+    """Ездит слой с точкой, а портрет стоит.
+
+    Пакет прислал свой CSS, в котором точка ходит по `left` и `top`: это
+    пересчитывает раскладку на каждом кадре, и на слабом телефоне из-за
+    этого дёргается прокрутка. В проекте анимируются только `transform`,
+    `opacity` и `filter` — то, что рисует видеокарта.
+    """
+    ходы = STYLES.split("@keyframes eye-guide-vertical {", 1)[1].split(
+        "@keyframes eye-guide-pulse", 1)[0]
+    assert "transform: translate" in ходы
+    for запрет in ("left:", "top:", "width:", "margin"):
+        assert запрет not in ходы, запрет
+
+    # Портрет — обычный кадр проекта: вписан целиком и не тронут.
+    кадр = STYLES.split(".exercise-technique-media {", 1)[1].split("}", 1)[0]
+    assert "object-fit: contain" in кадр
+
+    слой = APP_JS.split("function EyeGuideOverlay(", 1)[1].split("\n}", 1)[0]
+    assert "track.className = 'eye-track';" in слой
+    assert "track.dataset.move = item.motionClass" in слой
+    # Слой рисуется только для своего вида показа, а не поверх всего подряд.
+    assert "if (!вид.startsWith('ui_')) return false;" in слой
+
+
+def test_the_near_far_cues_switch_on_the_manifest_windows():
+    """Окна подсказок в стилях — те же, что в манифесте.
+
+    Проценты в CSS написаны руками и за манифестом не следят. Разъедутся —
+    «Взгляд вдаль» будет висеть, когда надо смотреть на палец, и наоборот.
+    """
+    item = next(i for i in ASSETS if i["exerciseId"] == "near_far_focus")
+    assert item["animationType"] == "ui_timed_focus_cues"
+    окна = item["cuesRu"]
+    assert [c["text"] for c in окна] == ["Фокус на пальце", "Взгляд вдаль",
+                                         "Фокус на пальце"]
+    круг = item["durationSeconds"]
+    assert окна[0]["from"] == 0 and окна[-1]["to"] == круг
+
+    движение = STYLES.split("Движение\n", 1)[1]
+    for номер, окно in enumerate(окна, start=1):
+        начало = round(окно["from"] / круг * 100)
+        имя = {1: "first", 2: "second", 3: "third"}[номер]
+        правило = f".eye-cue-{номер} {{ animation: eye-cue-{имя} {круг}s"
+        assert правило in движение, правило
+        кадры = STYLES.split(f"@keyframes eye-cue-{имя} {{", 1)[1].split("\n}", 1)[0]
+        видна = f"{начало}% {{ opacity: 1; }}" if начало else "0% { opacity: 1; }"
+        assert видна in кадры, (имя, видна, кадры)
+
+    # При выключенном движении остаётся первая подсказка, а не пустота и не
+    # три строки разом.
+    строка = STYLES.split(".eye-cue {", 1)[1].split("}", 1)[0]
+    assert "opacity: 0;" in строка and "animation" not in строка
+    assert ".eye-cue-1 { opacity: 1; }" in STYLES
+
+
+def test_the_old_eye_codes_were_not_brought_back():
+    """Вторая пара кодов на те же упражнения — это два справочника.
+
+    Расходиться они начали бы в тот же день, и молча: показ есть, карточка
+    открывается, просто у половины упражнений он от другого набора.
+    """
+    коды = {item["exerciseId"] for item in ASSETS}
+    assert коды & EYE_IDS_FORBIDDEN == set(), коды & EYE_IDS_FORBIDDEN
+    assert set(EXERCISE_IDS.values()) & EYE_IDS_FORBIDDEN == set()
+
+
+def test_blinking_and_palming_stay_without_a_show():
+    """Показ не подменяется похожим — лучше честная строка «готовится».
+
+    Готовый ролик моргания показывает мягкое моргание, а в каталоге частое:
+    это другое движение. Пальминга в прежней сборке нет вовсе, и подставить
+    вместо него любой портрет значило бы сказать неправду картинкой.
+    """
+    коды = {item["exerciseId"] for item in ASSETS}
+    for пусто in ("rapid_blinking", "palming"):
+        assert пусто in EXERCISE_IDS.values(), пусто
+        assert пусто not in коды, пусто
+    assert "Анимация техники готовится" in INDEX
+
+
+def test_the_same_picture_never_lies_in_the_folder_twice_unnoticed():
+    """Один и тот же файл под двумя именами — правка уедет в один из двух.
+
+    Совпадение бывает и осознанным: портрет Аи в упор снят один раз и
+    служит и кадром вытяжения шеи, и фоном для глаз. Список закрыт нарочно:
+    само совпадение не ошибка, но появляться оно должно осознанно.
+    """
+    РАЗРЕШЕНО = {
+        # Ровный портрет в упор. У шеи это сам показ (видеоверсии отклонены —
+        # они запрокидывали голову назад), у глаз — фон под точкой.
+        frozenset({"static/anim_neck_lengthening.png",
+                   "static/eye_guide_character.png"}),
+    }
+    по_содержимому = {}
+    for папка in ("animations", "posters", "static"):
+        for файл in sorted((TRAINER / папка).iterdir()):
+            if файл.is_file():
+                ключ = hashlib.sha256(файл.read_bytes()).hexdigest()
+                по_содержимому.setdefault(ключ, set()).add(f"{папка}/{файл.name}")
+    совпали = [имена for имена in по_содержимому.values() if len(имена) > 1]
+    for имена in совпали:
+        assert frozenset(имена) in РАЗРЕШЕНО, имена
+    assert len(совпали) == len(РАЗРЕШЕНО), совпали
 
 
 def test_the_hold_with_a_timer_never_moves_the_picture():
