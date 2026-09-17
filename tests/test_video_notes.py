@@ -7,12 +7,16 @@
 
 import asyncio
 import inspect
+import struct
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 import pytest
 
-from services.video_notes import (CIRCLES, CIRCLES_DIR, MAX_SECONDS, SIDE,
-                                  circle_path, send_circle)
+from services.video_notes import (CIRCLE_SOURCES, CIRCLES, CIRCLES_DIR,
+                                  MAX_SECONDS, SIDE, circle_path, complaint,
+                                  ensure_circles, install, probe, send_circle)
 
 ROOT = Path(__file__).resolve().parents[1]
 LEGAL = (ROOT / "handlers" / "legal.py").read_text(encoding="utf-8")
@@ -30,6 +34,42 @@ class ФейковоеСообщение:
         if self.падает:
             raise RuntimeError("Telegram не принял файл")
         self.отправлено.append((файл, length))
+
+
+def коробка(тег: bytes, тело: bytes) -> bytes:
+    return struct.pack(">I", len(тело) + 8) + тег + тело
+
+
+def ролик(ширина: int, высота: int, секунды: float = 8.0) -> bytes:
+    """Крошечный MP4 ровно из тех коробок, по которым смотрит probe."""
+    mvhd = коробка(b"mvhd", b"\x00" * 12 + struct.pack(">II", 1000, int(секунды * 1000))
+                   + b"\x00" * 80)
+    tkhd = b"\x00" * 76 + struct.pack(">II", ширина << 16, высота << 16)
+    trak = коробка(b"trak", коробка(b"mdia", коробка(b"tkhd", tkhd)))
+    return коробка(b"ftyp", b"isom" + b"\x00" * 8) + коробка(b"moov", mvhd + trak)
+
+
+def квадратный_ролик() -> bytes:
+    return ролик(SIDE, SIDE)
+
+
+def прямоугольный_ролик() -> bytes:
+    return ролик(640, 360)
+
+
+class Раздатчик(BaseHTTPRequestHandler):
+    """Отдаёт один годный кружок и молчит в журнал."""
+
+    def do_GET(self):
+        тело = квадратный_ролик()
+        self.send_response(200)
+        self.send_header("Content-Type", "video/mp4")
+        self.send_header("Content-Length", str(len(тело)))
+        self.end_headers()
+        self.wfile.write(тело)
+
+    def log_message(self, *args):
+        pass
 
 
 def test_there_are_exactly_two_circles_and_both_are_at_the_entrance():
@@ -144,6 +184,108 @@ def test_the_installed_files_fit_what_telegram_draws():
         # И сторона та самая, которую бот обещает Telegram.
         assert размер[0] == SIDE, (имя, размер, SIDE)
         assert секунды is None or секунды <= MAX_SECONDS, (имя, секунды)
+
+
+def test_the_bot_fetches_the_circles_itself():
+    """От человека для этого не требуется ничего.
+
+    Забрать ролики файлом из рабочей сессии нельзя — прокси не пускает к
+    хранилищу HeyGen. Зато у сервера интернет открыт, а бот и так
+    перезапускается каждые полчаса: значит, качает он. Тот же приём, что у
+    фоновых картинок.
+    """
+    assert set(CIRCLE_SOURCES) == set(CIRCLES), set(CIRCLE_SOURCES) ^ set(CIRCLES)
+    for имя, ссылка in CIRCLE_SOURCES.items():
+        assert ссылка.startswith("https://"), имя
+
+    старт = (ROOT / "bot.py").read_text(encoding="utf-8")
+    assert "ensure_circles()" in старт
+    # Фоном, как картинки: без кружков регистрация идёт как шла.
+    assert "asyncio.create_task(ensure_circles())" in старт
+    # И задача снимается на выходе — иначе она переживёт бота.
+    assert "circles_task.cancel()" in старт
+
+
+def test_a_download_that_fails_does_not_stop_the_bot(tmp_path):
+    """Сеть отвалилась, ссылка протухла — бот всё равно встаёт.
+
+    Проверяется на заведомо недоступном адресе и в пустой папке: наружу не
+    должно вылететь ничего, и мусор в папке появиться тоже не должен.
+    """
+    было = dict(CIRCLE_SOURCES)
+    CIRCLE_SOURCES.clear()
+    CIRCLE_SOURCES["hello"] = "https://127.0.0.1:1/нет.mp4"
+    try:
+        asyncio.run(ensure_circles(tmp_path))    # не должно бросить наружу
+    finally:
+        CIRCLE_SOURCES.clear()
+        CIRCLE_SOURCES.update(было)
+    assert list(tmp_path.iterdir()) == []
+    assert circle_path("hello", tmp_path) is None
+
+
+def test_one_circle_falling_does_not_take_the_other_with_it(tmp_path):
+    """Ссылки подписанные и протухают порознь.
+
+    Если первая уже мертва, а вторая жива, забрать надо вторую. Без этого
+    один просроченный адрес молча оставлял бы человека без обоих роликов.
+    """
+    сервер = HTTPServer(("127.0.0.1", 0), Раздатчик)
+    поток = threading.Thread(target=сервер.serve_forever, daemon=True)
+    поток.start()
+    адрес = f"http://127.0.0.1:{сервер.server_address[1]}/ready.mp4"
+
+    было = dict(CIRCLE_SOURCES)
+    CIRCLE_SOURCES.clear()
+    CIRCLE_SOURCES["hello"] = "https://127.0.0.1:1/нет.mp4"
+    CIRCLE_SOURCES["ready"] = адрес
+    try:
+        asyncio.run(ensure_circles(tmp_path))
+    finally:
+        CIRCLE_SOURCES.clear()
+        CIRCLE_SOURCES.update(было)
+        сервер.shutdown()
+
+    assert circle_path("hello", tmp_path) is None
+    assert circle_path("ready", tmp_path) is not None
+    assert (tmp_path / "ready.mp4").read_bytes() == квадратный_ролик()
+
+
+def test_a_bad_file_never_reaches_the_folder(tmp_path):
+    """Кривой кружок Telegram нарисует обрезанным, и заметить это будет
+    некому — кроме человека, который в этот момент регистрируется."""
+    # Не видео вовсе.
+    assert install("hello", b"\x00" * 500, tmp_path) is not None
+    # Прямоугольный кадр: Telegram обрежет всё, что не влезло в круг.
+    assert install("hello", прямоугольный_ролик(), tmp_path) is not None
+    # Имя, которого нет: опечатка в коде, а не молчание.
+    assert install("нет_такого", b"", tmp_path) is not None
+    # Ни один из них до папки не доехал.
+    assert list(tmp_path.iterdir()) == []
+    assert circle_path("hello", tmp_path) is None
+
+    # А годный — доехал, и лежит под своим именем.
+    assert install("hello", квадратный_ролик(), tmp_path) is None
+    assert circle_path("hello", tmp_path) == tmp_path / "hello.mp4"
+    # Временного файла после установки не остаётся.
+    assert not (tmp_path / "hello.part").exists()
+
+    # И жалобы говорят словами, что именно не так.
+    assert "не похоже на видео" in complaint(b"\x00" * 500)
+    assert "квадрат" in complaint(прямоугольный_ролик())
+
+
+def test_the_check_lives_in_one_place():
+    """Двух разных мнений о том, какой файл годный, в проекте быть не должно.
+
+    Ручной скрипт и загрузчик бота обязаны спрашивать одну и ту же функцию:
+    иначе однажды один поставит то, что другой отверг бы.
+    """
+    ручной = (ROOT / "services" / "fetch_circles.py").read_text(encoding="utf-8")
+    assert "from services.video_notes import" in ручной
+    assert "install(имя, data)" in ручной
+    # Своей проверки геометрии у скрипта не осталось.
+    assert "struct.unpack" not in ручной
 
 
 def test_the_service_says_what_each_circle_is_about():

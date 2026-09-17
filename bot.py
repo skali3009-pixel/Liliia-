@@ -13,6 +13,7 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo
 import config
 from db import init_models
 from services.artwork import ensure_artwork
+from services.video_notes import ensure_circles
 from services.fsm_storage import DatabaseStorage
 from services import commands as bot_commands
 from services import identity
@@ -129,6 +130,10 @@ async def main() -> None:
     # Картинки качаются фоном: без них приложение работает, а ждать их
     # на старте незачем. Ссылку держим, чтобы задачу не собрал сборщик.
     artwork_task = asyncio.create_task(ensure_artwork())
+    # Кружки Аи — туда же: без них регистрация идёт как шла, а ждать их
+    # на старте тем более незачем. Скачаются — появятся при следующем
+    # знакомстве.
+    circles_task = asyncio.create_task(ensure_circles())
 
     runner = await start_webapp(bot)
     scheduler = start_scheduler(bot)
@@ -143,6 +148,7 @@ async def main() -> None:
         await dp.start_polling(bot)
     finally:
         artwork_task.cancel()
+        circles_task.cancel()
         scheduler.shutdown(wait=False)
         if runner is not None:
             await runner.cleanup()
