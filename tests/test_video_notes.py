@@ -112,7 +112,7 @@ def test_the_installed_files_fit_what_telegram_draws():
     проверять нечего, а когда появятся — они обязаны быть квадратными и
     короткими, иначе у Аи срежет половину лица.
     """
-    assert MAX_SECONDS == 60 and SIDE == 640
+    assert MAX_SECONDS == 60 and SIDE == 720
     import struct
 
     for имя in CIRCLES:
@@ -141,6 +141,8 @@ def test_the_installed_files_fit_what_telegram_draws():
             i += длина
         assert размер is not None, имя
         assert размер[0] == размер[1], (имя, размер)
+        # И сторона та самая, которую бот обещает Telegram.
+        assert размер[0] == SIDE, (имя, размер, SIDE)
         assert секунды is None or секунды <= MAX_SECONDS, (имя, секунды)
 
 
