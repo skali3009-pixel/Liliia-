@@ -31,6 +31,7 @@ from services.profile import (
     MIN_WEIGHT_KG,
 )
 from services.subscriptions import check_access, ensure_trial
+from services.video_notes import send_circle
 from states.onboarding import OnboardingStates
 from utils.formulas import ActivityLevel, Gender, Goal, calculate_macros, daily_water_ml
 from utils.parsing import parse_float, parse_int
@@ -359,3 +360,6 @@ async def _finish_onboarding(message: Message, state: FSMContext) -> None:
     # человек не читает: он только что ответил на девять вопросов и ждёт,
     # что теперь. Ответ должен быть один и выполнимый прямо сейчас.
     await message.answer(first_step_text(), reply_markup=open_app_keyboard())
+    # И кружком — то же самое голосом. Последним, а не первым: кнопка
+    # «Открыть приложение» должна остаться под большим пальцем.
+    await send_circle(message, "ready")

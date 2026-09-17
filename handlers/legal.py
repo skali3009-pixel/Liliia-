@@ -22,6 +22,7 @@ from db import get_session
 from models import User
 from services import deletion
 from services.legal import LEGAL_VERSION, document_url, links_ready
+from services.video_notes import send_circle
 
 logger = logging.getLogger(__name__)
 router = Router(name="legal")
@@ -117,6 +118,10 @@ async def set_ads(callback: CallbackQuery, state: FSMContext) -> None:
         "Хорошо, буду присылать изредка." if wants else "Хорошо, рекламы не будет."
     )
     await callback.answer()
+
+    # Знакомство: Ая здоровается голосом до первого вопроса. Момент
+    # наступает ровно один раз — согласие спрашивают, пока его нет.
+    await send_circle(callback.message, "hello")
 
     # Дальше — обычный путь: анкета или главное меню.
     from handlers.onboarding import begin_onboarding
