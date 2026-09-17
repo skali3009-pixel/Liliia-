@@ -5491,6 +5491,190 @@ async function dropFriend(friend) {
   }
 }
 
+/* --- Подсказки по кнопкам ------------------------------------------------
+   Анкета в чате спрашивает рост и цель, а что делать на пяти вкладках — не
+   говорит никто. Человек попадает на «Сегодня», видит десяток блоков и
+   закрывает приложение.
+
+   Как сделано и почему именно так:
+
+   - **По одной карточке за раз.** Десять непривычных названий подряд не
+     читают: место теряется после третьего. Тот же приём, что у инструкции
+     про шаги с айфона.
+   - **Подсказка показывает на месте, а не рассказывает.** Блок, про который
+     речь, остаётся освещённым, всё вокруг гаснет. Затемнение — это тень
+     самого окошка, поэтому подсвеченный блок не двигается и его не надо
+     поднимать над остальными: z-index внутри чужих прокручиваемых
+     контейнеров работает не всегда.
+   - **Свой короткий тур у каждой вкладки, при первом заходе на неё.** Всё
+     сразу на «Сегодня» — это двадцать карточек про то, чего человек ещё не
+     видел.
+   - **Чего нет на экране, про то и не рассказываем.** Женский календарь
+     виден не всем, «Твой ход» бывает пустым, карточка занятий прячется.
+     Шаг с пропавшим блоком пропускается молча — подсветить пустое место
+     хуже, чем промолчать.
+   - **Пропускается и вызывается заново** кнопкой в профиле. */
+
+const TOUR_KEY = 'aura.tour';
+
+// Что показываем на каждой вкладке. `sel` — за что цепляемся, `card` —
+// подсветить не сам элемент, а карточку, в которой он лежит.
+const TOUR = {
+  today: [
+    { sel: '#turn', title: 'Твой ход',
+      text: 'Здесь одно дело, которое сейчас полезнее всего. Не список — одно. Пусто — значит, предлагать нечего.' },
+    { sel: '.quick', title: 'Быстрые действия',
+      text: 'Четыре кнопки на каждый день: еда, рассказать как дела, стакан воды, шаги.' },
+    { sel: '.ring-card', title: 'Сколько осталось',
+      text: 'Большое кольцо — калории на сегодня. Кружочки под ним — белки, жиры, углеводы и клетчатка.' },
+    { sel: '#quests', card: true, title: 'Задания дня',
+      text: 'Три главных сразу, остальные под кнопкой. За них приходят кристаллы.' },
+    { sel: '#crystal', title: 'Кристаллы',
+      text: 'Единственный счёт в приложении. Копятся за задания и открывают новые места в «Моём мире».' },
+  ],
+  world: [
+    { sel: '#world-next-card', title: 'Ближайшее открытие',
+      text: 'Сколько кристаллов осталось до нового места.' },
+    { sel: '#team-card', title: 'Команда и друзья',
+      text: 'Можно создать свою команду или вступить по коду. Вместе идти легче.' },
+  ],
+  gym: [
+    { sel: '#pick-card', title: 'Подобрать мне',
+      text: 'Скажи, сколько есть минут, — соберу тренировку. Быстрее, чем выбирать из каталога.' },
+    { sel: '#cardio-card', title: 'Я занималась сама',
+      text: 'Бегала, плавала, танцевала — отметь плитку и запиши минуты. Программу выбирать не надо.' },
+    { sel: '#category-switch', title: 'Направления',
+      text: 'Тело, лицо, глаза, осанка, женское. У каждого свои программы.' },
+  ],
+  cube: [
+    { sel: '#decide-btn', card: true, title: 'Реши за меня',
+      text: 'Один вариант без вопросов — когда думать уже нет сил.' },
+    { sel: '#food-modes', title: 'Четыре режима',
+      text: 'Кубик, быстро, рецепты и заготовки — разные способы найти, что съесть.' },
+    { sel: '#cube-shelf-card', title: 'Сфоткай полку',
+      text: 'Фотография холодильника или полки в магазине — скажу, что из этого собрать.' },
+  ],
+  progress: [
+    { sel: '.stats', title: 'Три показателя',
+      text: 'Вес сейчас, изменение и серия дней. Самое короткое, что стоит знать.' },
+    { sel: '#cycle-card', title: 'Женский календарь',
+      text: 'Отметь день, когда начались месячные. Он объясняет прибавку веса перед ними — она не от того, что ты что-то сделала не так.' },
+    { sel: '.body-card', title: 'Твоё тело',
+      text: 'Сейчас и цель рядом, по зонам. Меняется от замеров, а не от веса.' },
+  ],
+};
+
+function tourSeen() {
+  try {
+    return new Set(JSON.parse(localStorage.getItem(TOUR_KEY) || '[]'));
+  } catch (error) {
+    return new Set();                       // приватный режим — покажем снова
+  }
+}
+
+function rememberTour(screen) {
+  try {
+    const seen = tourSeen();
+    seen.add(screen);
+    localStorage.setItem(TOUR_KEY, JSON.stringify([...seen]));
+  } catch (error) {
+    /* приватный режим — ничего страшного, подсказка просто придёт ещё раз */
+  }
+}
+
+function forgetTours() {
+  try { localStorage.removeItem(TOUR_KEY); } catch (error) { /* пусто */ }
+}
+
+let tourSteps = [];
+let tourAt = 0;
+
+/* Блок, на который показываем. Нет его на экране — нет и шага: подсветить
+   пустое место хуже, чем промолчать. */
+function tourTarget(step) {
+  const found = document.querySelector(step.sel);
+  if (!found) return null;
+  const box = step.card ? (found.closest('.card, .decide, section') || found) : found;
+  // offsetParent пропадает у всего, что скрыто вместе с родителем, — это и
+  // есть «на экране его нет».
+  if (box.hidden || box.offsetParent === null) return null;
+  return box;
+}
+
+function maybeTour(screen) {
+  if (!TOUR[screen] || tourSeen().has(screen)) return;
+  // Даём экрану дорисоваться: данные приходят с сервера, и половины блоков
+  // в первый миг ещё нет.
+  setTimeout(() => startTour(screen), 700);
+}
+
+function startTour(screen, force = false) {
+  if (!TOUR[screen]) return;
+  if (!force && tourSeen().has(screen)) return;
+  // Поверх открытого окна подсказка не лезет: человек сейчас занят другим.
+  if (document.querySelector('.sheet:not([hidden])')) return;
+  tourSteps = TOUR[screen].filter((step) => tourTarget(step));
+  if (tourSteps.length === 0) { rememberTour(screen); return; }
+  tourAt = 0;
+  document.getElementById('tour').hidden = false;
+  showTourStep(screen);
+}
+
+function showTourStep(screen) {
+  const step = tourSteps[tourAt];
+  const box = tourTarget(step);
+  if (!box) { nextTourStep(screen); return; }
+
+  const card = document.getElementById('tour-card');
+  const hole = document.getElementById('tour-hole');
+  const pad = 6;
+
+  /* Карточка стоит внизу, и окошко не должно под неё залезать: подсказка
+     поверх подсвеченного блока читается как ошибка отрисовки. Поэтому сперва
+     считаем свободную полосу — всё, что выше карточки, — и дальше живём
+     только в ней. */
+  const полоса = { верх: 8, низ: window.innerHeight - (card.offsetHeight || 190) - 30 };
+  const высота = полоса.низ - полоса.верх;
+
+  /* Прокрутка мгновенная, а не плавная. Плавная кончается позже, чем мы
+     успеваем померить, и окошко встаёт туда, где блок был, — поймано в
+     браузере на женском календаре. Плавность даёт сама рамка: у неё переход
+     по координатам, и она едет к новому месту на глазах. */
+  box.scrollIntoView({ block: 'start', behavior: 'auto' });
+  let rect = box.getBoundingClientRect();
+
+  // Блок ниже полосы не бывает, а выше — бывает: подвинем его в середину.
+  const надо = Math.min(rect.height + pad * 2, высота);
+  const цель = полоса.верх + Math.max((высота - надо) / 2, 0);
+  window.scrollBy(0, rect.top - pad - цель);
+  rect = box.getBoundingClientRect();
+
+  hole.style.left = `${Math.max(rect.left - pad, 4)}px`;
+  hole.style.top = `${Math.max(rect.top - pad, полоса.верх)}px`;
+  hole.style.width = `${Math.min(rect.width + pad * 2, window.innerWidth - 8)}px`;
+  /* Блок выше полосы обрезаем по верху: подсветить его целиком нельзя, а
+     верх блока и есть то, по чему его узнают. */
+  hole.style.height = `${Math.min(rect.height + pad * 2, полоса.низ - Math.max(rect.top - pad, полоса.верх))}px`;
+
+  document.getElementById('tour-count').textContent =
+    `${tourAt + 1} из ${tourSteps.length}`;
+  document.getElementById('tour-title').textContent = step.title;
+  document.getElementById('tour-text').textContent = step.text;
+  document.getElementById('tour-next').textContent =
+    tourAt === tourSteps.length - 1 ? 'Понятно' : 'Дальше';
+}
+
+function nextTourStep(screen) {
+  tourAt += 1;
+  if (tourAt >= tourSteps.length) { endTour(screen); return; }
+  showTourStep(screen);
+}
+
+function endTour(screen) {
+  document.getElementById('tour').hidden = true;
+  rememberTour(screen);
+}
+
 // Приложение, открытое из подсказки бота, должно открыться там, где
 // действие делается, а не на «Сегодня». Иначе человек, нажавший «подобрать
 // еду», попадает на главный экран и ищет нужную вкладку сам.
@@ -5623,6 +5807,8 @@ function switchScreen(name) {
     refreshBoard().catch((e) => toast(e.message));
   }
   if (name === 'progress' && !progress) refreshProgress().catch((e) => toast(e.message));
+  maybeTour(name);
+
   if (name === 'gym' && !gym) {
     buildPicker();
     refreshWorkouts().catch((e) => toast(e.message));
@@ -5655,6 +5841,24 @@ async function init() {
     haptic();
     await refresh();
   };
+  // Подсказки: «Дальше» ведёт по шагам, «Пропустить» закрывает и больше не
+  // показывает эту вкладку. Экран запоминается в самой кнопке — тур всегда
+  // про ту вкладку, с которой начался.
+  document.getElementById('tour-next').onclick = () => {
+    haptic();
+    nextTourStep(document.querySelector('.tab.active')?.dataset.screen || 'today');
+  };
+  document.getElementById('tour-skip').onclick = () => {
+    haptic();
+    endTour(document.querySelector('.tab.active')?.dataset.screen || 'today');
+  };
+  document.getElementById('tour-again').onclick = () => {
+    forgetTours();
+    haptic();
+    document.getElementById('profile-close').click();
+    startTour(document.querySelector('.tab.active')?.dataset.screen || 'today', true);
+  };
+
   document.getElementById('pill-add').onclick = addPill;
   document.getElementById('pill-form-toggle').onclick = () => {
     const form = document.getElementById('pill-form');
@@ -5820,6 +6024,7 @@ async function init() {
     // анимировал бы то, чего на экране нет.
     playEntrance('today');
     openRequestedScreen();
+    maybeTour('today');
     // Тренировка, прерванная закрытием приложения, предлагается к
     // продолжению — но только сегодня и только если что-то уже сделано.
     offerResume();

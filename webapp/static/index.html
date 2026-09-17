@@ -931,6 +931,23 @@
 <!-- Профиль целиком в приложении: выбор — тапом, числа и аллергии — полем.
      Каждая правка сохраняется сразу, кнопки «Сохранить» нет намеренно:
      полшага меньше, и нельзя уйти, потеряв изменения. -->
+<!-- Подсказки по кнопкам. Затемнение рисуется не отдельным слоем, а
+     огромной тенью самого «окошка»: так подсвеченный блок остаётся на своём
+     месте и его не надо поднимать над остальными — z-index внутри чужих
+     контейнеров работает не всегда. -->
+<div id="tour" hidden>
+  <div id="tour-hole" aria-hidden="true"></div>
+  <div id="tour-card" role="dialog" aria-label="Подсказка">
+    <div class="tour-step" id="tour-count"></div>
+    <h3 id="tour-title"></h3>
+    <p id="tour-text"></p>
+    <div class="tour-acts">
+      <button class="btn primary" id="tour-next">Дальше</button>
+      <button class="btn ghost" id="tour-skip">Пропустить</button>
+    </div>
+  </div>
+</div>
+
 <div id="profile-sheet" class="sheet" hidden>
   <div class="sheet-card">
     <div class="sheet-head">
@@ -1003,6 +1020,9 @@
     <!-- Настройки разворачиваются по кнопке: семь галочек, показанные всем
          сразу, превращают профиль в анкету. -->
     <button class="btn ghost" id="notif-toggle">Настроить подробнее</button>
+    <!-- Тот, кто пролистал подсказки в первый день, не должен остаться без
+         них навсегда: показать заново — одна кнопка. -->
+    <button class="btn ghost" id="tour-again">Показать подсказки заново</button>
     <div id="notif-box" hidden>
       <div class="eyebrow ruled">О чём писать</div>
       <div class="state-options" id="notif-kinds"></div>
