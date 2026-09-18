@@ -75,7 +75,7 @@ def дни(n: int) -> str:
     return f"{n} {plural(n, 'день', 'дня', 'дней')}"
 
 
-async def _thank_for_invite(message: Message, inviter_id: int,
+async def _thank_for_invite(message: Message, кто, inviter_id: int,
                             to_inviter: int, to_newcomer: int) -> None:
     """Сказать обеим сторонам про начисленные дни.
 
@@ -93,7 +93,10 @@ async def _thank_for_invite(message: Message, inviter_id: int,
     if not to_inviter or not inviter_id:
         return
 
-    имя = (message.from_user.full_name or "").split(" ")[0] or "Подруга"
+    # Имя берём у человека, а не у автора сообщения: последний шаг анкеты —
+    # кнопка, и автором там числится бот. Подруга получила бы «AURA завела
+    # профиль по твоей ссылке».
+    имя = (кто.full_name or "").split(" ")[0] or "Подруга"
     try:
         await message.bot.send_message(
             inviter_id,
@@ -133,19 +136,26 @@ class Шаг:
 # он остановился. А главное — вторая копия вопроса рано или поздно разъехалась
 # бы с первой, и человек, вернувшийся в анкету, увидел бы не тот вопрос, на
 # котором стоит.
+# Анкета кончается ровно там, где норму уже можно посчитать. Всё остальное
+# спрашивается после — когда человек уже получил, ради чего отвечал.
+#
+# Что осталось: пол, возраст, рост и вес — из них считается основной обмен;
+# активность и цель — из них суточная норма; тип питания — он один тап и
+# решает, что человеку вообще предлагать (вегану мясо в первый же день —
+# это видимая ошибка, которая дороже одного нажатия).
+#
+# Что ушло: целевой вес и аллергии. Ни то ни другое в норму не входит, зато
+# оба спрашиваются текстом — а набирать труднее, чем нажимать. Из пяти
+# печатаемых ответов осталось три.
 ШАГИ: tuple[Шаг, ...] = (
     Шаг(OnboardingStates.gender, "Укажи свой пол:", gender_keyboard),
     Шаг(OnboardingStates.age, "Сколько тебе полных лет?"),
     Шаг(OnboardingStates.height, "Какой у тебя рост, см? Например: 172"),
     Шаг(OnboardingStates.current_weight, "Какой у тебя текущий вес, кг? Например: 68.5"),
-    Шаг(OnboardingStates.target_weight, "А какой вес хочешь в итоге, кг? Например: 62"),
     Шаг(OnboardingStates.activity_level, "Какой у тебя уровень активности?",
         activity_keyboard),
     Шаг(OnboardingStates.goal, "Какая у тебя цель?", goal_keyboard),
     Шаг(OnboardingStates.diet_type, "Тип питания:", diet_type_keyboard),
-    Шаг(OnboardingStates.allergies,
-        "Есть ли аллергии или непереносимости? Перечисли через запятую "
-        "(или напиши «нет»):"),
 )
 
 ВСЕГО_ШАГОВ = len(ШАГИ)
@@ -384,12 +394,23 @@ async def process_current_weight(message: Message, state: FSMContext) -> None:
         )
         return
     await state.update_data(current_weight_kg=weight)
-    await state.set_state(OnboardingStates.target_weight)
-    await спросить(message, ПО_СОСТОЯНИЮ[OnboardingStates.target_weight.state])
+    await state.set_state(OnboardingStates.activity_level)
+    # Середина анкеты и конец печатания: дальше только кнопки. Слайд стоит
+    # ровно здесь, на том же месте по счёту, что и раньше.
+    await send_slide(message, "why_questions")
+    await спросить(message, ПО_СОСТОЯНИЮ[OnboardingStates.activity_level.state])
 
 
 @router.message(OnboardingStates.target_weight, F.text)
 async def process_target_weight(message: Message, state: FSMContext) -> None:
+    """Прежний шаг. Из анкеты он убран, но обработчик остаётся — и надолго.
+
+    В базе живут незаконченные разговоры (две недели), и в момент обновления
+    кто-то стоит ровно здесь. Убери обработчик — и человек, набравший свой
+    целевой вес, не получит ответа ни от кого: сценарий его съест, а нового
+    вопроса не будет. Поэтому ответ принимается и человек едет дальше по
+    новой, короткой цепочке.
+    """
     weight = parse_float(message.text)
     if weight is None or not (MIN_WEIGHT_KG <= weight <= MAX_WEIGHT_KG):
         await message.answer(
@@ -398,10 +419,6 @@ async def process_target_weight(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(target_weight_kg=weight)
     await state.set_state(OnboardingStates.activity_level)
-    # Середина анкеты. Дальше идут самые скучные вопросы, и здесь чат
-    # закрывают чаще всего: человек отвечает уже пятый раз и не понимает,
-    # зачем у него всё это спрашивают. Слайд отвечает именно на это.
-    await send_slide(message, "why_questions")
     await спросить(message, ПО_СОСТОЯНИЮ[OnboardingStates.activity_level.state])
 
 
@@ -429,18 +446,25 @@ async def process_goal(callback: CallbackQuery, state: FSMContext) -> None:
 async def process_diet_type(callback: CallbackQuery, state: FSMContext) -> None:
     diet_value = callback.data.split(":", 1)[1]
     await state.update_data(diet_type=diet_value)
-    await state.set_state(OnboardingStates.allergies)
     await callback.message.edit_text("Тип питания сохранён ✅")
-    await спросить(callback.message, ПО_СОСТОЯНИЮ[OnboardingStates.allergies.state])
     await callback.answer()
+    # Последний вопрос: дальше сразу норма. Человека сюда передаём его
+    # самого, а не автора сообщения: у сообщения с кнопкой автор — бот, и
+    # профиль записался бы боту.
+    await _finish_onboarding(callback.message, state, callback.from_user)
 
 
 @router.message(OnboardingStates.allergies, F.text)
 async def process_allergies(message: Message, state: FSMContext) -> None:
+    """Прежний последний шаг. Из анкеты убран, обработчик оставлен.
+
+    По той же причине, что и целевой вес: в момент обновления кто-то стоит
+    ровно здесь, и без обработчика его ответ утонул бы вместе с анкетой.
+    """
     text = message.text.strip()
     allergies = None if text.lower() in {"нет", "-", "none", "no"} else text
     await state.update_data(allergies=allergies)
-    await _finish_onboarding(message, state)
+    await _finish_onboarding(message, state, message.from_user)
 
 
 def norms_text(macros, water_ml: int) -> str:
@@ -481,7 +505,62 @@ def open_app_keyboard() -> InlineKeyboardMarkup | None:
     return builder.as_markup()
 
 
-async def _finish_onboarding(message: Message, state: FSMContext) -> None:
+# Цели, при которых число на весах — финиш. У поддержания и рекомпозиции
+# «цель по весу» смысла не имеет, и спрашивать её там незачем: тот же
+# справочник, что и в services/goal.py, но импортировать его сюда ради двух
+# значений — тянуть половину игрового слоя в анкету.
+ЦЕЛИ_С_ВЕСОМ = (GoalEnum.LOSE_WEIGHT, GoalEnum.GAIN_MASS)
+
+
+async def _offer_the_rest(message: Message, *, нужен_вес: bool,
+                          нужны_аллергии: bool) -> None:
+    """Предложить то, что убрано из анкеты. После нормы, не до неё.
+
+    Целевой вес и аллергии в норму не входят, и держать их перед человеком
+    значит брать плату вперёд за то, чего он ещё не видел. Здесь всё иначе:
+    норма уже посчитана, предложение ничего не загораживает, а не ответить
+    на него ничего не стоит — поэтому и кнопки «потом» нет. Кнопка, которая
+    ничего не меняет, учит, что бота можно не слушать.
+
+    Спрашиваем только то, чего правда нет и что правда нужно: цель по весу —
+    лишь там, где число на весах вообще финиш.
+    """
+    from keyboards.profile import CB_EDIT
+
+    строки, builder = [], InlineKeyboardBuilder()
+
+    if нужен_вес:
+        строки.append("• цель по весу — тогда на «Прогрессе» появится линия, "
+                      "к которой идём")
+        builder.button(text="🎯 Цель по весу", callback_data=f"{CB_EDIT}target_weight")
+
+    if нужны_аллергии:
+        строки.append("• аллергии и непереносимости — чтобы не предлагать тебе "
+                      "того, что нельзя")
+        builder.button(text="🚫 Аллергии", callback_data=f"{CB_EDIT}allergies")
+
+    if not строки:
+        return
+
+    builder.adjust(1)
+    шапка = ("Ещё пара необязательных штрихов — норма от них не меняется:"
+             if len(строки) > 1 else
+             "Ещё одна необязательная мелочь — норма от неё не меняется:")
+    await message.answer(
+        шапка + "\n\n" + "\n".join(строки) +
+        "\n\nМожно сейчас, можно когда угодно потом — в профиле.",
+        reply_markup=builder.as_markup(),
+    )
+
+
+async def _finish_onboarding(message: Message, state: FSMContext, кто) -> None:
+    """Посчитать норму и записать профиль.
+
+    `кто` передаётся отдельно от `message` нарочно. Последний шаг анкеты —
+    кнопка, а у сообщения с кнопкой автор бот, не человек: возьми мы автора
+    из сообщения, профиль записался бы боту, а человек остался бы без
+    анкеты навсегда — и молча.
+    """
     data = await state.get_data()
 
     macros = calculate_macros(
@@ -499,18 +578,18 @@ async def _finish_onboarding(message: Message, state: FSMContext) -> None:
     )
 
     async with get_session() as session:
-        user = await session.get(User, message.from_user.id)
+        user = await session.get(User, кто.id)
         if user is None:
-            user = User(id=message.from_user.id)
+            user = User(id=кто.id)
             session.add(user)
 
-        user.username = message.from_user.username
-        user.full_name = message.from_user.full_name
+        user.username = кто.username
+        user.full_name = кто.full_name
         user.gender = GenderEnum(data["gender"])
         user.age = data["age"]
         user.height_cm = data["height_cm"]
         user.current_weight_kg = data["current_weight_kg"]
-        user.target_weight_kg = data["target_weight_kg"]
+        user.target_weight_kg = data.get("target_weight_kg")
         user.activity_level = ActivityLevelEnum(data["activity_level"])
         user.goal = GoalEnum(data["goal"])
         user.diet_type = DietTypeEnum(data["diet_type"])
@@ -529,6 +608,13 @@ async def _finish_onboarding(message: Message, state: FSMContext) -> None:
         # Наградой это становится только при включённой оплате; иначе
         # обе строки вернут нули и никто ничего не получит.
         пригласила, ей_дней, мне_дней = await referrals.reward_signup(session, user.id)
+
+        # Чего человеку ещё не хватает — считаем здесь, пока сессия открыта.
+        # Снаружи это обращение к отсоединённому объекту: сегодня оно живо
+        # только потому, что сессии заведены с expire_on_commit=False, а это
+        # настройка в другом файле и не наше обещание.
+        нужен_вес = not user.target_weight_kg and user.goal in ЦЕЛИ_С_ВЕСОМ
+        нужны_аллергии = not user.allergies
 
     await state.clear()
     await message.answer(
@@ -550,4 +636,9 @@ async def _finish_onboarding(message: Message, state: FSMContext) -> None:
     # И самым последним — подарок за приглашение, если он есть. Последним
     # нарочно: человек только что получил одно понятное действие, и
     # заслонять его хорошей новостью значит менять дело на настроение.
-    await _thank_for_invite(message, пригласила, ей_дней, мне_дней)
+    await _thank_for_invite(message, кто, пригласила, ей_дней, мне_дней)
+
+    # И только теперь — то, что убрали из анкеты. Человек уже получил норму
+    # и одно понятное действие; отсюда любой его ответ добровольный.
+    await _offer_the_rest(message, нужен_вес=нужен_вес,
+                          нужны_аллергии=нужны_аллергии)
