@@ -191,7 +191,7 @@ async def show_my_id(message: Message) -> None:
 
 @router.message(Command("circles"))
 async def preview_circles(message: Message) -> None:
-    """Показать владельцу оба кружка знакомства — по требованию.
+    """Показать владелице оба кружка знакомства — по требованию.
 
     Зачем отдельная команда. Оба момента одноразовые: «Привет» приходит
     после согласия с условиями, «Готово» — после анкеты, и человек, у
@@ -202,11 +202,20 @@ async def preview_circles(message: Message) -> None:
     Заводить ради этого сброс анкеты нельзя: он стёр бы настоящий профиль.
     Поэтому кружки просто присылаются ещё раз, и только владельцу — для
     всех остальных команды словно не существует.
+
+    Чего нет на диске — качается прямо здесь, а не «при следующем
+    перезапуске». Ждать полчаса, чтобы увидеть своё же приветствие, —
+    это не ответ, а отписка; а бот и так умеет качать сам.
+
+    И если не выходит, команда говорит почему. «Кружка нет» без причины —
+    тупик: следующий шаг из него не придумать, а в журнал на сервере
+    владелица не смотрит, она работает с айпада.
     """
     if message.from_user.id not in config.ADMIN_IDS:
         return
 
-    from services.video_notes import CIRCLES, circle_path, send_circle
+    from services.video_notes import (CIRCLES, circle_path, ensure_circles,
+                                      send_circle, состояние)
 
     когда = {
         "hello": "Это приходит сразу после согласия с условиями, "
@@ -214,13 +223,17 @@ async def preview_circles(message: Message) -> None:
         "ready": "А это — когда анкета заполнена, вместе с первым шагом.",
     }
 
-    нет = [имя for имя in CIRCLES if circle_path(имя) is None]
-    if len(нет) == len(CIRCLES):
-        await message.answer(
-            "Кружков пока нет на сервере.\n\n"
-            "Бот качает их сам при запуске, а перезапускается раз в полчаса — "
-            "попробуй эту команду ещё раз позже."
-        )
+    if any(circle_path(имя) is None for имя in CIRCLES):
+        await message.answer("Одного кружка не хватает — качаю, секунду…")
+        await ensure_circles()
+
+    готовые = [имя for имя in CIRCLES if circle_path(имя) is not None]
+    if not готовые:
+        строки = ["Кружков на сервере нет, и скачать их сейчас не вышло.", ""]
+        строки += [f"• {имя} — {состояние(имя)}" for имя in CIRCLES]
+        строки.append("")
+        строки.append("Пришли мне эти строки — по ним видно, где затык.")
+        await message.answer("\n".join(строки))
         return
 
     await message.answer(
@@ -228,18 +241,9 @@ async def preview_circles(message: Message) -> None:
         "Тебе это придёт по команде, ему — само, один раз в жизни."
     )
     for имя, пояснение in когда.items():
-        if circle_path(имя) is None:
-            await message.answer(
-                f"{пояснение}\n\nСам кружок ещё не скачался — бот дотянет "
-                "его при следующем перезапуске."
-            )
-            continue
         await message.answer(пояснение)
-        if not await send_circle(message, имя):
-            await message.answer(
-                "…а вот отправить не вышло. Файл на месте, но Telegram его не "
-                "принял — я записал это в журнал."
-            )
+        if circle_path(имя) is None or not await send_circle(message, имя):
+            await message.answer(f"Кружок не показался. Что с ним: {состояние(имя)}")
 
 
 @router.message(Command("admin"))

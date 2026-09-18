@@ -332,3 +332,63 @@ def test_the_service_says_what_each_circle_is_about():
         assert len(текст) > 20, имя
     assert "Ая" in CIRCLES["hello"]
     assert inspect.getdoc(send_circle)
+
+def test_the_owner_is_not_told_to_wait_half_an_hour():
+    """Кружков нет — команда качает их прямо сейчас, а не отсылает ждать.
+
+    Раньше она отвечала «бот дотянет их при следующем перезапуске».
+    Перезапуск раз в полчаса: чтобы увидеть своё же приветствие, надо было
+    ждать полчаса — это не ответ, а отписка. Качать бот умеет и сам.
+    """
+    кусок = ACCESS.split('@router.message(Command("circles"))', 1)[1]
+    тело = кусок.split("\n@router", 1)[0]
+    assert "await ensure_circles()" in тело, "команда не пробует докачать"
+    # Смотрим на то, что бот говорит человеку, а не на пояснение для себя:
+    # в пояснении слово «перезапуск» стоит законно — там сказано, почему
+    # отсылать к нему нельзя.
+    без_пояснения = тело.split('"""', 2)[-1]
+    assert "перезапуск" not in без_пояснения.lower(), "команда всё ещё отсылает ждать"
+
+
+def test_a_failure_reaches_the_owner_in_words(tmp_path):
+    """«Кружка нет» без причины — тупик: следующий шаг из него не придумать.
+
+    Причина жила только в журнале на сервере, а владелица работает с
+    айпада и туда не смотрит.
+    """
+    from services.video_notes import СБОИ, состояние
+
+    было = dict(CIRCLE_SOURCES)
+    СБОИ.clear()
+    CIRCLE_SOURCES.clear()
+    CIRCLE_SOURCES["hello"] = "https://127.0.0.1:1/нет.mp4"
+    try:
+        asyncio.run(ensure_circles(tmp_path))
+    finally:
+        CIRCLE_SOURCES.clear()
+        CIRCLE_SOURCES.update(было)
+
+    assert "hello" in СБОИ, "причина не запомнилась"
+    рассказ = состояние("hello", tmp_path)
+    assert "файла нет" in рассказ and "не скачался" in рассказ, рассказ
+
+    # А когда файл на месте, рассказ называет размер кадра — по нему и
+    # видно, тот ли файл доехал.
+    assert install("hello", квадратный_ролик(), tmp_path) is None
+    рассказ = состояние("hello", tmp_path)
+    assert "на месте" in рассказ and f"{SIDE}×{SIDE}" in рассказ, рассказ
+    СБОИ.clear()
+
+
+def test_a_refusal_from_telegram_is_remembered_too(tmp_path):
+    """Файл на месте, а кружок не пришёл — это третий случай, и молчать
+    о нём нельзя: снаружи он неотличим от «файла нет»."""
+    from services.video_notes import СБОИ, состояние
+
+    СБОИ.clear()
+    assert install("ready", квадратный_ролик(), tmp_path) is None
+    сообщение = ФейковоеСообщение(падает=True)
+    # Отправка смотрит в рабочую папку, поэтому проверяем саму память о сбое.
+    СБОИ["ready"] = "Telegram не принял файл: VIDEO_NOTE_DIMENSIONS_INVALID"
+    assert "Telegram не принял" in состояние("ready", tmp_path)
+    СБОИ.clear()

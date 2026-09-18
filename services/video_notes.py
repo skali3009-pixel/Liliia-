@@ -150,15 +150,24 @@ def install(name: str, data: bytes, directory: Path | None = None) -> str | None
     return None
 
 
-async def ensure_circles(directory: Path | None = None) -> None:
+# Что в последний раз пошло не так с каждым кружком — словами. Раньше
+# причина уходила только в журнал, а журнал владелице не открыть: она
+# работает с айпада. «Кружка нет» без причины — это тупик, из которого
+# следующий шаг придумать нельзя.
+СБОИ: dict[str, str] = {}
+
+
+async def ensure_circles(directory: Path | None = None) -> list[str]:
     """Докачать недостающие кружки. Падать из-за них бот не должен.
 
     Вызывается фоном при старте, как и картинки: без кружков приложение
-    работает целиком, ждать их незачем.
+    работает целиком, ждать их незачем. Возвращает имена тех, что встали
+    именно сейчас, — чтобы вызвавший мог сказать об этом вслух.
     """
     нужны = [имя for имя in CIRCLE_SOURCES if circle_path(имя, directory) is None]
     if not нужны:
-        return
+        return []
+    встали: list[str] = []
     try:
         timeout = aiohttp.ClientTimeout(total=TIMEOUT_SECONDS)
         async with aiohttp.ClientSession(timeout=timeout) as session:
@@ -168,17 +177,24 @@ async def ensure_circles(directory: Path | None = None) -> None:
                         ответ.raise_for_status()
                         data = await ответ.read()
                 except Exception as ошибка:
+                    СБОИ[имя] = f"не скачался: {ошибка}"
                     logger.warning("Кружок %s не скачался: %s", имя, ошибка)
                     continue
                 беда = install(имя, data, directory)
                 if беда:
+                    СБОИ[имя] = f"пришёл негодным: {беда}"
                     logger.warning("Кружок %s не поставлен: %s", имя, беда)
                 else:
+                    СБОИ.pop(имя, None)
+                    встали.append(имя)
                     logger.info("Кружок %s готов (%.1f МБ)", имя, len(data) / 2**20)
     except asyncio.CancelledError:
         raise
-    except Exception:
+    except Exception as ошибка:
+        for имя in нужны:
+            СБОИ.setdefault(имя, f"скачать не вышло: {ошибка}")
         logger.warning("Кружки скачать не вышло — идём дальше", exc_info=True)
+    return встали
 
 
 def circle_path(name: str, directory: Path | None = None) -> Path | None:
@@ -188,6 +204,28 @@ def circle_path(name: str, directory: Path | None = None) -> Path | None:
     path = (directory or CIRCLES_DIR) / f"{name}.mp4"
     return path if path.is_file() else None
 
+
+
+def состояние(name: str, directory: Path | None = None) -> str:
+    """Что сейчас с этим кружком — одной строкой, словами.
+
+    Нужно владелице: «кружка нет» без причины — тупик, из которого
+    следующий шаг придумать нельзя, а в журнал на сервере она не смотрит.
+    """
+    путь = circle_path(name, directory)
+    if путь is None:
+        беда = СБОИ.get(name)
+        return f"файла нет ({беда})" if беда else "файла нет, и причина неизвестна"
+    данные = путь.read_bytes()
+    размер, секунды = probe(данные)
+    куски = [f"{len(данные) / 2**20:.1f} МБ"]
+    if размер:
+        куски.append(f"{размер[0]}×{размер[1]}")
+    if секунды:
+        куски.append(f"{секунды:.0f} с")
+    строка = "на месте: " + ", ".join(куски)
+    беда = СБОИ.get(name)
+    return f"{строка}; в прошлый раз {беда}" if беда else строка
 
 async def send_circle(message: Message, name: str) -> bool:
     """Отправить кружок. Вернуть, отправился ли.
@@ -200,7 +238,9 @@ async def send_circle(message: Message, name: str) -> bool:
         return False
     try:
         await message.answer_video_note(FSInputFile(path), length=SIDE)
+        СБОИ.pop(name, None)
         return True
-    except Exception:
+    except Exception as ошибка:
+        СБОИ[name] = f"Telegram не принял файл: {ошибка}"
         logger.warning("Кружок %s не отправился — идём дальше", name, exc_info=True)
         return False
