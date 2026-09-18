@@ -54,7 +54,7 @@ def main():
             "-loop", "1", "-i", str(СБОРКА / "overlay.png")]
     for ключ, _, _ in СЦЕНЫ:
         вход += ["-loop", "1", "-i", str(СБОРКА / "caps" / f"{ключ}.png")]
-    вход += ["-loop", "1", "-i", str(СБОРКА / "endtext.png")]
+    вход += ["-loop", "1", "-i", str(СБОРКА / "end.png")]
     и_финал = 3 + len(СЦЕНЫ)
 
     цепь = [

@@ -47,9 +47,14 @@ async def main(ручка: str):
         строка = f'<p class="handle">{ручка}</p>' if ручка else ""
         await page.set_content(СТРАНИЦА % {"handle": строка})
         await page.wait_for_timeout(900)
-        # Прозрачный фон: карточка ложится поверх той же оправы, что и кадры,
-        # иначе свет за экраном на последней секунде погас бы рывком.
         await page.screenshot(path=str(СБОРКА / "endtext.png"), omit_background=True)
+        # И сразу кладём текст на тот же фон, что у кадров. Прозрачной
+        # карточку оставлять нельзя: под ней остаётся кромка окна, и на
+        # последней секунде на экране висит пустой контур телефона.
+        from PIL import Image
+        фон = Image.open(СБОРКА / "bg.png").convert("RGBA")
+        текст = Image.open(СБОРКА / "endtext.png").convert("RGBA")
+        Image.alpha_composite(фон, текст).convert("RGB").save(СБОРКА / "end.png")
         есть = await page.evaluate("document.fonts.check('500 150px \"Playfair Display\"')")
         print("Playfair загружен:", есть, "| ручка:", ручка or "не задана")
         await b.close()

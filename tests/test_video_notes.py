@@ -21,6 +21,12 @@ from services.video_notes import (CIRCLE_SOURCES, CIRCLES, CIRCLES_DIR,
 ROOT = Path(__file__).resolve().parents[1]
 LEGAL = (ROOT / "handlers" / "legal.py").read_text(encoding="utf-8")
 ONBOARDING = (ROOT / "handlers" / "onboarding.py").read_text(encoding="utf-8")
+ACCESS = (ROOT / "handlers" / "access.py").read_text(encoding="utf-8")
+
+# Где кружкам стоять позволено — и больше нигде. Третье место появилось
+# позже двух первых: у Лилии профиль давно заведён, и оба одноразовых
+# момента она пропустила, а знать, что получает новый человек, ей надо.
+РАЗРЕШЕНО = {"legal.py", "onboarding.py", "access.py"}
 
 
 class ФейковоеСообщение:
@@ -82,6 +88,32 @@ def test_there_are_exactly_two_circles_and_both_are_at_the_entrance():
     assert LEGAL.count("send_circle(") == 1
     assert ONBOARDING.count("send_circle(") == 1
 
+    # И ни в одном другом разговоре кружок не всплывает.
+    где = {путь.name for путь in (ROOT / "handlers").glob("*.py")
+           if "send_circle(" in путь.read_text(encoding="utf-8")}
+    assert где == РАЗРЕШЕНО, где ^ РАЗРЕШЕНО
+
+
+def test_the_owners_preview_is_closed_to_everyone_else():
+    """Третье место — показ владелице, и он обязан быть только для неё.
+
+    Открытый всем, он превратился бы в кнопку «покажи кино»: кружок
+    перестал бы быть встречей и стал бы развлечением, а бот живёт по
+    правилу «молчать, когда сказать нечего».
+    """
+    кусок = ACCESS.split('@router.message(Command("circles"))', 1)[1]
+    тело = кусок.split("\n@router", 1)[0]
+    assert "send_circle(" in тело, "показ уехал из своего обработчика"
+    # Проверка хозяина стоит до первой отправки, а не где-нибудь ниже.
+    проверка = тело.index("config.ADMIN_IDS")
+    assert проверка < тело.index("send_circle("), "показ идёт до проверки хозяина"
+    assert "return" in тело[проверка:проверка + 120], "проверка ничего не обрывает"
+
+    # И команда не попала в общий список, где её увидят все.
+    from services import commands as bot_commands
+    assert "circles" not in {имя for имя, _ in bot_commands.public()}
+    assert "circles" in {имя for имя, _ in bot_commands.admin()}
+
 
 def test_each_moment_happens_once_in_a_persons_life():
     """Иначе кружок придёт на каждый /start, и это навязчивость.
@@ -138,11 +170,17 @@ def test_an_unknown_circle_is_a_mistake_in_the_code_and_says_so():
 
 
 def test_the_circles_are_sent_and_awaited():
-    """Забытый await — это «кружок не пришёл», и никакой ошибки."""
-    for текст in (LEGAL, ONBOARDING):
+    """Забытый await — это «кружок не пришёл», и никакой ошибки.
+
+    Требовать, чтобы строка начиналась с `await`, нельзя: вызов законно
+    стоит и внутри условия («не отправился — скажи словами»). Важно
+    только одно — что его дожидаются.
+    """
+    for текст in (LEGAL, ONBOARDING, ACCESS):
         for строка in текст.splitlines():
             if "send_circle(" in строка and "import" not in строка:
-                assert строка.strip().startswith("await "), строка
+                до = строка.split("send_circle(")[0]
+                assert до.rstrip().endswith("await"), строка
 
 
 def test_the_installed_files_fit_what_telegram_draws():

@@ -189,6 +189,59 @@ async def show_my_id(message: Message) -> None:
     await message.answer("\n".join(lines), parse_mode="Markdown")
 
 
+@router.message(Command("circles"))
+async def preview_circles(message: Message) -> None:
+    """Показать владельцу оба кружка знакомства — по требованию.
+
+    Зачем отдельная команда. Оба момента одноразовые: «Привет» приходит
+    после согласия с условиями, «Готово» — после анкеты, и человек, у
+    которого профиль давно заведён, не увидит их уже никогда. Владелице
+    же надо знать, что именно получает новый человек, — иначе судить о
+    первом знакомстве приходится по чужому пересказу.
+
+    Заводить ради этого сброс анкеты нельзя: он стёр бы настоящий профиль.
+    Поэтому кружки просто присылаются ещё раз, и только владельцу — для
+    всех остальных команды словно не существует.
+    """
+    if message.from_user.id not in config.ADMIN_IDS:
+        return
+
+    from services.video_notes import CIRCLES, circle_path, send_circle
+
+    когда = {
+        "hello": "Это приходит сразу после согласия с условиями, "
+                 "перед первым вопросом анкеты.",
+        "ready": "А это — когда анкета заполнена, вместе с первым шагом.",
+    }
+
+    нет = [имя for имя in CIRCLES if circle_path(имя) is None]
+    if len(нет) == len(CIRCLES):
+        await message.answer(
+            "Кружков пока нет на сервере.\n\n"
+            "Бот качает их сам при запуске, а перезапускается раз в полчаса — "
+            "попробуй эту команду ещё раз позже."
+        )
+        return
+
+    await message.answer(
+        "Показываю то же, что видит новый человек. "
+        "Тебе это придёт по команде, ему — само, один раз в жизни."
+    )
+    for имя, пояснение in когда.items():
+        if circle_path(имя) is None:
+            await message.answer(
+                f"{пояснение}\n\nСам кружок ещё не скачался — бот дотянет "
+                "его при следующем перезапуске."
+            )
+            continue
+        await message.answer(пояснение)
+        if not await send_circle(message, имя):
+            await message.answer(
+                "…а вот отправить не вышло. Файл на месте, но Telegram его не "
+                "принял — я записал это в журнал."
+            )
+
+
 @router.message(Command("admin"))
 async def admin_stats(message: Message) -> None:
     """Сводка для владельца: сколько людей и звёзд."""
