@@ -60,10 +60,16 @@ def goal_keyboard(prefix: str = "onb") -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
+# Подписи объясняют разницу, а не только называют диету. Лилия, владелица
+# бота, увидела «Веган» и «Вегетарианское» рядом и решила, что это одна
+# кнопка продублировалась. Диеты разные — у вегана нет ни молока, ни яиц, —
+# но если этого не видно хозяйке, то человеку в анкете не видно тем более.
+# Кнопки идут по одной в строке, место для пояснения есть; длиннее делать
+# нельзя — Telegram обрежет на узком экране.
 DIET_LABELS: dict[DietTypeEnum, str] = {
-    DietTypeEnum.REGULAR: "🍽️ Обычное",
-    DietTypeEnum.VEGAN: "🌱 Веган",
-    DietTypeEnum.VEGETARIAN: "🥦 Вегетарианское",
+    DietTypeEnum.REGULAR: "🍽️ Обычное — ем всё",
+    DietTypeEnum.VEGAN: "🌱 Веган — ни мяса, ни молока",
+    DietTypeEnum.VEGETARIAN: "🥦 Вегетарианское — без мяса",
     DietTypeEnum.GLUTEN_FREE: "🌾 Без глютена",
 }
 

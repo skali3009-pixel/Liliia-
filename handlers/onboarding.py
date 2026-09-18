@@ -32,6 +32,7 @@ from services.profile import (
     MIN_WEIGHT_KG,
 )
 from services.subscriptions import check_access, ensure_trial
+from services.slides import send_slide
 from services.video_notes import send_circle
 from states.onboarding import OnboardingStates
 from utils.formulas import ActivityLevel, Gender, Goal, calculate_macros, daily_water_ml
@@ -245,6 +246,10 @@ async def process_target_weight(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(target_weight_kg=weight)
     await state.set_state(OnboardingStates.activity_level)
+    # Середина анкеты. Дальше идут самые скучные вопросы, и здесь чат
+    # закрывают чаще всего: человек отвечает уже пятый раз и не понимает,
+    # зачем у него всё это спрашивают. Слайд отвечает именно на это.
+    await send_slide(message, "why_questions")
     await message.answer("Какой у тебя уровень активности?", reply_markup=activity_keyboard())
 
 
@@ -382,3 +387,7 @@ async def _finish_onboarding(message: Message, state: FSMContext) -> None:
     # И кружком — то же самое голосом. Последним, а не первым: кнопка
     # «Открыть приложение» должна остаться под большим пальцем.
     await send_circle(message, "ready")
+    # И последним — что приложение не единственный вход. Команды лежат за
+    # синей кнопкой, куда никто не смотрит, а открывать приложение готовы
+    # не все: без этой картинки половина бота для них не существует.
+    await send_slide(message, "in_chat_too")
