@@ -1,7 +1,8 @@
 """Собрать промо-ролик целиком: одна команда вместо шести.
 
-    python -m promo.make            # из корня проекта
-    python make.py                  # из этой папки
+    python promo/make.py                        # всё по умолчанию
+    python promo/make.py @имя_бота              # с именем на карточке
+    python promo/make.py @имя_бота victoria     # и другим голосом
 
 Порядок шагов не случаен: ролики Аи нужны до съёмки, подписи и оправа —
 до монтажа. Съёмка сама себя проверяет и при испорченном захвате
@@ -21,7 +22,7 @@ def шаг(имя: str, *аргументы: str) -> None:
         sys.exit(f"шаг {имя} не прошёл")
 
 
-def main(ручка: str = "") -> None:
+def main(ручка: str = "", голос: str = "") -> None:
     шаг("transcode.py")
     снято = False
     for попытка in range(1, ПОПЫТОК + 1):
@@ -32,6 +33,8 @@ def main(ручка: str = "") -> None:
         print("захват испорчен — снимаю заново")
     if not снято:
         sys.exit(f"запись не удалась {ПОПЫТОК} раза подряд")
+    # Голос — после съёмки: окна реплик считаются по её меткам.
+    шаг("voice.py", *([голос] if голос else []))
     шаг("captions.py")
     шаг("frame.py")
     шаг("endcard.py", *([ручка] if ручка else []))
@@ -41,4 +44,7 @@ def main(ручка: str = "") -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "")
+    доводы = [а for а in sys.argv[1:] if not а.startswith("-")]
+    ручка = next((а for а in доводы if а.startswith("@")), "")
+    голос = next((а for а in доводы if not а.startswith("@")), "")
+    main(ручка, голос)
