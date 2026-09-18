@@ -69,6 +69,22 @@ def nudge_keyboard(*, target: str, cta: str, kind: str,
     return builder.as_markup()
 
 
+def unfinished_keyboard() -> InlineKeyboardMarkup:
+    """Кнопка под письмом про незаконченную анкету.
+
+    Ведёт не в приложение, а ровно туда, где человек остановился: приложение
+    без анкеты не знает ни нормы, ни воды, и показывать ему пустые кольца —
+    это повторить ту же неудачу второй раз. Кнопка та же самая, что и у
+    предложения продолжить в чате: два способа вернуться в анкету разошлись
+    бы между собой молча.
+    """
+    from handlers.onboarding import CB_RESUME
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Продолжить анкету", callback_data=CB_RESUME)
+    return builder.as_markup()
+
+
 def comeback_keyboard() -> InlineKeyboardMarkup | None:
     """Кнопка под письмом тому, кто пропал.
 
@@ -87,4 +103,4 @@ def comeback_keyboard() -> InlineKeyboardMarkup | None:
 
 
 __all__ = ["CB_LATER", "CB_MUTE", "CB_WATER", "SCREEN", "comeback_keyboard",
-           "deep_link", "nudge_keyboard"]
+           "deep_link", "nudge_keyboard", "unfinished_keyboard"]

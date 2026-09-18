@@ -80,7 +80,10 @@ def test_the_slides_stand_where_a_person_gives_up():
     # «Почему столько вопросов» — после целевого веса, перед активностью.
     кусок = ONBOARDING.split('send_slide(message, "why_questions")', 1)
     assert "target_weight_kg=weight" in кусок[0]
-    assert "уровень активности" in кусок[1][:400]
+    # Вопрос про активность теперь не написан здесь словами — он лежит в
+    # общем списке ШАГИ и вызывается по своему состоянию. Сверяем то же
+    # самое: сразу за слайдом идёт именно он, а не какой-нибудь другой.
+    assert "OnboardingStates.activity_level" in кусок[1][:400]
 
     # «И в чате тоже» — после того, как анкета записана.
     кусок = ONBOARDING.split('send_slide(message, "in_chat_too")', 1)[0]

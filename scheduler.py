@@ -10,12 +10,13 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 import config
 from db import get_session
-from keyboards.notifications import comeback_keyboard, nudge_keyboard
+from keyboards.notifications import (comeback_keyboard, nudge_keyboard,
+                                    unfinished_keyboard)
 from keyboards.supplements import reminder_keyboard
 from services.reminders import collect_due_reminders
 from services import fsm_storage
 from services import notifications
-from services import comeback, guard, metrics
+from services import comeback, guard, metrics, unfinished
 from services.gamification import remember_suggestion
 from services import step_results
 from services import owner_reports as owner_reports_text
@@ -134,6 +135,27 @@ async def send_comebacks(bot: Bot) -> None:
             _already_sent.add(key)
         except Exception:
             logger.info("Не получилось позвать обратно %s", letter.user_id)
+
+
+async def send_unfinished(bot: Bot) -> None:
+    """Днём — тем, кто начал анкету и не дошёл до конца. Ровно один раз."""
+    try:
+        async with get_session() as session:
+            letters = await unfinished.due(session)
+    except Exception:
+        logger.exception("Не удалось собрать письма про незаконченную анкету")
+        return
+
+    for letter in letters:
+        key = (letter.user_id, "unfinished")
+        if key in _already_sent:
+            continue
+        try:
+            await bot.send_message(letter.user_id, letter.text,
+                                   reply_markup=unfinished_keyboard())
+            _already_sent.add(key)
+        except Exception:
+            logger.info("Не получилось позвать в анкету %s", letter.user_id)
 
 
 async def send_step_results(bot: Bot) -> None:
@@ -286,6 +308,9 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler.add_job(send_weekly_summaries, "cron", minute="*", args=[bot], id="weekly")
     # Письмо тем, кто пропал. Тоже по местному времени — раз в минуту.
     scheduler.add_job(send_comebacks, "cron", minute="*", args=[bot], id="comeback")
+    # Письмо застрявшему в анкете: тот же местный полдень, тоже раз в минуту.
+    scheduler.add_job(send_unfinished, "cron", minute="*", args=[bot],
+                      id="unfinished")
     # Итог недели по шагам: понедельник, местное утро — тоже раз в минуту.
     scheduler.add_job(send_step_results, "cron", minute="*", args=[bot],
                       id="step_results")

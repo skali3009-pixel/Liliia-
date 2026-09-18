@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
+from typing import Callable
 
 import config
 from services.step_sync import plural
 from aiogram import F, Router
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State
 from aiogram.types import (CallbackQuery, InlineKeyboardMarkup, Message,
                            WebAppInfo)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -115,6 +118,60 @@ async def _accept_team(session, user_id: int, args: str | None) -> str | None:
     return team.name
 
 
+@dataclass(frozen=True)
+class Шаг:
+    """Один вопрос анкеты: где стоим, что спрашиваем и чем отвечают."""
+
+    состояние: State
+    текст: str
+    клавиатура: Callable[[], InlineKeyboardMarkup] | None = None
+
+
+# Девять вопросов одним списком — и это единственное место, где они написаны.
+# Раньше каждый вопрос жил внутри своего обработчика, и посчитать их было
+# неоткуда: ни сказать человеку «третий из девяти», ни вернуть его туда, где
+# он остановился. А главное — вторая копия вопроса рано или поздно разъехалась
+# бы с первой, и человек, вернувшийся в анкету, увидел бы не тот вопрос, на
+# котором стоит.
+ШАГИ: tuple[Шаг, ...] = (
+    Шаг(OnboardingStates.gender, "Укажи свой пол:", gender_keyboard),
+    Шаг(OnboardingStates.age, "Сколько тебе полных лет?"),
+    Шаг(OnboardingStates.height, "Какой у тебя рост, см? Например: 172"),
+    Шаг(OnboardingStates.current_weight, "Какой у тебя текущий вес, кг? Например: 68.5"),
+    Шаг(OnboardingStates.target_weight, "А какой вес хочешь в итоге, кг? Например: 62"),
+    Шаг(OnboardingStates.activity_level, "Какой у тебя уровень активности?",
+        activity_keyboard),
+    Шаг(OnboardingStates.goal, "Какая у тебя цель?", goal_keyboard),
+    Шаг(OnboardingStates.diet_type, "Тип питания:", diet_type_keyboard),
+    Шаг(OnboardingStates.allergies,
+        "Есть ли аллергии или непереносимости? Перечисли через запятую "
+        "(или напиши «нет»):"),
+)
+
+ВСЕГО_ШАГОВ = len(ШАГИ)
+ПО_СОСТОЯНИЮ = {шаг.состояние.state: шаг for шаг in ШАГИ}
+
+
+def номер_шага(шаг: Шаг) -> int:
+    """Который это вопрос по счёту, начиная с единицы."""
+    return ШАГИ.index(шаг) + 1
+
+
+async def спросить(message: Message, шаг: Шаг, *, вступление: str = "") -> None:
+    """Задать вопрос, назвав его номер.
+
+    «Вопрос 3 из 9» стоит здесь не для красоты. Девять вопросов подряд без
+    счётчика — это дорога без конца: человек не знает, ответил он половину
+    или десятую часть, и бросает ровно там, где кажется, что конца нет.
+    Счётчик берётся из списка, а не пишется руками, — иначе однажды окажется
+    «вопрос 7 из 9», а за ним ещё четыре.
+    """
+    шапка = f"Вопрос {номер_шага(шаг)} из {ВСЕГО_ШАГОВ}"
+    текст = f"{вступление}{шапка}\n{шаг.текст}"
+    клавиатура = шаг.клавиатура() if шаг.клавиатура else None
+    await message.answer(текст, reply_markup=клавиатура)
+
+
 def trial_line() -> str:
     """Строка про пробный период — или пустая, пока оплата выключена.
 
@@ -206,8 +263,55 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         await message.answer(greeting, reply_markup=main_menu_keyboard())
         return
 
+    # Человек уже отвечал и вернулся. Раньше здесь стоял state.clear(), и
+    # анкета начиналась с первого вопроса: пять честных ответов стирались
+    # молча, а Telegram именно /start и подсовывает кнопкой. Второй раз
+    # проходить то же самое не станет никто.
+    шаг = ПО_СОСТОЯНИЮ.get(await state.get_state())
+    if шаг is not None:
+        await предложить_продолжить(message, шаг)
+        return
+
     await state.clear()
     await begin_onboarding(message, state, message.from_user.id)
+
+
+CB_RESUME = "onb:resume"
+CB_RESTART = "onb:restart"
+
+
+async def предложить_продолжить(message: Message, шаг: Шаг) -> None:
+    """Вернулся в незаконченную анкету — спрашиваем, продолжить или заново."""
+    осталось = ВСЕГО_ШАГОВ - номер_шага(шаг) + 1
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Продолжить", callback_data=CB_RESUME)
+    builder.button(text="Начать заново", callback_data=CB_RESTART)
+    builder.adjust(1)
+    await message.answer(
+        f"Ты остановилась на вопросе {номер_шага(шаг)} из {ВСЕГО_ШАГОВ}. "
+        f"Осталось {осталось} — это меньше минуты.",
+        reply_markup=builder.as_markup(),
+    )
+
+
+@router.callback_query(F.data == CB_RESUME)
+async def resume_onboarding(callback: CallbackQuery, state: FSMContext) -> None:
+    """Продолжить с того вопроса, на котором стоим."""
+    шаг = ПО_СОСТОЯНИЮ.get(await state.get_state())
+    await callback.answer()
+    if шаг is None:
+        # Состояние успело протухнуть (через две недели строку убирают) —
+        # продолжать нечего, но и молчать нельзя.
+        await begin_onboarding(callback.message, state, callback.from_user.id)
+        return
+    await спросить(callback.message, шаг)
+
+
+@router.callback_query(F.data == CB_RESTART)
+async def restart_onboarding(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    await state.clear()
+    await begin_onboarding(callback.message, state, callback.from_user.id)
 
 
 async def begin_onboarding(message: Message, state: FSMContext, user_id: int) -> None:
@@ -222,12 +326,19 @@ async def begin_onboarding(message: Message, state: FSMContext, user_id: int) ->
         return
 
     await state.set_state(OnboardingStates.gender)
-    trial = trial_line()
-    await message.answer(
-        f"Настроим профиль — это 1-2 минуты.\n{trial}\n"
-        "Укажи свой пол:",
-        reply_markup=gender_keyboard(),
+    # Первая строка называет не только цену, но и награду. «Настроим профиль»
+    # — это работа без обещания: человек видит, сколько с него спросят, и не
+    # видит, что он получит. Норма калорий и воды приходит сразу после
+    # девятого вопроса, считается по его росту, весу и цели — и это
+    # единственное, что мы правда можем пообещать за анкету сегодня, пока
+    # доступ бесплатен для всех и «подарить дни» нечего.
+    вступление = (
+        "Настроим профиль — это 1-2 минуты.\n"
+        "В конце посчитаю твою норму: калории, белки, жиры, углеводы и воду — "
+        "по твоему росту, весу и цели.\n"
+        f"{trial_line()}\n"
     )
+    await спросить(message, ШАГИ[0], вступление=вступление)
 
 
 @router.callback_query(OnboardingStates.gender, F.data.startswith("onb_gender:"))
@@ -236,7 +347,7 @@ async def process_gender(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(gender=gender_value)
     await state.set_state(OnboardingStates.age)
     await callback.message.edit_text(f"Пол: {GENDER_RU[gender_value]} ✅")
-    await callback.message.answer("Сколько тебе полных лет?")
+    await спросить(callback.message, ПО_СОСТОЯНИЮ[OnboardingStates.age.state])
     await callback.answer()
 
 
@@ -248,7 +359,7 @@ async def process_age(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(age=age)
     await state.set_state(OnboardingStates.height)
-    await message.answer("Какой у тебя рост, см? Например: 172")
+    await спросить(message, ПО_СОСТОЯНИЮ[OnboardingStates.height.state])
 
 
 @router.message(OnboardingStates.height, F.text)
@@ -261,7 +372,7 @@ async def process_height(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(height_cm=height)
     await state.set_state(OnboardingStates.current_weight)
-    await message.answer("Какой у тебя текущий вес, кг? Например: 68.5")
+    await спросить(message, ПО_СОСТОЯНИЮ[OnboardingStates.current_weight.state])
 
 
 @router.message(OnboardingStates.current_weight, F.text)
@@ -274,7 +385,7 @@ async def process_current_weight(message: Message, state: FSMContext) -> None:
         return
     await state.update_data(current_weight_kg=weight)
     await state.set_state(OnboardingStates.target_weight)
-    await message.answer("А какой вес хочешь в итоге, кг? Например: 62")
+    await спросить(message, ПО_СОСТОЯНИЮ[OnboardingStates.target_weight.state])
 
 
 @router.message(OnboardingStates.target_weight, F.text)
@@ -291,7 +402,7 @@ async def process_target_weight(message: Message, state: FSMContext) -> None:
     # закрывают чаще всего: человек отвечает уже пятый раз и не понимает,
     # зачем у него всё это спрашивают. Слайд отвечает именно на это.
     await send_slide(message, "why_questions")
-    await message.answer("Какой у тебя уровень активности?", reply_markup=activity_keyboard())
+    await спросить(message, ПО_СОСТОЯНИЮ[OnboardingStates.activity_level.state])
 
 
 @router.callback_query(OnboardingStates.activity_level, F.data.startswith("onb_activity:"))
@@ -300,7 +411,7 @@ async def process_activity(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(activity_level=activity_value)
     await state.set_state(OnboardingStates.goal)
     await callback.message.edit_text("Уровень активности сохранён ✅")
-    await callback.message.answer("Какая у тебя цель?", reply_markup=goal_keyboard())
+    await спросить(callback.message, ПО_СОСТОЯНИЮ[OnboardingStates.goal.state])
     await callback.answer()
 
 
@@ -310,7 +421,7 @@ async def process_goal(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(goal=goal_value)
     await state.set_state(OnboardingStates.diet_type)
     await callback.message.edit_text("Цель сохранена ✅")
-    await callback.message.answer("Тип питания:", reply_markup=diet_type_keyboard())
+    await спросить(callback.message, ПО_СОСТОЯНИЮ[OnboardingStates.diet_type.state])
     await callback.answer()
 
 
@@ -320,9 +431,7 @@ async def process_diet_type(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(diet_type=diet_value)
     await state.set_state(OnboardingStates.allergies)
     await callback.message.edit_text("Тип питания сохранён ✅")
-    await callback.message.answer(
-        "Есть ли аллергии или непереносимости? Перечисли через запятую (или напиши «нет»):"
-    )
+    await спросить(callback.message, ПО_СОСТОЯНИЮ[OnboardingStates.allergies.state])
     await callback.answer()
 
 
