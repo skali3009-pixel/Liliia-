@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 import config
+from services.step_sync import plural
 from aiogram import F, Router
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
@@ -76,6 +77,29 @@ async def _accept_team(session, user_id: int, args: str | None) -> str | None:
     if status not in {"ok", "same"} or team is None:
         return None
     return team.name
+
+
+def trial_line() -> str:
+    """Строка про пробный период — или пустая, пока оплата выключена.
+
+    Вынесена отдельно нарочно: раньше она собиралась прямо в обработчике, и
+    тест проверял не её, а собственную копию тех же слов. Такой тест
+    проходит и на сломанном коде.
+
+    Пока бот бесплатен для всех, «первые дни бесплатно» — обещание платы,
+    которой нет: человек ждёт, что его вот-вот отключат, и не вкладывается.
+
+    А когда оплата включена, важно не «сколько дано», а «зачем столько».
+    Срок здесь не щедрость: это время, за которое заводится привычка. Без
+    второй фразы три недели читаются как «потом заплати», а не как
+    «попробуй по-настоящему».
+    """
+    if not config.PAYWALL:
+        return ""
+    дней = config.TRIAL_DAYS
+    return (f"Первые {дней} {plural(дней, 'день', 'дня', 'дней')} — бесплатно. "
+            "Этого хватает, чтобы записывать еду и движение не «когда "
+            "вспомнил», а каждый день.\n")
 
 
 @router.message(CommandStart())
@@ -156,12 +180,7 @@ async def begin_onboarding(message: Message, state: FSMContext, user_id: int) ->
         return
 
     await state.set_state(OnboardingStates.gender)
-    # Про пробный период говорим, только если оплата вообще включена. Пока
-    # бот бесплатен для всех, «первые семь дней бесплатно» — обещание
-    # платы, которой нет: человек ждёт, что его вот-вот отключат, и не
-    # вкладывается.
-    trial = (f"Первые {config.TRIAL_DAYS} дней бесплатно.\n"
-             if config.PAYWALL else "")
+    trial = trial_line()
     await message.answer(
         f"Настроим профиль — это 1-2 минуты.\n{trial}\n"
         "Укажи свой пол:",

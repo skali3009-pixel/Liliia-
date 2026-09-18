@@ -8,6 +8,8 @@
 import asyncio
 import inspect
 import struct
+import subprocess
+import tempfile
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -190,7 +192,7 @@ def test_the_installed_files_fit_what_telegram_draws():
     проверять нечего, а когда появятся — они обязаны быть квадратными и
     короткими, иначе у Аи срежет половину лица.
     """
-    assert MAX_SECONDS == 60 and SIDE == 720
+    assert MAX_SECONDS == 60 and SIDE == 640
     import struct
 
     for имя in CIRCLES:
@@ -427,3 +429,66 @@ def test_the_retry_costs_nothing_once_the_files_are_in_place(tmp_path):
         CIRCLE_SOURCES.update(было)
     assert встали == [], встали
     assert СБОИ == {}, "задача ходила в сеть, хотя файлы на месте"
+
+def настоящий_ролик(сторона: int, секунд: int = 6) -> bytes:
+    """Живой MP4 со звуком — подделкой из коробок тут не обойтись.
+
+    Уменьшение кадра проверяется настоящим кодировщиком, а он на выдуманных
+    коробках работать не станет. Без такого теста правило «640» держалось бы
+    на слове.
+    """
+    import imageio_ffmpeg
+    ff = imageio_ffmpeg.get_ffmpeg_exe()
+    with tempfile.TemporaryDirectory() as папка:
+        файл = Path(папка) / "v.mp4"
+        subprocess.run(
+            [ff, "-v", "error", "-y", "-f", "lavfi",
+             "-i", f"testsrc=size={сторона}x{сторона}:rate=25:duration={секунд}",
+             "-f", "lavfi", "-i", f"sine=frequency=440:duration={секунд}",
+             "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac",
+             "-shortest", str(файл)], check=True)
+        return файл.read_bytes()
+
+
+def test_a_720_circle_is_brought_down_to_what_telegram_accepts(tmp_path):
+    """HeyGen меньше 720 квадратных не делает, а Telegram 720 не принимает.
+
+    Живой ответ сервера: `Bad Request: wrong video note length`. Значит,
+    уменьшать надо самим, и на установке, а не на каждой отправке.
+    """
+    исход = настоящий_ролик(720)
+    assert probe(исход)[0] == (720, 720)
+    # Слишком большой кадр — беда поправимая, и жалобой она быть не должна.
+    assert complaint(исход) is None
+
+    assert install("hello", исход, tmp_path) is None
+    лежит = (tmp_path / "hello.mp4").read_bytes()
+    assert probe(лежит)[0] == (SIDE, SIDE), probe(лежит)
+
+
+def test_the_voice_survives_the_resize(tmp_path):
+    """В кружке говорят. Потерять звук значит потерять сам смысл."""
+    import imageio_ffmpeg
+    assert install("ready", настоящий_ролик(720), tmp_path) is None
+    ff = imageio_ffmpeg.get_ffmpeg_exe()
+    сведения = subprocess.run([ff, "-hide_banner", "-i", str(tmp_path / "ready.mp4")],
+                              capture_output=True, text=True).stderr
+    assert "Audio:" in сведения, сведения[-400:]
+
+
+def test_circles_already_on_disk_get_fixed_in_place(tmp_path):
+    """Файлы уже лежали в 720: докачивать нечего, а Telegram их не берёт.
+
+    Чинить надо то, что есть. Качать заново нечем — подписанные ссылки
+    живут около недели.
+    """
+    for имя in CIRCLES:
+        (tmp_path / f"{имя}.mp4").write_bytes(настоящий_ролик(720))
+
+    from services.video_notes import fix_installed
+    assert sorted(fix_installed(tmp_path)) == sorted(CIRCLES)
+    for имя in CIRCLES:
+        assert probe((tmp_path / f"{имя}.mp4").read_bytes())[0] == (SIDE, SIDE)
+
+    # Второй заход не трогает ничего: лечение не должно жевать файл по кругу.
+    assert fix_installed(tmp_path) == []

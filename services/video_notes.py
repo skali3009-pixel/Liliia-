@@ -29,6 +29,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import struct
+import subprocess
+import tempfile
 from pathlib import Path
 
 import aiohttp
@@ -74,10 +76,11 @@ CIRCLE_SOURCES: dict[str, str] = {
 # Telegram рисует кружок квадратным и обрезает всё, что в квадрат не влезло.
 # Больше минуты он не принимает вовсе.
 MAX_SECONDS = 60
-# Сторона кадра. Ровно та, в которой сняты кружки: `length` — это подсказка
-# Telegram о размере, и врать в ней значит просить телефон нарисовать круг
-# не того размера, что пришёл.
-SIDE = 720
+# Сторона кадра. Не «на глаз» и не «как пришло»: на 720 живой Telegram
+# отвечает `Bad Request: wrong video note length` — его потолок для кружка
+# 640. Поймано на сервере у Лилии; отсюда не проверить, к api.telegram.org
+# прокси не пускает.
+SIDE = 640
 
 # Дольше этого ролик не ждём: кружок не то, ради чего стоит держать старт.
 TIMEOUT_SECONDS = 180
@@ -115,18 +118,73 @@ def probe(data: bytes) -> tuple[tuple[int, int] | None, float | None]:
 
 
 def complaint(data: bytes) -> str | None:
-    """Чем плох этот файл — словами. Всё хорошо — None."""
+    """Чем плох этот файл **непоправимо** — словами. Всё хорошо — None.
+
+    Сторона здесь не проверяется нарочно: слишком большой кадр — беда
+    поправимая, его уменьшает `to_side`. А вот прямоугольник или ролик
+    длиннее минуты не чинится ничем.
+    """
     размер, секунды = probe(data)
     if размер is None:
         return f"это не похоже на видео ({len(data)} байт)"
     if размер[0] != размер[1]:
         return (f"кадр {размер[0]}×{размер[1]}, а нужен квадрат — "
                 "Telegram обрежет всё лишнее")
-    if размер[0] != SIDE:
-        return f"сторона {размер[0]}, а бот обещает Telegram {SIDE}"
     if секунды is not None and секунды > MAX_SECONDS:
         return f"{секунды:.0f} секунд, а Telegram берёт не больше {MAX_SECONDS}"
     return None
+
+
+def to_side(data: bytes) -> tuple[bytes | None, str | None]:
+    """Привести квадратный ролик к стороне SIDE. Вернуть (байты, жалоба).
+
+    Зачем вообще. HeyGen меньше 720 квадратных не делает — в его списке
+    только 4k, 1080p и 720p. А Telegram на 720 отвечает отказом. Значит,
+    уменьшать надо самим, и делать это один раз при установке, а не при
+    каждой отправке.
+
+    Перекодирование тут законно, в отличие от роликов тренировок: там
+    правило «ставить как есть» защищает движение, снятое художником, а
+    здесь выбора нет — иначе кружка не будет вовсе.
+
+    ffmpeg приезжает пакетом `imageio-ffmpeg`, внутри которого собранный
+    двоичный файл: ставить что-то в систему на сервере не надо.
+    """
+    размер, _ = probe(data)
+    if размер is None:
+        return None, "это не похоже на видео"
+    if размер[0] == SIDE:
+        return data, None
+
+    try:
+        import imageio_ffmpeg
+        ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    except Exception as ошибка:
+        return None, (f"кадр {размер[0]}, нужен {SIDE}, а уменьшить нечем: "
+                      f"{ошибка}")
+
+    with tempfile.TemporaryDirectory() as папка:
+        вход = Path(папка) / "in.mp4"
+        выход = Path(папка) / "out.mp4"
+        вход.write_bytes(data)
+        # Звук переносим как есть: в кружке говорят, и терять голос нельзя.
+        # `+faststart` — чтобы оглавление легло в начало файла.
+        р = subprocess.run(
+            [ffmpeg, "-v", "error", "-y", "-i", str(вход),
+             "-vf", f"scale={SIDE}:{SIDE}:flags=lanczos",
+             "-c:v", "libx264", "-preset", "medium", "-crf", "23",
+             "-pix_fmt", "yuv420p", "-c:a", "copy",
+             "-movflags", "+faststart", str(выход)],
+            capture_output=True, text=True)
+        if р.returncode or not выход.exists():
+            хвост = (р.stderr or "").strip().splitlines()[-1:] or ["без объяснений"]
+            return None, f"не вышло уменьшить кадр: {хвост[0][:200]}"
+        стало = выход.read_bytes()
+
+    проверка = probe(стало)[0]
+    if проверка != (SIDE, SIDE):
+        return None, f"после уменьшения кадр {проверка}, а нужен {SIDE}×{SIDE}"
+    return стало, None
 
 
 def install(name: str, data: bytes, directory: Path | None = None) -> str | None:
@@ -139,6 +197,9 @@ def install(name: str, data: bytes, directory: Path | None = None) -> str | None
     if name not in CIRCLES:
         return f"такого кружка нет; бывают: {', '.join(CIRCLES)}"
     беда = complaint(data)
+    if беда:
+        return беда
+    data, беда = to_side(data)
     if беда:
         return беда
     папка = directory or CIRCLES_DIR
@@ -157,6 +218,39 @@ def install(name: str, data: bytes, directory: Path | None = None) -> str | None
 СБОИ: dict[str, str] = {}
 
 
+def fix_installed(directory: Path | None = None) -> list[str]:
+    """Привести уже лежащие кружки к стороне SIDE. Вернуть имена изменённых.
+
+    Нужно ровно потому, что сначала сюда положили 720: файлы на месте, и
+    докачивать нечего, а Telegram их не принимает. Чинить надо то, что уже
+    есть, — качать заново незачем и нечем, ссылки живут неделю.
+
+    Тихо не падаем: не вышло — записываем причину и оставляем как было.
+    Битый файл на месте рабочего хуже, чем неподходящий.
+    """
+    изменены: list[str] = []
+    for имя in CIRCLES:
+        путь = circle_path(имя, directory)
+        if путь is None:
+            continue
+        было = путь.read_bytes()
+        размер, _ = probe(было)
+        if размер == (SIDE, SIDE):
+            continue
+        стало, беда = to_side(было)
+        if беда or not стало:
+            СБОИ[имя] = f"кадр {размер}, привести к {SIDE} не вышло: {беда}"
+            logger.warning("Кружок %s не ужался: %s", имя, беда)
+            continue
+        временный = путь.with_suffix(".part")
+        временный.write_bytes(стало)
+        временный.replace(путь)
+        СБОИ.pop(имя, None)
+        изменены.append(имя)
+        logger.info("Кружок %s приведён к %d×%d", имя, SIDE, SIDE)
+    return изменены
+
+
 async def ensure_circles(directory: Path | None = None) -> list[str]:
     """Докачать недостающие кружки. Падать из-за них бот не должен.
 
@@ -164,6 +258,9 @@ async def ensure_circles(directory: Path | None = None) -> list[str]:
     работает целиком, ждать их незачем. Возвращает имена тех, что встали
     именно сейчас, — чтобы вызвавший мог сказать об этом вслух.
     """
+    # Сначала лечим уже лежащее: файл на месте, но не той стороны — это
+    # не «нечего делать», а именно то, из-за чего кружок не приходит.
+    fix_installed(directory)
     нужны = [имя for имя in CIRCLE_SOURCES if circle_path(имя, directory) is None]
     if not нужны:
         return []

@@ -10,7 +10,7 @@ import pytest
 
 import config
 from handlers import legal
-from handlers.onboarding import first_step_text, norms_text
+from handlers.onboarding import first_step_text, norms_text, trial_line
 
 
 class FakeMacros:
@@ -20,11 +20,14 @@ class FakeMacros:
 # --- Пробный период --------------------------------------------------------
 
 def _greeting(monkeypatch, paywall: bool) -> str:
-    """Первая фраза анкеты собирается там же, где стоит проверка оплаты."""
+    """Первая фраза анкеты — из самого кода, а не из копии тех же слов.
+
+    Раньше тест собирал строку у себя: такая проверка проходит и на
+    сломанном обработчике, потому что сверяет сама с собой.
+    """
     monkeypatch.setattr(config, "PAYWALL", paywall)
     monkeypatch.setattr(config, "TRIAL_DAYS", 7)
-    trial = f"Первые {config.TRIAL_DAYS} дней бесплатно.\n" if config.PAYWALL else ""
-    return f"Настроим профиль — это 1-2 минуты.\n{trial}\nУкажи свой пол:"
+    return f"Настроим профиль — это 1-2 минуты.\n{trial_line()}\nУкажи свой пол:"
 
 
 def test_no_trial_is_promised_while_the_bot_is_free(monkeypatch):
@@ -32,7 +35,32 @@ def test_no_trial_is_promised_while_the_bot_is_free(monkeypatch):
 
 
 def test_the_trial_is_named_when_payment_is_actually_on(monkeypatch):
-    assert "7 дней бесплатно" in _greeting(monkeypatch, paywall=True)
+    assert "7 дней — бесплатно" in _greeting(monkeypatch, paywall=True)
+
+
+def test_the_number_of_days_is_declined_properly(monkeypatch):
+    """«Первые 21 дней» — не по-русски, а срок мы как раз меняем.
+
+    Число в этой строке берётся из настройки, и при 21 обычное «дней»
+    становится ошибкой в первом же сообщении новому человеку.
+    """
+    monkeypatch.setattr(config, "PAYWALL", True)
+    ожидаем = {1: "1 день", 2: "2 дня", 5: "5 дней", 7: "7 дней",
+               11: "11 дней", 21: "21 день", 22: "22 дня", 30: "30 дней"}
+    for дней, строка in ожидаем.items():
+        monkeypatch.setattr(config, "TRIAL_DAYS", дней)
+        assert f"Первые {строка} — бесплатно" in trial_line(), (дней, trial_line())
+
+
+def test_the_trial_says_what_the_time_is_for(monkeypatch):
+    """Срок без объяснения читается как «потом заплати»."""
+    monkeypatch.setattr(config, "PAYWALL", True)
+    monkeypatch.setattr(config, "TRIAL_DAYS", 21)
+    строка = trial_line()
+    assert "каждый день" in строка, строка
+    # И это не обещание результата — те же правила, что у техники и тура.
+    for запрет in ("похуде", "гарантирова", "результат за", "избавит"):
+        assert запрет not in строка.lower(), запрет
 
 
 def test_the_greeting_source_really_checks_the_paywall():
@@ -41,7 +69,7 @@ def test_the_greeting_source_really_checks_the_paywall():
 
     source = (Path(__file__).resolve().parent.parent / "handlers" /
               "onboarding.py").read_text(encoding="utf-8")
-    assert "if config.PAYWALL else" in source
+    assert "if not config.PAYWALL:" in source
     assert source.count("config.PAYWALL") >= 2
 
 
