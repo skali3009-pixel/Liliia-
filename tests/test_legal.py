@@ -127,3 +127,40 @@ def test_documents_read_correctly_for_any_form_of_owner(monkeypatch, owner):
         # перед именем владельца.
         assert f"офертой {owner}" not in page
         assert f"от {owner}" not in page
+
+
+def test_missing_email_leaves_a_visible_hole(monkeypatch):
+    """Пустая почта рвёт фразу прямо в документе — и это должно быть видно.
+
+    Без адреса в политике остаётся «или письмом на .», а в подвале — «ИП … · ».
+    Чинить это подстановкой чего-нибудь нельзя: закон требует настоящий способ
+    связи с оператором, а выдуманный адрес хуже пустого — по нему напишут в
+    никуда. Поэтому тест не требует, чтобы дыры не было: он требует, чтобы
+    про неё сказали владельцу словами.
+    """
+    from services import status
+
+    monkeypatch.setattr(config, "LEGAL_EMAIL", "")
+    строки = "\n".join(status._legal_lines())
+    assert "почта для обращений" in строки, строки
+
+    # А когда почта есть — в документах не остаётся оборванных хвостов.
+    monkeypatch.setattr(config, "LEGAL_EMAIL", "hello@example.com")
+    полный = "\n".join(status._legal_lines())
+    assert "Не хватает" not in полный
+    for slug in DOCUMENTS:
+        страница = render(slug)
+        assert "на ." not in страница, slug
+        assert "почта: <" not in страница.lower(), slug
+
+
+def test_status_names_exactly_what_is_missing(monkeypatch):
+    """«Реквизиты не заполнены» без имени поля — это «заполни всё заново»."""
+    from services import status
+
+    monkeypatch.setattr(config, "LEGAL_OWNER", "")
+    monkeypatch.setattr(config, "LEGAL_REQUISITES", "ИНН 1, ОГРНИП 2")
+    monkeypatch.setattr(config, "LEGAL_EMAIL", "hello@example.com")
+    строки = "\n".join(status._legal_lines())
+    assert "имя владельца" in строки
+    assert "реквизиты," not in строки and "почта" not in строки, строки

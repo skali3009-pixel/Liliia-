@@ -104,11 +104,24 @@ def _invite_lines() -> list[str]:
 
 
 def _legal_lines() -> list[str]:
-    filled = all((config.LEGAL_OWNER, config.LEGAL_EMAIL))
+    """Что с документами. Недостающее называется поимённо.
+
+    Раньше строка говорила «реквизиты заполнены — нет» и советовала заново
+    вписать имя, реквизиты и почту. Когда не хватает одной почты, это
+    предложение перезаполнить всё: человек не знает, чего именно нет, и либо
+    вводит по кругу то, что уже стоит, либо не делает ничего.
+    """
+    нет = [имя for имя, значение in (
+        ("имя владельца", config.LEGAL_OWNER),
+        ("реквизиты", config.LEGAL_REQUISITES),
+        ("почта для обращений", config.LEGAL_EMAIL),
+    ) if not значение]
+
     lines = [f"📄 Документы: редакция {LEGAL_VERSION}, реквизиты заполнены — "
-             f"{YES if filled else NO}"]
-    if not filled:
-        lines.append("   Заполнить: bash set-legal.sh — спросит имя, реквизиты и почту")
+             f"{YES if not нет else NO}"]
+    if нет:
+        lines.append(f"   Не хватает: {', '.join(нет)}")
+        lines.append("   Заполнить: bash set-legal.sh")
     if not config.WEBAPP_URL:
         lines.append("   Нет WEBAPP_URL — ссылки на документы в боте не показываются")
     return lines
