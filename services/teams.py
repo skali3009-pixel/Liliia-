@@ -26,6 +26,10 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import Team, TeamMember, User
+
+# Приставка в ссылке: t.me/бот?start=team_КОД. Как и у друзей — одна на весь
+# проект, чтобы выпуск ссылок и приём переходов не разъехались молча.
+TEAM_PREFIX = "team_"
 from services import steps as step_service
 from utils.timeframe import DEFAULT_TIMEZONE
 
@@ -104,6 +108,13 @@ async def create(session: AsyncSession, user_id: int, name: str) -> tuple[str, T
     session.add(TeamMember(team_id=team.id, user_id=user_id))
     await session.commit()
     return "ok", team
+
+
+def invite_link(code: str) -> str:
+    """Ссылка-приглашение в команду. Пустая, пока бот не знает своего имени."""
+    from services.identity import start_link
+
+    return start_link(f"{TEAM_PREFIX}{code}" if code else "")
 
 
 async def join(session: AsyncSession, user_id: int, code: str) -> tuple[str, Team | None]:

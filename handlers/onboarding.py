@@ -31,6 +31,7 @@ from services.profile import (
     MIN_HEIGHT_CM,
     MIN_WEIGHT_KG,
 )
+from services import referrals
 from services.subscriptions import check_access, ensure_trial
 from services.slides import send_slide
 from services.video_notes import send_circle
@@ -44,18 +45,17 @@ router = Router(name="onboarding")
 GENDER_RU = {GenderEnum.MALE.value: "мужской", GenderEnum.FEMALE.value: "женский"}
 
 
-INVITE_PREFIX = "friend_"
-TEAM_PREFIX = "team_"
 
 
 async def _accept_invite(session, user_id: int, args: str | None) -> str | None:
     """Принять приглашение из ссылки. Возвращает имя друга или None."""
-    if not args or not args.startswith(INVITE_PREFIX):
-        return None
-
     from services import friends
 
-    owner = await friends.owner_of(session, args[len(INVITE_PREFIX):])
+    code = friends.code_from_args(args)
+    if code is None:
+        return None
+
+    owner = await friends.owner_of(session, code)
     if owner is None or owner == user_id:
         return None
 
@@ -67,14 +67,49 @@ async def _accept_invite(session, user_id: int, args: str | None) -> str | None:
     return (friend.full_name or "").split(" ")[0] if friend else "друг"
 
 
+def дни(n: int) -> str:
+    """«7 дней», «1 день» — число здесь всегда рядом со словом."""
+    return f"{n} {plural(n, 'день', 'дня', 'дней')}"
+
+
+async def _thank_for_invite(message: Message, inviter_id: int,
+                            to_inviter: int, to_newcomer: int) -> None:
+    """Сказать обеим сторонам про начисленные дни.
+
+    Приглашающей пишем в её собственный чат, а она бота могла и заблокировать:
+    отправка в чужой чат обязана уметь не получиться. Уронить здесь анкету
+    новенькой из-за чужой настройки приватности нельзя — она пришла заводить
+    профиль, а не доставлять подруге сообщение.
+    """
+    if to_newcomer:
+        await message.answer(
+            f"И ещё: ты пришла по ссылке подруги — держи {дни(to_newcomer)} "
+            "доступа сверх обычного срока."
+        )
+
+    if not to_inviter or not inviter_id:
+        return
+
+    имя = (message.from_user.full_name or "").split(" ")[0] or "Подруга"
+    try:
+        await message.bot.send_message(
+            inviter_id,
+            f"{имя} завела профиль по твоей ссылке — тебе {дни(to_inviter)} "
+            "доступа в подарок. Спасибо!"
+        )
+    except Exception as error:  # noqa: BLE001 — чужой чат нам не подчиняется
+        logger.warning("Не смогли поблагодарить %s за приглашение: %s",
+                       inviter_id, error)
+
+
 async def _accept_team(session, user_id: int, args: str | None) -> str | None:
     """Вступить в команду из ссылки. Возвращает её название или None."""
-    if not args or not args.startswith(TEAM_PREFIX):
-        return None
-
     from services import teams
 
-    status, team = await teams.join(session, user_id, args[len(TEAM_PREFIX):])
+    if not args or not args.startswith(teams.TEAM_PREFIX):
+        return None
+
+    status, team = await teams.join(session, user_id, args[len(teams.TEAM_PREFIX):])
     if status not in {"ok", "same"} or team is None:
         return None
     return team.name
@@ -129,6 +164,12 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         # Ссылка в команду: t.me/бот?start=team_КОД. Тоже сразу — тот, кто
         # перешёл по ссылке, уже согласился.
         team_name = await _accept_team(session, user.id, command.args)
+
+        # И отдельной строкой — кто кого привёл. Дружбу разрывают, а эта
+        # запись остаётся: по ней потом начисляют дни, и ссора двух подруг
+        # не должна отменять заработанное. Пока оплата выключена, запись
+        # только копится и ничего не выдаёт.
+        await referrals.remember(session, user.id, command.args)
 
         # Пробный период отсчитывается от первого «Привет», а не от конца анкеты.
         await ensure_trial(session, user.id)
@@ -375,6 +416,11 @@ async def _finish_onboarding(message: Message, state: FSMContext) -> None:
 
         await session.commit()
 
+        # Анкета дошла до конца — значит, пришёл человек, а не нажатие.
+        # Наградой это становится только при включённой оплате; иначе
+        # обе строки вернут нули и никто ничего не получит.
+        пригласила, ей_дней, мне_дней = await referrals.reward_signup(session, user.id)
+
     await state.clear()
     await message.answer(
         norms_text(macros, water_ml),
@@ -391,3 +437,8 @@ async def _finish_onboarding(message: Message, state: FSMContext) -> None:
     # синей кнопкой, куда никто не смотрит, а открывать приложение готовы
     # не все: без этой картинки половина бота для них не существует.
     await send_slide(message, "in_chat_too")
+
+    # И самым последним — подарок за приглашение, если он есть. Последним
+    # нарочно: человек только что получил одно понятное действие, и
+    # заслонять его хорошей новостью значит менять дело на настроение.
+    await _thank_for_invite(message, пригласила, ей_дней, мне_дней)

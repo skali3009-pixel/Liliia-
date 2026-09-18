@@ -18,6 +18,21 @@ import config
 logger = logging.getLogger(__name__)
 
 
+def start_link(payload: str) -> str:
+    """Ссылка вида t.me/бот?start=ЧТО-ТО. Пустая, пока имя не известно.
+
+    Единственное место, где такая ссылка собирается. Их две — «позвать в
+    друзья» и «позвать в команду», — и ломаются они всегда вместе, потому что
+    зависят от одного и того же: знает ли бот своё имя. Собранные по разным
+    углам, они и чинились бы по разным углам, а поломка тут тихая: экраны
+    открываются, кнопка отвечает «ссылка появится позже», и позвать
+    кого-нибудь нельзя вообще.
+    """
+    if not config.BOT_USERNAME or not payload:
+        return ""
+    return f"https://t.me/{config.BOT_USERNAME}?start={payload}"
+
+
 async def learn_username(bot) -> str:
     """Узнать имя у Telegram, если в .env его нет. Возвращает то, что вышло."""
     if config.BOT_USERNAME:
@@ -37,4 +52,4 @@ async def learn_username(bot) -> str:
     return config.BOT_USERNAME
 
 
-__all__ = ["learn_username"]
+__all__ = ["learn_username", "start_link"]

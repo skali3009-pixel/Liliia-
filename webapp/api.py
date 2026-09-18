@@ -1294,8 +1294,7 @@ async def get_friends(request: web.Request) -> web.Response:
         goal = await challenges.current(session, user_id, timezone_name=tz)
         code = await friends.invite_code(session, user_id)
 
-    link = (f"https://t.me/{config.BOT_USERNAME}?start=friend_{code}"
-            if config.BOT_USERNAME else "")
+    link = friends.invite_link(code)
     return web.json_response({
         "friends": [card.to_dict() for card in cards],
         "count": len(cards) - 1,
@@ -1700,9 +1699,7 @@ async def get_steps_board(request: web.Request) -> web.Response:
                                                   timezone_name=tz, period=last_period)
         mine = next((row for row in last_rows if row.user_id == user_id), None)
 
-    invite = ""
-    if team is not None and config.BOT_USERNAME:
-        invite = f"https://t.me/{config.BOT_USERNAME}?start=team_{team.code}"
+    invite = teams.invite_link(team.code) if team is not None else ""
 
     return web.json_response({
         "team": dict(team.to_dict(), invite=invite) if team else None,

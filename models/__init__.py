@@ -17,6 +17,7 @@ from models.day_stat import DayStat
 from models.meal import Meal, MealSourceEnum, MealTypeEnum
 from models.friendship import Friendship, Invite
 from models.fsm import FsmState
+from models.referral import Referral
 from models.steps import StepLog
 from models.team import Team, TeamMember
 from models.user_prep import UserPrep
@@ -70,6 +71,7 @@ __all__ = [
     "UserPrep",
     "Friendship",
     "Invite",
+    "Referral",
     "Subscription",
     "SubscriptionStatus",
     "SubscriptionSource",

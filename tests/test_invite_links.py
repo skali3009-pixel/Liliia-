@@ -77,11 +77,60 @@ def test_the_status_report_says_when_invites_are_broken(monkeypatch):
     assert "работают" in fine and "aura_bot" in fine
 
 
-def test_both_invite_links_depend_on_the_same_name():
-    """Друзья и команда ломаются вместе — значит, чинить надо одно место."""
+def test_both_invite_links_depend_on_the_same_name(monkeypatch):
+    """Друзья и команда ломаются вместе — значит, чинить надо одно место.
+
+    Раньше это проверялось подсчётом слова BOT_USERNAME в файле приложения:
+    обе ссылки собирались там руками. Теперь их собирает одна функция, и
+    гарантия переехала за ними — она сильнее прежней, потому что проверяет
+    не «сколько раз упомянуто», а что вторая ссылка правда идёт через ту же
+    дверь.
+    """
+    from services import friends, identity, teams
+
+    monkeypatch.setattr(identity.config, "BOT_USERNAME", "aura_bot")
+    assert friends.invite_link("КОД") == "https://t.me/aura_bot?start=friend_КОД"
+    assert teams.invite_link("КОД") == "https://t.me/aura_bot?start=team_КОД"
+
+    # Имя пропало — молчат обе, а не одна.
+    monkeypatch.setattr(identity.config, "BOT_USERNAME", "")
+    assert friends.invite_link("КОД") == ""
+    assert teams.invite_link("КОД") == ""
+
+
+def test_nobody_builds_an_invite_link_by_hand():
+    """Вторая такая строка где-нибудь ещё — это вторая ссылка, которую забудут починить."""
     from pathlib import Path
 
-    api = (Path(__file__).resolve().parent.parent / "webapp" /
-           "api.py").read_text(encoding="utf-8")
-    assert api.count("config.BOT_USERNAME") >= 3
-    assert "start=friend_" in api and "start=team_" in api
+    корень = Path(__file__).resolve().parent.parent
+    свои = {корень / "services" / "identity.py"}
+
+    виноватые = []
+    for файл in корень.rglob("*.py"):
+        if файл in свои or "/tests/" in str(файл) or "/promo/" in str(файл):
+            continue
+        # Ищем именно сборку адреса, а не слова о ней: объяснять в
+        # комментарии, как выглядит ссылка, никому не запрещено.
+        if "https://t.me/" in файл.read_text(encoding="utf-8"):
+            виноватые.append(str(файл.relative_to(корень)))
+
+    assert not виноватые, f"ссылка собирается мимо identity.start_link: {виноватые}"
+
+
+def test_the_invite_prefix_is_written_once():
+    """Приставку меняют в одном месте, иначе выпуск и приём разъедутся молча."""
+    from pathlib import Path
+
+    корень = Path(__file__).resolve().parent.parent
+    хозяева = {"services/friends.py": '"friend_"', "services/teams.py": '"team_"'}
+
+    for файл in корень.rglob("*.py"):
+        имя = str(файл.relative_to(корень))
+        if имя.startswith(("tests/", "promo/")):
+            continue
+        текст = файл.read_text(encoding="utf-8")
+        for хозяин, приставка in хозяева.items():
+            if имя == хозяин:
+                assert текст.count(приставка) == 1, имя
+            else:
+                assert приставка not in текст, f"{имя} держит свою копию {приставка}"

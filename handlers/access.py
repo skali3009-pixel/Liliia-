@@ -23,6 +23,8 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 from db import get_session
 from models import SubscriptionSource
+from services import friends, referrals
+from services.step_sync import plural
 from services.subscriptions import Access, activate, check_access, grant_lifetime, stats
 
 logger = logging.getLogger(__name__)
@@ -140,6 +142,88 @@ async def approve_payment(query: PreCheckoutQuery) -> None:
     await query.answer(ok=True)
 
 
+@router.message(Command("referral"))
+async def my_invite_link(message: Message) -> None:
+    """Личная ссылка-приглашение и что по ней уже произошло.
+
+    Ссылка была и раньше, но лежала внутри приложения, на экране «Друзья».
+    Человек, который бота в чате и открывает, про неё не знал вовсе — а
+    позвать подругу хотят чаще из переписки, чем из приложения.
+
+    Текст меняется вместе с оплатой. Пока доступ бесплатен для всех, про
+    подаренные дни здесь нет ни слова: обещать подарок, которым нельзя
+    воспользоваться, хуже, чем не обещать ничего.
+    """
+    async with get_session() as session:
+        code = await friends.invite_code(session, message.from_user.id)
+        итог = await referrals.summary(session, message.from_user.id)
+
+    link = friends.invite_link(code)
+    if not link:
+        await message.answer(
+            "Ссылка появится, когда бот узнает своё имя в Telegram. "
+            "Это чинится на стороне бота, не у тебя — напиши /problem."
+        )
+        return
+
+    строки = ["Твоя ссылка — по ней подруга попадёт сразу к тебе в друзья:",
+              "", link, ""]
+
+    if config.PAYWALL:
+        дней_за_анкету = referrals.SIGNUP_DAYS_INVITER
+        дней_за_оплату = referrals.PAYMENT_DAYS_INVITER
+        строки += [
+            f"Дошла до конца анкеты — {дней_за_анкету} "
+            f"{plural(дней_за_анкету, 'день', 'дня', 'дней')} доступа тебе и "
+            f"столько же ей. Так до {referrals.SIGNUP_LIMIT} подруг.",
+            f"Оформила подписку — ещё {дней_за_оплату} "
+            f"{plural(дней_за_оплату, 'день', 'дня', 'дней')} тебе. "
+            "Тут ограничения нет.",
+            "",
+        ]
+        if итог.invited:
+            строки.append(
+                f"Пришло по ссылке: {итог.invited} · завели профиль: "
+                f"{итог.signed_up} · оформили подписку: {итог.paid}"
+            )
+            строки.append(
+                f"Начислено: {итог.days_earned} "
+                f"{plural(итог.days_earned, 'день', 'дня', 'дней')}. "
+                f"Наград за анкету осталось: {итог.signups_left}."
+            )
+    else:
+        строки.append("Вы окажетесь в общем недельном рейтинге и увидите "
+                      "кристаллы и серии друг друга.")
+        if итог.invited:
+            строки.append("")
+            строки.append(f"Пришло по ссылке: {итог.invited} · завели "
+                          f"профиль: {итог.signed_up}")
+
+    await message.answer("\n".join(строки), disable_web_page_preview=True)
+
+
+async def _thank_inviter_for_payment(message: Message, inviter_id: int,
+                                     days: int) -> None:
+    """Сказать приглашающей про дни за оплату — не называя, кто заплатил.
+
+    Кто по чьей ссылке пришёл, обе стороны и так знают: они друзья в
+    приложении. А вот «твоя подруга заплатила» — это уже про чужие деньги,
+    и человек не просил об этом рассказывать. Поэтому фраза безымянная.
+    """
+    if not days or not inviter_id:
+        return
+
+    слово = plural(days, "день", "дня", "дней")
+    try:
+        await message.bot.send_message(
+            inviter_id,
+            f"Человек, которого ты привела, оформил подписку — тебе "
+            f"{days} {слово} доступа в подарок. Спасибо!"
+        )
+    except Exception as error:  # noqa: BLE001 — чужой чат нам не подчиняется
+        logger.warning("Не смогли поблагодарить %s за оплату: %s", inviter_id, error)
+
+
 @router.message(F.successful_payment)
 async def payment_received(message: Message) -> None:
     """Оплата прошла — открываем доступ. Сюда же приходят автопродления."""
@@ -155,6 +239,12 @@ async def payment_received(message: Message) -> None:
             charge_id=payment.telegram_payment_charge_id or "",
             is_recurring=bool(payment.is_recurring),
         )
+        # Если этого человека кто-то привёл — приглашающей идут дни. Платят
+        # один раз за приведённого, сколько бы он потом ни продлевал:
+        # награда за человека, а не процент с каждого платежа.
+        пригласила, дней = await referrals.reward_payment(session, message.from_user.id)
+
+    await _thank_inviter_for_payment(message, пригласила, дней)
 
     if payment.is_recurring and not payment.is_first_recurring:
         await message.answer("⭐ Подписка продлена на месяц. Спасибо!")

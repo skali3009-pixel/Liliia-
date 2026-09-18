@@ -29,6 +29,28 @@ from utils.timeframe import DEFAULT_TIMEZONE, today_in
 # а ссылка остаётся короткой.
 CODE_LENGTH = 8
 
+# Приставка в ссылке: t.me/бот?start=friend_КОД. Живёт здесь в единственном
+# числе нарочно. Она была написана словом в трёх местах сразу — в обработчике
+# «Начать», в приложении и в наградах за приглашения; поменяй её в одном, и
+# ссылки продолжат выпускаться, переходы продолжат приниматься, а связь между
+# ними молча оборвётся. Сломается при этом не ссылка, а доверие: человек
+# отправит её подруге, та перейдёт, и не случится ничего.
+INVITE_PREFIX = "friend_"
+
+
+def invite_link(code: str) -> str:
+    """Ссылка-приглашение в друзья. Пустая, пока бот не знает своего имени."""
+    from services.identity import start_link
+
+    return start_link(f"{INVITE_PREFIX}{code}" if code else "")
+
+
+def code_from_args(args: str | None) -> str | None:
+    """Код из аргумента ссылки, либо None, если ссылка не про приглашение."""
+    if not args or not args.startswith(INVITE_PREFIX):
+        return None
+    return args[len(INVITE_PREFIX):].strip() or None
+
 # Больше этого числа друзей приложение не держит: список, который не
 # помещается на экран, никто не читает, а соревнование теряет смысл.
 MAX_FRIENDS = 20
