@@ -21,6 +21,7 @@ from services import step_results
 from services import owner_reports as owner_reports_text
 from services import usage
 from services.selfupdate import run_update
+from services.video_notes import ensure_circles
 from services.subscriptions import expire_overdue, expiring_soon, mark_warned
 from services.weekly import build_summary, render, users_for_summary
 
@@ -297,6 +298,14 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     # Срочные проверки. Раз в десять минут: чаще нет смысла — диск и расход
     # так быстро не меняются, — а реже владелец узнаёт слишком поздно.
     scheduler.add_job(watch_health, "cron", minute="*/10", args=[bot], id="watch")
+
+    # Кружки знакомства: если их ещё нет, пробуем докачать. Одной попытки
+    # при запуске мало — сеть могла моргнуть ровно в ту секунду, а до
+    # следующего перезапуска ждать нечего: перезапуск бывает только когда
+    # выходит новая версия, то есть на тихой неделе может не случиться
+    # вовсе. Когда файлы на месте, задача не делает ничего и в сеть не
+    # ходит.
+    scheduler.add_job(ensure_circles, "interval", minutes=20, id="circles")
 
     if config.AUTO_UPDATE:
         # Раз в полчаса — не чаще: обновление перезапускает бота, и делать

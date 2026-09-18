@@ -392,3 +392,38 @@ def test_a_refusal_from_telegram_is_remembered_too(tmp_path):
     СБОИ["ready"] = "Telegram не принял файл: VIDEO_NOTE_DIMENSIONS_INVALID"
     assert "Telegram не принял" in состояние("ready", tmp_path)
     СБОИ.clear()
+
+def test_the_bot_keeps_trying_until_the_circles_are_there(tmp_path):
+    """Одной попытки при запуске мало.
+
+    Сеть могла моргнуть ровно в ту секунду, а перезапуск бывает только
+    когда выходит новая версия — на тихой неделе его может не случиться
+    вовсе, и новые люди всё это время приходили бы без приветствия.
+    """
+    расписание = (ROOT / "scheduler.py").read_text(encoding="utf-8")
+    assert "from services.video_notes import ensure_circles" in расписание
+    assert 'scheduler.add_job(ensure_circles, "interval"' in расписание, \
+        "повторной попытки в планировщике нет"
+
+
+def test_the_retry_costs_nothing_once_the_files_are_in_place(tmp_path):
+    """Задача крутится постоянно, поэтому на готовых файлах она обязана
+    молчать: ходить в чужое хранилище каждые двадцать минут без надобности
+    — это и лишний трафик, и лишний повод протухшей ссылке нашуметь."""
+    assert install("hello", квадратный_ролик(), tmp_path) is None
+    assert install("ready", квадратный_ролик(), tmp_path) is None
+
+    было = dict(CIRCLE_SOURCES)
+    CIRCLE_SOURCES.clear()
+    # Адрес заведомо мёртвый: если задача в сеть полезет, будет видно по
+    # записанной беде.
+    CIRCLE_SOURCES.update({имя: "https://127.0.0.1:1/нет.mp4" for имя in CIRCLES})
+    from services.video_notes import СБОИ
+    СБОИ.clear()
+    try:
+        встали = asyncio.run(ensure_circles(tmp_path))
+    finally:
+        CIRCLE_SOURCES.clear()
+        CIRCLE_SOURCES.update(было)
+    assert встали == [], встали
+    assert СБОИ == {}, "задача ходила в сеть, хотя файлы на месте"

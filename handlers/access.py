@@ -224,7 +224,7 @@ async def preview_circles(message: Message) -> None:
     }
 
     if any(circle_path(имя) is None for имя in CIRCLES):
-        await message.answer("Одного кружка не хватает — качаю, секунду…")
+        await message.answer("Не все кружки на месте — качаю, секунду…")
         await ensure_circles()
 
     готовые = [имя for имя in CIRCLES if circle_path(имя) is not None]
