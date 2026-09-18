@@ -6,7 +6,8 @@ import enum
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, Float, Integer, String, func
+from sqlalchemy import (BigInteger, Boolean, DateTime, Enum, Float, Integer,
+                        String, Text, func)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from models.base import Base
@@ -84,6 +85,18 @@ class User(Base):
     )
     # Аллергии/непереносимости — свободный текст через запятую (MVP).
     allergies: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    # Блюда, которые человек убрал из «Ешь как обычно»: съел дважды и больше
+    # видеть не хочет. Хранятся приведёнными к одному виду именами, по одному
+    # на строку. Отдельной таблицы не завели: список короткий, читается вместе
+    # с профилем и живёт ровно столько же.
+    hidden_foods: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Какие вкладки уже показали свою подсказку. Раньше это помнил только
+    # браузер телефона, а он забывает: у Лилии тур приходил при каждом заходе
+    # на вкладку. Память о показанном — это про человека, а не про устройство,
+    # и жить она должна там же, где остальной профиль.
+    tours_seen: Mapped[str] = mapped_column(String(120), default="", nullable=False)
 
     # Часовой пояс в формате IANA («Europe/Moscow»): по нему считаются сутки
     # в дневнике и время напоминаний.

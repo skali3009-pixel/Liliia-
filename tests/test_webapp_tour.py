@@ -104,9 +104,19 @@ def test_what_was_shown_is_remembered_and_can_be_brought_back():
     assert "const TOUR_KEY = 'aura.tour';" in APP_JS
     for имя in ("function tourSeen(", "function rememberTour(", "function forgetTours("):
         assert имя in APP_JS, имя
-    # Приватный режим не должен ронять экран.
+    # Приватный режим не должен ронять экран. Проверяем не форму записи, а
+    # само свойство: чтение памяти телефона обёрнуто в try/catch и что бы там
+    # ни случилось, наружу выходит множество.
     видели = APP_JS.split("function tourSeen(", 1)[1].split("\n}", 1)[0]
-    assert "catch" in видели and "new Set()" in видели
+    assert "try {" in видели and "catch" in видели
+    assert "new Set(" in видели
+
+    # И главное: память о показанном живёт не только в телефоне. Внутри
+    # Telegram localStorage переживает не всякое закрытие приложения — у
+    # Лилии подсказка приходила при каждом заходе на вкладку.
+    assert "tourServer" in видели
+    отметка = APP_JS.split("function rememberTour(", 1)[1].split("\n}", 1)[0]
+    assert "'/api/tours'" in отметка
 
     assert 'id="tour-again"' in INDEX
     кнопка = APP_JS.split("getElementById('tour-again').onclick", 1)[1][:300]

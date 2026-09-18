@@ -285,7 +285,8 @@ function renderToday(data) {
   renderSteps(data.game && data.game.steps);
   renderHero(data);
   renderTimeline(data.timeline || []);
-  renderFrequent(data.frequent || []);
+  tourFromServer(data.tours);
+  renderFrequent(data.frequent || [], data.frequent_hidden || 0);
 }
 
 
@@ -3868,13 +3869,19 @@ async function finishCardio() {
    и оплаченный запрос ради «овсянки», которая уже двадцать раз записана.
 */
 
-function renderFrequent(items) {
+function renderFrequent(items, hiddenCount = 0) {
   const card = document.getElementById('frequent-card');
   const box = document.getElementById('frequent');
-  card.hidden = !items || !items.length;
+  card.hidden = (!items || !items.length) && !hiddenCount;
   box.innerHTML = '';
 
   for (const item of items || []) {
+    /* Строка — это два разных действия, и делать её одной кнопкой нельзя:
+       внутри кнопки не живёт другая кнопка. Поэтому обёртка, а в ней
+       «записать» во всю ширину и маленькое «убрать» с краю. */
+    const wrap = document.createElement('div');
+    wrap.className = 'often-row';
+
     const row = document.createElement('button');
     row.className = 'often';
     row.innerHTML = `
@@ -3902,8 +3909,46 @@ function renderFrequent(items) {
         row.disabled = false;
       }
     };
-    box.appendChild(row);
+
+    /* Съел дважды — не значит «буду есть дальше». Без этой кнопки список
+       можно только копить, и случайные конфеты навсегда встают между
+       овсянкой и кофе. Спрашиваем «точно?»: кнопка маленькая и стоит рядом
+       с «записать», промахнуться легко. */
+    const hide = document.createElement('button');
+    hide.className = 'icon-btn often-hide';
+    hide.type = 'button';
+    hide.textContent = '✕';
+    hide.setAttribute('aria-label', `Убрать из списка: ${item.name}`);
+    hide.onclick = async () => {
+      const sure = await askYes({
+        title: 'Убрать из списка?',
+        text: `«${item.name}» больше не будет предлагаться. Записи о съеденном это не меняет.`,
+        action: 'Убрать',
+        danger: true,
+      });
+      if (!sure) return;
+      hide.disabled = true;
+      try {
+        await api('/api/frequent', {
+          method: 'POST', body: JSON.stringify({ hide: item.name }),
+        });
+        haptic();
+        await refresh();
+      } catch (e) {
+        toast(e.message);
+        hide.disabled = false;
+      }
+    };
+
+    wrap.append(row, hide);
+    box.appendChild(wrap);
   }
+
+  /* Строка возврата появляется, только когда есть что возвращать. Промах по
+     маленькой кнопке — обычное дело, а список без возврата врёт навсегда. */
+  const back = document.getElementById('frequent-restore');
+  back.hidden = !hiddenCount;
+  back.textContent = `Убрано: ${hiddenCount} · вернуть`;
 }
 
 /* --- Экран «Что съесть»: четыре режима ----------------------------------- */
@@ -5564,12 +5609,27 @@ const TOUR = {
   ],
 };
 
+/* Что человек уже видел. Главный источник — сервер: память телефона внутри
+   Telegram переживает не всякое закрытие приложения, и у Лилии подсказка
+   приходила при каждом заходе на вкладку. Браузер оставлен рядом быстрым
+   ответом — чтобы тур не мигнул, пока сервер ещё не ответил. */
+let tourServer = null;      // null — сервер ещё не отвечал
+
 function tourSeen() {
-  try {
-    return new Set(JSON.parse(localStorage.getItem(TOUR_KEY) || '[]'));
-  } catch (error) {
-    return new Set();                       // приватный режим — покажем снова
-  }
+  const local = (() => {
+    try { return JSON.parse(localStorage.getItem(TOUR_KEY) || '[]'); }
+    catch (error) { return []; }            // приватный режим — только сервер
+  })();
+  return new Set([...(tourServer || []), ...local]);
+}
+
+/* Сервер сказал своё — запоминаем и переносим в браузер, чтобы следующий
+   заход не ждал ответа. */
+function tourFromServer(list) {
+  if (!Array.isArray(list)) return;
+  tourServer = list;
+  try { localStorage.setItem(TOUR_KEY, JSON.stringify([...tourSeen()])); }
+  catch (error) { /* приватный режим — обойдёмся сервером */ }
 }
 
 function rememberTour(screen) {
@@ -5578,12 +5638,18 @@ function rememberTour(screen) {
     seen.add(screen);
     localStorage.setItem(TOUR_KEY, JSON.stringify([...seen]));
   } catch (error) {
-    /* приватный режим — ничего страшного, подсказка просто придёт ещё раз */
+    /* приватный режим — память останется только на сервере */
   }
+  if (tourServer && !tourServer.includes(screen)) tourServer = [...tourServer, screen];
+  api('/api/tours', { method: 'POST', body: JSON.stringify({ seen: screen }) })
+    .catch(() => { /* не дошло — придёт со следующим показом */ });
 }
 
 function forgetTours() {
+  tourServer = [];
   try { localStorage.removeItem(TOUR_KEY); } catch (error) { /* пусто */ }
+  api('/api/tours', { method: 'POST', body: JSON.stringify({ forget: true }) })
+    .catch(() => { /* не дошло — вернётся при следующем заходе */ });
 }
 
 let tourSteps = [];
@@ -5616,6 +5682,15 @@ function startTour(screen, force = false) {
   tourSteps = TOUR[screen].filter((step) => tourTarget(step));
   if (tourSteps.length === 0) { rememberTour(screen); return; }
   tourAt = 0;
+  /* Отмечаем показанным сразу, а не в конце. Дощёлкать до последней карточки
+     человек не обязан: он закрывает приложение, ему звонят, он уходит делать
+     то, зачем зашёл. Прежний код ставил отметку только после «Пропустить»
+     или последнего шага — и у всех, кто ушёл раньше, тур начинался заново,
+     каждый раз. Вернуть его можно кнопкой в профиле.
+
+     Отмечаем и при «показать заново»: человек видит тур прямо сейчас, а
+     остальные вкладки кнопка уже очистила и покажет каждую в свой черёд. */
+  rememberTour(screen);
   document.getElementById('tour').hidden = false;
   showTourStep(screen);
 }
@@ -5672,7 +5747,7 @@ function nextTourStep(screen) {
 
 function endTour(screen) {
   document.getElementById('tour').hidden = true;
-  rememberTour(screen);
+  rememberTour(screen);   // отмечено уже при показе; здесь — на случай «заново»
 }
 
 // Приложение, открытое из подсказки бота, должно открыться там, где
@@ -5844,6 +5919,14 @@ async function init() {
   // Подсказки: «Дальше» ведёт по шагам, «Пропустить» закрывает и больше не
   // показывает эту вкладку. Экран запоминается в самой кнопке — тур всегда
   // про ту вкладку, с которой начался.
+  document.getElementById('frequent-restore').onclick = async () => {
+    haptic();
+    try {
+      await api('/api/frequent', { method: 'POST', body: JSON.stringify({ restore: true }) });
+      await refresh();
+    } catch (e) { toast(e.message); }
+  };
+
   document.getElementById('tour-next').onclick = () => {
     haptic();
     nextTourStep(document.querySelector('.tab.active')?.dataset.screen || 'today');

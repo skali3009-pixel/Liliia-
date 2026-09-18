@@ -182,13 +182,21 @@ button:focus-visible, .tab:focus-visible {
 }
 
 /* Ешь как обычно: строка-кнопка, нажатие сразу записывает. */
+/* Строка списка — две кнопки: «записать» во всю ширину и маленькое
+   «убрать» с краю. Разделитель переехал на обёртку: он про строку целиком,
+   а не про одну из кнопок. */
+.often-row { display: flex; align-items: center; border-bottom: 1px solid var(--bg); }
+.often-row:last-of-type { border-bottom: none; }
 .often {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 11px 2px; border: none; border-bottom: 1px solid var(--bg);
+  display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
+  padding: 11px 2px; border: none;
   background: none; color: var(--fg); font-family: inherit; text-align: left;
   cursor: pointer;
 }
-.often:last-of-type { border-bottom: none; }
+/* «Убрать» намеренно тише «плюса» и отодвинуто: два одинаково заметных
+   кружка рядом — это приглашение промахнуться. */
+.often-hide { margin-left: 6px; font-size: 14px; opacity: .55; }
+.often-hide:active { opacity: 1; }
 .often:active { opacity: .6; }
 .often:disabled { opacity: .35; }
 .often-main { flex: 1; min-width: 0; }

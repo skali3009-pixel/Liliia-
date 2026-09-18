@@ -20,6 +20,7 @@ from services import preps as prep_service
 from services.checkins import save_checkin, today_state
 from services.preps import expiring_names
 from services.workouts import recent_program_codes
+from services import favorites, tours
 from services.favorites import frequent_meals
 from services.food_vision import FoodAnalysis, FoodRecognitionError
 from services import usage
@@ -285,10 +286,61 @@ async def get_today(request: web.Request) -> web.Response:
                 },
                 "timeline": timeline,
                 "frequent": [item.to_dict() for item in
-                             await frequent_meals(session, user_id, timezone_name=tz)],
+                             await frequent_meals(session, user_id, timezone_name=tz,
+                                                  hidden=favorites.hidden_names(user))],
+                # Сколько блюд человек убрал руками. Без этого числа кнопка
+                # «вернуть» либо висит всегда, либо не появляется вовсе.
+                "frequent_hidden": len(favorites.hidden_names(user)),
+                # Какие вкладки уже показали свою подсказку. Раньше это знал
+                # только браузер телефона — и забывал.
+                "tours": tours.seen(user),
                 "game": game,
             }
         )
+
+
+async def post_frequent(request: web.Request) -> web.Response:
+    """Убрать блюдо из «Ешь как обычно» или вернуть всё убранное.
+
+    Запись о съеденном при этом не трогается: человек просил не предлагать
+    ему это блюдо, а не забыть, что он его ел. Дневник, кольца и статистика
+    остаются как были.
+    """
+    body = await request.json() if request.can_read_body else {}
+
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        if user is None:
+            return web.json_response({"error": "Профиль не найден"}, status=404)
+
+        if body.get("restore"):
+            вернулось = await favorites.restore(session, user)
+            return web.json_response({"ok": True, "restored": вернулось})
+
+        name = (body.get("hide") or "").strip()
+        if not name:
+            return web.json_response({"error": "Нечего убирать"}, status=400)
+
+        await favorites.hide(session, user, name)
+        return web.json_response({"ok": True,
+                                  "hidden": len(favorites.hidden_names(user))})
+
+
+async def post_tours(request: web.Request) -> web.Response:
+    """Отметить показанную подсказку или забыть все показанные."""
+    body = await request.json() if request.can_read_body else {}
+
+    async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        if user is None:
+            return web.json_response({"error": "Профиль не найден"}, status=404)
+
+        if body.get("forget"):
+            await tours.forget(session, user)
+        else:
+            await tours.mark(session, user, (body.get("seen") or "").strip())
+
+        return web.json_response({"ok": True, "tours": tours.seen(user)})
 
 
 async def post_water(request: web.Request) -> web.Response:
@@ -1915,6 +1967,8 @@ def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/workouts", get_workouts)
     app.router.add_post("/api/workouts/log", post_workout_log)
     app.router.add_post("/api/meals", post_meal)
+    app.router.add_post("/api/frequent", post_frequent)
+    app.router.add_post("/api/tours", post_tours)
     app.router.add_post("/api/moment", post_moment)
     app.router.add_post("/api/moment/confirm", confirm_moment)
     app.router.add_post("/api/moment/facts", recount_moment)

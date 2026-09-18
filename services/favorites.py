@@ -39,6 +39,47 @@ def normalize(name: str) -> str:
     return _SPACES.sub(" ", (name or "").strip().lower())
 
 
+def hidden_names(user) -> set[str]:
+    """Что человек убрал из списка. Имена уже приведены к одному виду."""
+    return {строка for строка in (user.hidden_foods or "").split("\n") if строка}
+
+
+async def hide(session: AsyncSession, user, name: str) -> bool:
+    """Убрать блюдо из списка. False — если нечего убирать.
+
+    Список предлагает то, что человек ел дважды, но «дважды» и «буду есть
+    дальше» — разные вещи: съел конфеты на выходных, и они теперь висят между
+    овсянкой и кофе. Кнопка «плюс» без обратной кнопки означает, что список
+    можно только копить.
+    """
+    ключ = normalize(name)
+    if not ключ:
+        return False
+
+    было = hidden_names(user)
+    if ключ in было:
+        return False
+
+    user.hidden_foods = "\n".join(sorted(было | {ключ}))
+    await session.commit()
+    return True
+
+
+async def restore(session: AsyncSession, user) -> int:
+    """Вернуть всё скрытое. Возвращает, сколько вернулось.
+
+    Промахнуться по маленькой кнопке легко, а список без возврата врёт
+    навсегда — то же правило, что у отметки в женском календаре. Возвращаем
+    всё разом: выбирать из скрытого некому, его и не видно.
+    """
+    сколько = len(hidden_names(user))
+    if not сколько:
+        return 0
+    user.hidden_foods = None
+    await session.commit()
+    return сколько
+
+
 @dataclass(frozen=True)
 class Favorite:
     """Блюдо из истории, готовое к повторной записи."""
@@ -64,8 +105,9 @@ async def frequent_meals(
     days: int = LOOKBACK_DAYS,
     limit: int = DEFAULT_LIMIT,
     min_times: int = MIN_TIMES,
+    hidden: set[str] | None = None,
 ) -> list[Favorite]:
-    """Самое частое из съеденного за последние недели."""
+    """Самое частое из съеденного за последние недели, кроме убранного."""
     start, _ = day_bounds(
         timezone_name, day=today_in(timezone_name) - timedelta(days=days - 1)
     )
@@ -94,8 +136,13 @@ async def frequent_meals(
     # Сначала то, что едят чаще; при равной частоте — то, что ели недавнее.
     # Сортировать готовые Favorite нельзя: в них уже нет времени записи, и
     # порядок молча выродился бы в «кто первым попался».
+    # Скрытое отсеиваем здесь, а не на подходе: блюдо всё равно остаётся в
+    # дневнике и в статистике — человек просил не предлагать его, а не
+    # забыть, что он его ел.
+    убрано = hidden or set()
     ranked = sorted(
-        (pair for pair in seen.values() if pair[0] >= min_times),
+        (pair for key, pair in seen.items()
+         if pair[0] >= min_times and key not in убрано),
         key=lambda pair: (pair[0], pair[1].logged_at),
         reverse=True,
     )
@@ -114,4 +161,5 @@ async def frequent_meals(
     ]
 
 
-__all__ = ["DEFAULT_LIMIT", "Favorite", "frequent_meals", "normalize"]
+__all__ = ["DEFAULT_LIMIT", "Favorite", "frequent_meals", "hidden_names",
+           "hide", "normalize", "restore"]
