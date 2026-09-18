@@ -20,7 +20,7 @@
     python promo/voice.py              # дорожка выбранным голосом
     python promo/voice.py --samples    # образцы всех голосов
 """
-import pathlib, subprocess, sys, wave
+import array, math, pathlib, subprocess, sys, wave
 
 import imageio_ffmpeg
 
@@ -138,6 +138,76 @@ def дорожка(голос: str = ГОЛОС) -> pathlib.Path:
     return выход
 
 
+def разрезать(файл: pathlib.Path, сколько: int) -> list[tuple[float, float]]:
+    """Найти в записи `сколько` кусков речи, разделённых тишиной.
+
+    Нужно для готовой записи из чужого синтеза: там одна дорожка с паузами
+    внутри, а фразы должны встать по кадрам поимённо.
+    """
+    сырой = subprocess.run([FF, "-v", "error", "-i", str(файл), "-ac", "1",
+                            "-ar", "8000", "-f", "s16le", "-"],
+                           capture_output=True).stdout
+    d = array.array("h")
+    d.frombytes(сырой[: len(сырой) // 2 * 2])
+    окно = 8000 // 50                      # 20 мс
+    громко = []
+    for i in range(0, len(d) - окно, окно):
+        кусок = d[i:i + окно]
+        громко.append(math.sqrt(sum(х * х for х in кусок) / len(кусок)))
+    порог = max(громко) * 0.03
+
+    # Тишиной считаем провал длиннее полусекунды: внутри фразы паузы
+    # короче, а между фразами мы сами ставили от секунды.
+    минимум = int(0.5 * 50)
+    куски, начало, тихо = [], None, 0
+    for i, г in enumerate(громко):
+        if г > порог:
+            if начало is None:
+                начало = i
+            тихо = 0
+        elif начало is not None:
+            тихо += 1
+            if тихо >= минимум:
+                куски.append((начало / 50, (i - тихо) / 50))
+                начало = None
+    if начало is not None:
+        куски.append((начало / 50, len(громко) / 50))
+    if len(куски) != сколько:
+        sys.exit(f"нашёл {len(куски)} кусков речи, а реплик {сколько}. "
+                 "Паузы между фразами должны быть длиннее полусекунды.")
+    return куски
+
+
+def переложить(файл: pathlib.Path) -> pathlib.Path:
+    """Разложить готовую запись по сценам и собрать дорожку под ролик.
+
+    Синтез — не метроном: одна и та же фраза от раза к разу выходит на
+    полсекунды длиннее или короче, и подгонять паузы пересозданием
+    бессмысленно. Проще разрезать готовое по тишине и поставить каждую
+    фразу в начало её сцены.
+    """
+    сц = сцены()
+    куски = разрезать(файл, len(сц))
+    входы, цепь = [], []
+    for i, ((ключ, от, до), (а, б)) in enumerate(zip(сц, куски)):
+        запас = (до - от) - (б - а)
+        пометка = "" if запас >= 0 else "  ← НЕ ВЛЕЗАЕТ"
+        print(f"  {ключ:8} сцена {до - от:5.2f} с, речь {б - а:5.2f} с, "
+              f"запас {запас:+5.2f}{пометка}")
+        входы += ["-ss", f"{а:.3f}", "-to", f"{б + 0.15:.3f}", "-i", str(файл)]
+        цепь.append(f"[{i}:a]adelay={int(от * 1000)}|{int(от * 1000)}[р{i}]")
+    цепь.append("".join(f"[р{i}]" for i in range(len(сц)))
+                + f"amix=inputs={len(сц)}:normalize=0,"
+                "alimiter=level_in=1:level_out=0.9,aformat=sample_rates=48000[out]")
+    выход = СБОРКА / "voice.wav"
+    р = subprocess.run([FF, "-y", "-v", "error", *входы,
+                        "-filter_complex", ";".join(цепь), "-map", "[out]",
+                        str(выход)], capture_output=True, text=True)
+    if р.returncode:
+        sys.exit(р.stderr[-2000:])
+    print(f"\nдорожка: {выход} ({выход.stat().st_size // 1024} КБ)")
+    return выход
+
 def образцы() -> pathlib.Path:
     """Одним файлом — все женские голоса на одной фразе.
 
@@ -170,6 +240,9 @@ def образцы() -> pathlib.Path:
 if __name__ == "__main__":
     if "--samples" in sys.argv:
         образцы()
+    elif "--from" in sys.argv:
+        # Готовая запись из чужого синтеза: режем по тишине и раскладываем.
+        переложить(pathlib.Path(sys.argv[sys.argv.index("--from") + 1]))
     else:
         голос = sys.argv[1] if len(sys.argv) > 1 and not sys.argv[1].startswith("-") else ГОЛОС
         дорожка(голос)
