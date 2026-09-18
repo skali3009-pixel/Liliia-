@@ -134,7 +134,12 @@ async def mark(
     if supplement is None or supplement.user_id != user_id:
         raise ValueError("Препарат не найден")
 
-    day_start, day_end = day_bounds(timezone_name)
+    # Тот же `user_today`, которым день определяет и чтение. Раньше отметка
+    # спрашивала сутки у `day_bounds` сама, и «сегодня» вычислялось в двух
+    # местах по-своему: на границе суток отметка ложилась в один день, а
+    # список читал другой — приём пропадал на глазах. В работе это те самые
+    # секунды около полуночи, а в тестах — падение раз в сутки.
+    day_start, day_end = day_bounds(timezone_name, day=user_today(timezone_name))
     existing = (
         await session.execute(
             select(SupplementLog).where(

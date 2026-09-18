@@ -390,7 +390,23 @@ def test_meal_can_be_deleted():
     run(scenario)
 
 
-def test_supplement_add_and_mark():
+def test_supplement_add_and_mark(monkeypatch):
+    """Отметила приём — список показывает, что приняла.
+
+    Час фиксируется нарочно. Тест падал раз в сутки: прогон кончался ровно в
+    полночь по Москве, отметка ложилась в один день, а следующий запрос читал
+    уже другой. Поймано на живом прогоне 18 сентября в 21:00 UTC — это 00:00
+    в часовом поясе тестового человека.
+    """
+    from services import supplements as служба
+    from utils.timeframe import today_in
+
+    # День берём один раз, сейчас, — и дальше он не меняется. Прибить его
+    # календарной датой нельзя: сама запись о приёме кладётся с настоящим
+    # временем, и замороженный «18 сентября» разошёлся бы с ним навсегда.
+    сегодня = today_in("Europe/Moscow")
+    monkeypatch.setattr(служба, "user_today", lambda _tz: сегодня)
+
     async def scenario():
         async with webapp_client() as (client, _):
             response = await call(client, "POST", "/api/supplements",
