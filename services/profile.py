@@ -1,0 +1,330 @@
+"""Изменение профиля после анкеты.
+
+Анкета заполняется один раз, а жизнь меняется: цель, режим активности,
+питание, аллергии. Без возможности это поправить единственным выходом
+остаётся удалить всё и начать заново — так продукты не делают.
+
+Норма калорий зависит от пола, веса, роста, возраста, активности и цели.
+Значит, при изменении любого из этих полей её нужно пересчитать, иначе
+человек продолжит есть по старой цифре и не поймёт почему.
+"""
+
+from __future__ import annotations
+
+import logging
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from models import ActivityLevelEnum, DietTypeEnum, GoalEnum, User
+from utils.formulas import (MAX_PROTEIN_SHARE, MAX_WATER_ML, MIN_CALORIES,
+                            ActivityLevel, Gender, Goal, calculate_macros,
+                            daily_water_ml)
+
+logger = logging.getLogger(__name__)
+
+# Границы правдоподобия. Живут здесь, а не в обработчике: анкета и
+# редактирование профиля должны проверять ввод одинаково, иначе через одну
+# дверь пройдёт то, что не пустили в другую.
+MIN_AGE, MAX_AGE = 10, 100
+MIN_HEIGHT_CM, MAX_HEIGHT_CM = 100.0, 250.0
+MIN_WEIGHT_KG, MAX_WEIGHT_KG = 30.0, 300.0
+MIN_TARGET_KG, MAX_TARGET_KG = MIN_WEIGHT_KG, MAX_WEIGHT_KG
+
+# Поля, которые человек может поменять сам, и то, влияют ли они на норму.
+EDITABLE = {
+    "goal": True,
+    "activity": True,
+    "age": True,
+    "height": True,
+    "diet": False,
+    "allergies": False,
+    "target_weight": False,
+    # Цель по шагам на норму КБЖУ не влияет: это договорённость человека с
+    # собой, а не расчёт по формуле.
+    "steps_goal": False,
+}
+
+
+# Подписи вариантов по-русски. Лежат рядом с валидацией, а не в обработчике
+# чата: то же самое показывает мини-приложение, и две копии рано или поздно
+# разошлись бы.
+GENDER_RU = {"male": "мужской", "female": "женский"}
+ACTIVITY_RU = {
+    "sedentary": "сидячий образ жизни",
+    "light": "лёгкая",
+    "moderate": "умеренная",
+    "high": "высокая",
+    "very_high": "очень высокая",
+}
+GOAL_RU = {
+    "lose_weight": "похудение",
+    "maintain": "поддержание",
+    "gain_mass": "набор массы",
+    "recomposition": "рельеф",
+}
+DIET_RU = {
+    "regular": "обычное",
+    "vegan": "веган",
+    "vegetarian": "вегетарианское",
+    "gluten_free": "без глютена",
+}
+
+
+def can_recalculate(user: User) -> bool:
+    """Хватает ли данных, чтобы пересчитать норму."""
+    return all((user.gender, user.age, user.height_cm, user.current_weight_kg,
+                user.activity_level, user.goal))
+
+
+def recalculate(user: User) -> bool:
+    """Пересчитать норму КБЖУ и воду под текущие поля профиля."""
+    if not can_recalculate(user):
+        return False
+
+    macros = calculate_macros(
+        gender=Gender(user.gender.value),
+        weight_kg=user.current_weight_kg,
+        height_cm=user.height_cm,
+        age_years=user.age,
+        activity_level=ActivityLevel(user.activity_level.value),
+        goal=Goal(user.goal.value),
+    )
+    user.daily_calories = macros.calories
+    user.daily_protein_g = macros.protein_g
+    user.daily_fat_g = macros.fat_g
+    user.daily_carbs_g = macros.carbs_g
+    user.daily_fiber_g = macros.fiber_g
+    user.daily_water_ml = daily_water_ml(
+        weight_kg=user.current_weight_kg,
+        height_cm=user.height_cm,
+        activity_level=ActivityLevel(user.activity_level.value),
+    )
+    return True
+
+
+def norms_are_impossible(user: User) -> bool:
+    """Сохранённые нормы, которые человек не может выполнить.
+
+    Такие остались у всех, кто завёл профиль до того, как в формулах
+    появились предохранители: углеводы в ноль, вода вёдрами, белок на треть
+    сверх рациона. Держать их в базе нельзя — по ним человек и живёт.
+    """
+    calories = user.daily_calories or 0
+    if not calories:
+        return False
+    if (user.daily_carbs_g or 0) <= 0:
+        return True
+    if (user.daily_water_ml or 0) > MAX_WATER_ML:
+        return True
+    if (user.daily_protein_g or 0) * 4 > calories * (MAX_PROTEIN_SHARE + 0.01):
+        return True
+    gender = Gender(user.gender.value) if user.gender else Gender.FEMALE
+    return calories < MIN_CALORIES[gender]
+
+
+async def repair_impossible_norms(session: AsyncSession) -> int:
+    """Пересчитать нормы тем, у кого они невыполнимы. Возвращает число людей.
+
+    Запускается при старте. Повторный проход ничего не делает: после
+    пересчёта под условие уже никто не подходит.
+    """
+    users = (await session.execute(
+        select(User).where(User.onboarding_completed.is_(True))
+    )).scalars().all()
+
+    fixed = 0
+    for user in users:
+        if norms_are_impossible(user) and recalculate(user):
+            fixed += 1
+
+    if fixed:
+        await session.commit()
+        logger.warning("Пересчитаны невыполнимые нормы: %d человек", fixed)
+    return fixed
+
+
+async def set_goal(session: AsyncSession, user: User, value: str) -> bool:
+    user.goal = GoalEnum(value)
+    updated = recalculate(user)
+    await session.commit()
+    return updated
+
+
+async def set_activity(session: AsyncSession, user: User, value: str) -> bool:
+    user.activity_level = ActivityLevelEnum(value)
+    updated = recalculate(user)
+    await session.commit()
+    return updated
+
+
+async def set_age(session: AsyncSession, user: User, value: int) -> bool:
+    user.age = value
+    updated = recalculate(user)
+    await session.commit()
+    return updated
+
+
+async def set_height(session: AsyncSession, user: User, value: float) -> bool:
+    user.height_cm = value
+    updated = recalculate(user)
+    await session.commit()
+    return updated
+
+
+async def set_diet(session: AsyncSession, user: User, value: str) -> bool:
+    """Тип питания на норму не влияет — только на подбор блюд."""
+    user.diet_type = DietTypeEnum(value)
+    await session.commit()
+    return False
+
+
+async def set_allergies(session: AsyncSession, user: User, text: str) -> None:
+    user.allergies = clean_allergies(text)
+    await session.commit()
+
+
+async def set_target_weight(session: AsyncSession, user: User, value: float) -> None:
+    user.target_weight_kg = value
+    await session.commit()
+
+
+async def toggle_reminders(session: AsyncSession, user: User) -> bool:
+    """Включить/выключить мягкие напоминания. Возвращает новое состояние."""
+    user.reminders_enabled = not user.reminders_enabled
+    await session.commit()
+    return user.reminders_enabled
+
+
+class ProfileError(ValueError):
+    """Негодное значение поля. Текст ошибки показываем человеку как есть."""
+
+
+def _number(raw, cast, field: str):
+    """Число из чего угодно: приложение шлёт строку, бот — уже разобранное."""
+    try:
+        return cast(str(raw).strip().replace(",", "."))
+    except (AttributeError, TypeError, ValueError):
+        raise ProfileError(f"Не похоже на число: {field}") from None
+
+
+def apply_changes(user: User, changes: dict) -> bool:
+    """Применить правки к профилю, не сохраняя. True — норму пересчитали.
+
+    Одна дверь для чата и приложения: проверки и пересчёт здесь, а вызывающий
+    решает только, когда коммитить.
+    """
+    known = set(EDITABLE) | {"reminders"}
+    unknown = set(changes) - known
+    if unknown:
+        raise ProfileError(f"Неизвестное поле: {', '.join(sorted(unknown))}")
+
+    for field, raw in changes.items():
+        if field == "goal":
+            try:
+                user.goal = GoalEnum(raw)
+            except ValueError:
+                raise ProfileError("Неизвестная цель") from None
+        elif field == "activity":
+            try:
+                user.activity_level = ActivityLevelEnum(raw)
+            except ValueError:
+                raise ProfileError("Неизвестный уровень активности") from None
+        elif field == "diet":
+            try:
+                user.diet_type = DietTypeEnum(raw)
+            except ValueError:
+                raise ProfileError("Неизвестный тип питания") from None
+        elif field == "age":
+            value = _number(raw, int, "возраст")
+            if not valid_age(value):
+                raise ProfileError(f"Возраст — от {MIN_AGE} до {MAX_AGE} лет")
+            user.age = value
+        elif field == "height":
+            value = _number(raw, float, "рост")
+            if not valid_height(value):
+                raise ProfileError(
+                    f"Рост — от {MIN_HEIGHT_CM:.0f} до {MAX_HEIGHT_CM:.0f} см")
+            user.height_cm = value
+        elif field == "target_weight":
+            value = _number(raw, float, "вес цели")
+            if not valid_target(value):
+                raise ProfileError(
+                    f"Вес цели — от {MIN_TARGET_KG:.0f} до {MAX_TARGET_KG:.0f} кг")
+            user.target_weight_kg = value
+        elif field == "steps_goal":
+            from services.steps import MAX_GOAL, MIN_GOAL, clean_goal
+
+            value = clean_goal(raw)
+            if value is None:
+                raise ProfileError(
+                    f"Цель по шагам — число от {MIN_GOAL} до {MAX_GOAL}")
+            user.daily_steps = value
+        elif field == "allergies":
+            user.allergies = clean_allergies(raw)
+        elif field == "reminders":
+            user.reminders_enabled = bool(raw)
+
+    # Пересчитываем один раз в конце: правок может прийти несколько сразу.
+    if any(EDITABLE.get(field) for field in changes):
+        return recalculate(user)
+    return False
+
+
+async def apply(session: AsyncSession, user: User, changes: dict) -> bool:
+    """Сохранить правки профиля. True — норма пересчитана."""
+    updated = apply_changes(user, changes)
+    await session.commit()
+    return updated
+
+
+def clean_allergies(text: str | None) -> str | None:
+    """Пустая строка и «нет» означают одно: ограничений нет."""
+    cleaned = (text or "").strip()
+    return None if cleaned.lower() in {"", "-", "нет", "никаких"} else cleaned[:200]
+
+
+def valid_target(value: float | None) -> bool:
+    return value is not None and MIN_TARGET_KG <= value <= MAX_TARGET_KG
+
+
+def valid_age(value: int | None) -> bool:
+    return value is not None and MIN_AGE <= value <= MAX_AGE
+
+
+def valid_height(value: float | None) -> bool:
+    return value is not None and MIN_HEIGHT_CM <= value <= MAX_HEIGHT_CM
+
+
+__all__ = [
+    "ACTIVITY_RU",
+    "apply",
+    "apply_changes",
+    "can_recalculate",
+    "clean_allergies",
+    "DIET_RU",
+    "EDITABLE",
+    "GENDER_RU",
+    "GOAL_RU",
+    "MAX_AGE",
+    "MAX_HEIGHT_CM",
+    "MAX_TARGET_KG",
+    "MAX_WEIGHT_KG",
+    "MIN_AGE",
+    "MIN_HEIGHT_CM",
+    "MIN_TARGET_KG",
+    "MIN_WEIGHT_KG",
+    "ProfileError",
+    "recalculate",
+    "set_activity",
+    "set_age",
+    "set_allergies",
+    "set_diet",
+    "set_goal",
+    "set_height",
+    "set_target_weight",
+    "toggle_reminders",
+    "valid_age",
+    "valid_height",
+    "valid_target",
+]
