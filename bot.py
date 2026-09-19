@@ -8,6 +8,7 @@ from aiogram.filters import Command, CommandStart
 from aiogram.types import FSInputFile, Message
 
 import config
+import handlers_factory
 from claude_client import ask_claude, reset_history
 from composio_instagram import InstagramNotConnected
 
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 # Telegram-Markdown, а невалидная разметка приводит к ошибке отправки.
 bot = Bot(token=config.BOT_TOKEN)
 dp = Dispatcher()
+dp.include_router(handlers_factory.router)
 
 
 @dp.message(CommandStart())
@@ -26,8 +28,9 @@ async def cmd_start(message: Message) -> None:
     await message.answer(
         "Привет! Я AI-ассистент на базе Claude. Просто напишите мне сообщение — "
         "и я отвечу.\n\n"
-        "Команда /reset очищает историю диалога.\n"
-        "Команда /audit готовит Instagram-аудит вашего аккаунта (PDF)."
+        "🏭 /zavod — контент-завод: тексты постов кнопками, очередь публикаций.\n"
+        "📊 /audit — Instagram-аудит аккаунта (PDF).\n"
+        "♻️ /reset — очистить историю диалога."
     )
 
 
@@ -76,8 +79,13 @@ async def cmd_audit(message: Message) -> None:
     )
 
 
-@dp.message(F.text)
+@dp.message(F.text, ~F.text.startswith("/"))
 async def handle_text(message: Message) -> None:
+    # Завод иногда ждёт от неё текст — припев или правку к варианту.
+    # Забираем такой ввод до обращения к Claude.
+    if await handlers_factory.try_consume_pending(message):
+        return
+
     await bot.send_chat_action(message.chat.id, "typing")
     try:
         reply = await ask_claude(message.chat.id, message.text)
