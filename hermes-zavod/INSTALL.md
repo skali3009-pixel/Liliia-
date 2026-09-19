@@ -8,18 +8,18 @@ Telegram, модель, память и свой планировщик. Ему 
 
 ---
 
-## Шаг 1. Найти, куда Hermes кладёт скиллы
-
-Только читает, ничего не меняет.
+## Шаг 1. Куда класть — выяснено
 
 ```
-Выполни РОВНО одну команду ниже и верни вывод целиком. Ничего не устанавливай, не меняй, не перезапускай.
-
-ls -d /root/.hermes-insta/.hermes/skills/ /root/.hermes-insta/.hermes/profiles/instagram-bot/skills/ /root/.hermes/skills/ 2>/dev/null; echo "--- что вообще есть в профиле ---"; ls -la /root/.hermes-insta/.hermes/profiles/instagram-bot/ 2>/dev/null | head -20; echo "--- как настроены скиллы ---"; grep -riE 'skill' /root/.hermes-insta/.hermes/config.yaml 2>/dev/null | head
+/root/.hermes-insta/.hermes/profiles/instagram-bot/skills/
 ```
 
-Из ответа станет видно, какая папка настоящая. **Подставь её вместо `ПУТЬ`
-в шаге 2.**
+Существуют три папки со скиллами: общая `/root/.hermes/skills/`, общая для
+этого экземпляра `/root/.hermes-insta/.hermes/skills/` и профильная. Нужна
+**профильная**: рядом с ней лежит `.skills_prompt_snapshot.json` — собранный
+промпт скиллов именно профиля `instagram-bot`.
+
+Профильная ещё и правильнее по смыслу: завод нужен одному боту, а не всем.
 
 ---
 
@@ -30,8 +30,11 @@ ls -d /root/.hermes-insta/.hermes/skills/ /root/.hermes-insta/.hermes/profiles/i
 ```
 Выполни РОВНО эти команды и верни вывод. Ничего кроме них не делай.
 
-cd /tmp && rm -rf zavod-tmp && git clone --depth 1 -b claude/telegram-bot-setup-gvlv0k https://github.com/skali3009-pixel/Liliia-.git zavod-tmp && mkdir -p ПУТЬ/zavod && cp -r zavod-tmp/hermes-zavod/. ПУТЬ/zavod/ && rm -rf /tmp/zavod-tmp && ls -R ПУТЬ/zavod
+S=/root/.hermes-insta/.hermes/profiles/instagram-bot/skills; cd /tmp && rm -rf zavod-tmp && git clone --depth 1 -b claude/telegram-bot-setup-gvlv0k https://github.com/skali3009-pixel/Liliia-.git zavod-tmp && mkdir -p $S/zavod && cp -r zavod-tmp/hermes-zavod/. $S/zavod/ && rm -f $S/zavod/INSTALL.md && rm -rf /tmp/zavod-tmp && echo "=== СОСЕДИ ПО ПАПКЕ ===" && ls $S && echo "=== ЗАВОД ===" && ls -R $S/zavod
 ```
+
+Команда заодно покажет, какие скиллы уже лежат рядом. Если там есть другие —
+папка живая, всё правильно.
 
 ---
 
