@@ -167,9 +167,11 @@ def test_the_state_names_the_last_copy(monkeypatch, tmp_path):
 
     с = backups.состояние()
     assert с.сколько == 2
-    assert с.мегабайты == 3
+    assert с.байты == 3 * 1024 * 1024
     assert с.расписание is True
-    assert "всего на диске: 2" in "\n".join(backups.строки())
+    строки = "\n".join(backups.строки())
+    assert "всего на диске: 2" in строки
+    assert "3,0 МБ" in строки
 
 
 def test_a_missing_systemd_is_not_a_crash(monkeypatch, tmp_path):
@@ -193,3 +195,50 @@ def test_the_command_is_listed_for_the_owner():
 def test_the_public_menu_did_not_grow():
     """Список для всех держится на десяти строках — он не резиновый."""
     assert len(bot_commands.public()) <= 10
+
+
+# --- Размер копии ----------------------------------------------------------
+#
+# Поймано у Лилии на живом сервере: строка сказала «последняя копия
+# (0 МБ)». Копия была целой — база молодая, её выгрузка весит меньше
+# мегабайта, — но деление на мегабайты с округлением вниз показало ноль, а
+# «0 МБ» читается как «копия пустая, страховки нет».
+#
+# Цифра, которая пугает там, где всё в порядке, хуже, чем отсутствие цифры:
+# проверять по ней нельзя, а нервничать можно — и в следующий раз, когда
+# копия правда не сделается, эту строку уже не прочитают.
+
+def test_a_small_copy_is_never_shown_as_zero(monkeypatch, tmp_path):
+    """Копия меньше мегабайта показывается в килобайтах, а не нулём."""
+    monkeypatch.setattr(backups, "ПАПКА", tmp_path)
+    monkeypatch.setattr(backups, "_расписание", lambda: True)
+    (tmp_path / "aura-20260920-0434.tar.gz").write_bytes(b"x" * 700 * 1024)
+
+    строка = "\n".join(backups.строки())
+    assert "700 КБ" in строка, строка
+    assert "0 МБ" not in строка, "ноль мегабайт читается как «копии нет»"
+
+
+def test_sizes_are_named_at_every_scale():
+    """От пустого файла до гигабайтов — нигде не «0 МБ»."""
+    assert backups.вес(0) == "0 байт"
+    assert backups.вес(900) == "900 байт"
+    assert backups.вес(1024) == "1 КБ"
+    assert backups.вес(700 * 1024) == "700 КБ"
+    assert backups.вес(1024 * 1024) == "1,0 МБ"
+    assert backups.вес(45 * 1024 * 1024) == "45,0 МБ"
+    # И ни при каком размере строка не говорит «ноль» о непустом файле.
+    for байт in (1, 512, 1023, 1024, 10**5, 10**6, 10**7):
+        assert not backups.вес(байт).startswith("0 "), байт
+
+
+def test_the_console_summary_tells_the_same_size():
+    """`bash status.sh` показывает ту же строку — и врал так же.
+
+    Два разных мнения о размере копии в двух местах — это способ однажды
+    поверить не тому.
+    """
+    исходник = Path(backups.__file__).parent.parent / "status.sh"
+    текст = исходник.read_text(encoding="utf-8")
+    assert "КБ" in текст, "консольная сводка по-прежнему округляет до нуля"
+    assert "/ 1024 / 1024 )) МБ" not in текст

@@ -27,8 +27,15 @@ echo "Резервные копии:"
 BACKUP_DIR="${BACKUP_DIR:-/root/nutrition-backups}"
 LAST="$(ls -1t "$BACKUP_DIR"/aura-*.tar.gz 2>/dev/null | head -1)"
 if [ -n "$LAST" ]; then
-  echo "  последняя: $(date -r "$LAST" '+%d.%m.%Y %H:%M') "\
-       "($(( $(stat -c %s "$LAST") / 1024 / 1024 )) МБ)"
+  # Мегабайты с округлением вниз врут о малом: копия меньше мегабайта
+  # показывалась как «0 МБ», то есть «страховки нет».
+  БАЙТ="$(stat -c %s "$LAST")"
+  if [ "$БАЙТ" -ge 1048576 ]; then
+    РАЗМЕР="$(( БАЙТ / 1048576 )) МБ"
+  else
+    РАЗМЕР="$(( БАЙТ / 1024 )) КБ"
+  fi
+  echo "  последняя: $(date -r "$LAST" '+%d.%m.%Y %H:%M') ($РАЗМЕР)"
   echo "  всего на диске: $(ls -1 "$BACKUP_DIR"/aura-*.tar.gz 2>/dev/null | wc -l)"
 else
   echo "  копий нет — включи: sudo bash setup-backup.sh"
