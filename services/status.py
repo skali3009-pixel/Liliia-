@@ -163,6 +163,12 @@ async def collect() -> str:
     # цикле событий они падали.
     version = await asyncio.to_thread(_git_version)
     disk = await asyncio.to_thread(disk_usage)
+    # Состояние копий раньше показывал только `bash status.sh`, то есть
+    # снова консоль. Работа блокирующая — читает папку и спрашивает systemd,
+    # — поэтому в поток, рядом с git и диском.
+    from services import backups
+
+    копии = await asyncio.to_thread(backups.строки)
 
     lines = [
         f"Версия: {version}",
@@ -194,6 +200,8 @@ async def collect() -> str:
         "",
         *_notification_lines(notes),
         *_button_lines(button_use, button_since),
+        "",
+        *копии,
         "",
         *_art_lines(),
         "",
