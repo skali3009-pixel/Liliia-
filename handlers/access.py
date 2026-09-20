@@ -23,7 +23,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 from db import get_session
 from models import SubscriptionSource
-from services import friends, referrals
+from services import analytics, friends, referrals
 from services.step_sync import plural
 from services.subscriptions import Access, activate, check_access, grant_lifetime, stats
 
@@ -406,6 +406,65 @@ def _split(text: str, limit: int) -> list[str]:
     if current.strip():
         parts.append(current.rstrip("\n"))
     return parts or [text]
+
+
+@router.message(Command("sources"))
+async def marketing_report(message: Message) -> None:
+    """Воронка: откуда пришли и дошли ли до пользы. Только владельцу.
+
+    Отдельной панели и стороннего сервиса здесь нет намеренно: отчёт
+    собирается теми же средствами, что `/admin` и `/report`, и приходит
+    туда же — в чат владельцу.
+
+    Свои номера из рабочих показателей исключены. Без этого первые же цифры
+    оказываются про Лилию и тех, кто помогал проверять, — то есть про людей,
+    которые пришли не по ссылке и вели себя не как гости.
+    """
+    if message.from_user.id not in config.ADMIN_IDS:
+        return   # для остальных команды словно не существует
+
+    дней = 30
+    части = (message.text or "").split()
+    if len(части) > 1 and части[1].isdigit():
+        дней = max(1, min(int(части[1]), 365))
+
+    async with get_session() as session:
+        итог = await analytics.report(session, days=дней,
+                                      exclude=set(config.ADMIN_IDS))
+
+    строки = [
+        f"📈 Воронка за {дней} дн. ({итог.since:%d.%m} — {итог.until:%d.%m}, "
+        f"{analytics.REPORT_TZ})",
+        "",
+        "👥 Люди",
+        f"   Новых: {итог.starts_new}",
+        f"   Возвращались уже заведённые: {итог.starts_existing}",
+        f"   Дошли до конца анкеты: {итог.profiles}",
+        f"   Сделали первое полезное действие: {итог.first_actions}",
+        f"   Были активны хоть раз: {итог.active_people}",
+        f"   Активных дней всего: {итог.active_days}",
+    ]
+
+    if итог.actions:
+        строки += ["", "✅ Полезные действия (это события, не люди)"]
+        for вид, сколько in sorted(итог.actions.items(), key=lambda п: -п[1]):
+            строки.append(f"   {analytics.ACTION_NAMES.get(вид, вид)}: {сколько}")
+
+    строки += ["", "🔗 Первый источник (все за всё время)"]
+    if итог.sources:
+        for метка, сколько in sorted(итог.sources.items(), key=lambda п: -п[1]):
+            строки.append(f"   {метка}: {сколько}")
+    else:
+        строки.append("   пока никого")
+
+    строки += [
+        "",
+        f"Учёт ведётся с {analytics.STARTED_ON:%d.%m.%Y}. Того, что было "
+        "раньше, здесь нет и быть не может.",
+        "За другой срок: /sources 7",
+    ]
+
+    await message.answer("\n".join(строки))
 
 
 @router.message(Command("report"))

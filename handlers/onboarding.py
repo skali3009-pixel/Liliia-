@@ -34,7 +34,7 @@ from services.profile import (
     MIN_HEIGHT_CM,
     MIN_WEIGHT_KG,
 )
-from services import referrals
+from services import analytics, referrals, sources
 from services.subscriptions import check_access, ensure_trial
 from services.slides import send_slide
 from services.video_notes import send_circle
@@ -214,14 +214,31 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     """
     async with get_session() as session:
         user = await session.get(User, message.from_user.id)
+        # Правда ли строку заводим прямо сейчас. Ровно это отличает
+        # «пришёл по ссылке» от «уже был и открыл бота ещё раз»: у второго
+        # источник первого привлечения неизвестен, и выдавать за него
+        # сегодняшнюю метку нельзя.
+        новый = user is None
         if user is None:
             user = User(id=message.from_user.id)
             session.add(user)
+            await session.flush()
 
         user.username = message.from_user.username
         user.full_name = message.from_user.full_name
         if command.args and not user.referral:
             user.referral = command.args[:64]
+        # Источник — только из закрытого списка меток. Неизвестный параметр
+        # обрабатывается штатно и в отчёт не попадает: произвольной строке
+        # там не место.
+        sources.apply(user, command.args, is_new=новый)
+        # И сам факт обработанного запуска. Новый профиль и уже
+        # существовавший считаются порознь — иначе «новые пользователи»
+        # окажутся числом нажатий «Начать».
+        await analytics.note(
+            session, user.id, analytics.BOT_START,
+            kind=analytics.NEW_PROFILE if новый else analytics.EXISTING_PROFILE,
+            once="once_a_day")
         await session.commit()
 
         # Ссылка-приглашение от друга: t.me/бот?start=friend_КОД. Связь
@@ -496,12 +513,34 @@ def first_step_text() -> str:
 
 
 def open_app_keyboard() -> InlineKeyboardMarkup | None:
-    """Кнопка в приложение: там живёт большая часть того, что мы умеем."""
-    if not config.WEBAPP_URL:
-        return None
+    """Кнопки под итогом анкеты: приложение и, необязательно, музыка.
+
+    Музыка стоит здесь и больше нигде. Это единственное место, где у
+    человека уже есть результат и появляется свободная минута; в меню и на
+    экранах она была бы навязчивой, а «кнопка повсюду» — это не
+    предложение, а реклама.
+
+    Ничего не задерживает и ничем не управляет: обычная ссылка, без
+    подписки, без автозапуска и без обещаний, что музыка на что-то влияет.
+    Не открылась — остальное работает как работало.
+    """
     builder = InlineKeyboardBuilder()
-    builder.button(text="📱 Открыть приложение",
-                   web_app=WebAppInfo(url=config.WEBAPP_URL))
+    сколько = 0
+
+    if config.WEBAPP_URL:
+        builder.button(text="📱 Открыть приложение",
+                       web_app=WebAppInfo(url=config.WEBAPP_URL))
+        сколько += 1
+    if config.MUSIC_URL:
+        builder.button(text=config.MUSIC_BUTTON, url=config.MUSIC_URL)
+        сколько += 1
+
+    # Пустая клавиатура — не то же самое, что её отсутствие: Telegram на неё
+    # ругается. Раньше функция возвращала None без адреса приложения, и это
+    # поведение обязано сохраниться.
+    if not сколько:
+        return None
+    builder.adjust(1)
     return builder.as_markup()
 
 
@@ -608,6 +647,13 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
         # Наградой это становится только при включённой оплате; иначе
         # обе строки вернут нули и никто ничего не получит.
         пригласила, ей_дней, мне_дней = await referrals.reward_signup(session, user.id)
+
+        # Раз в жизни: `onboarding_completed` поднимается однажды, и второго
+        # завершения у одного человека не бывает. Повторная доставка того же
+        # события счётчик не двигает.
+        await analytics.note(session, user.id, analytics.PROFILE_COMPLETED,
+                             once="once_ever")
+        await session.commit()
 
         # Чего человеку ещё не хватает — считаем здесь, пока сессия открыта.
         # Снаружи это обращение к отсоединённому объекту: сегодня оно живо

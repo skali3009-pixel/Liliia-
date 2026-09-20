@@ -58,6 +58,15 @@ class User(Base):
     # Метка из ссылки-приглашения: t.me/бот?start=МЕТКА — видно, кто откуда пришёл.
     referral: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
+    # Источник привлечения, из закрытого списка меток (`services/sources.py`).
+    # Отдельно от `referral`: туда кладётся любой аргумент `/start` как есть,
+    # включая служебные ссылки приглашений, и отчёту он не годится.
+    # `first_source` не меняется после первой записи; `last_source` меняет
+    # только распознанная метка, обычный `/start` её не стирает.
+    first_source: Mapped[str | None] = mapped_column(String(32), index=True,
+                                                     nullable=True)
+    last_source: Mapped[str | None] = mapped_column(String(32), nullable=True)
+
     # Согласие с офертой и политикой данных: какая редакция принята и когда.
     # Пустая версия означает, что человек ещё не соглашался.
     legal_version: Mapped[str | None] = mapped_column(String(20), nullable=True)

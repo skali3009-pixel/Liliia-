@@ -57,6 +57,13 @@ async def save_meal(
         **({"logged_at": logged_at} if logged_at else {}),
     )
     session.add(meal)
+    # Полезное действие отмечается здесь, а не в четырёх обработчиках: это
+    # единственное место, где приём пищи правда попадает в дневник — и из
+    # чата, и из приложения. Уезжает тем же коммитом: учёт, сохранившийся
+    # без действия, — цифра, за которой ничего нет.
+    from services import analytics
+
+    await analytics.useful_action(session, user_id, "meal")
     await session.commit()
     return meal
 

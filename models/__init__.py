@@ -14,6 +14,7 @@ from models.nutrition import Dish, DishComponent, Prep, PrepComponent, Product
 from models.usage import ApiUsage
 from models.cycle import CycleLog
 from models.day_stat import DayStat
+from models.event import MarketingEvent
 from models.meal import Meal, MealSourceEnum, MealTypeEnum
 from models.friendship import Friendship, Invite
 from models.fsm import FsmState
@@ -67,6 +68,7 @@ __all__ = [
     "ProgressPhoto",
     "Achievement",
     "DayStat",
+    "MarketingEvent",
     "Checkin",
     "UserPrep",
     "Friendship",

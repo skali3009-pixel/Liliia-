@@ -20,7 +20,7 @@ from services import preps as prep_service
 from services.checkins import save_checkin, today_state
 from services.preps import expiring_names
 from services.workouts import recent_program_codes
-from services import favorites, tours
+from services import analytics, favorites, tours
 from services.favorites import frequent_meals
 from services.food_vision import FoodAnalysis, FoodRecognitionError
 from services import usage
@@ -662,6 +662,10 @@ async def post_measurement(request: web.Request) -> web.Response:
             "water_ml": user.daily_water_ml,
         }
         arrival = await _arrival(session, user)
+        # Замер записан — значит, действие завершено. Отказ по проверке
+        # значений сюда не доходит: он вернулся выше с ошибкой.
+        await analytics.useful_action(session, user.id, "measure")
+        await session.commit()
 
     return web.json_response({"ok": True, "norms_updated": norms_updated,
                               "norms": norms, "arrival": arrival})
@@ -893,6 +897,10 @@ async def post_workout_log(request: web.Request) -> web.Response:
             minutes=minutes,
         )
         summary = await week_summary(session, user.id, timezone_name=request["timezone"])
+        # Завершение тренировки, а не её начало: сюда приходят уже
+        # отмеченные упражнения, и `log_session` их записала.
+        await analytics.useful_action(session, user.id, "workout")
+        await session.commit()
 
     return web.json_response(
         {"logged": count, "minutes": total_minutes, "calories": calories, "week": summary}
@@ -1322,6 +1330,14 @@ async def post_cube(request: web.Request) -> web.Response:
                         level = lighter
                         break
             cubes = [("", item) for item in found]
+
+        # Успешной выдачей считается непустой ответ. Подбор, который ничего
+        # не нашёл, отвечает 200 и пустым списком — засчитать его пользой
+        # значит записать в успех ровно тот случай, когда человек ушёл ни с
+        # чем.
+        if cubes:
+            await analytics.useful_action(session, user.id, "cube")
+            await session.commit()
 
     return web.json_response({
         "level": level,

@@ -107,12 +107,24 @@ def test_the_last_message_names_one_action_not_a_list_of_features():
 
 
 def test_the_app_button_appears_only_when_there_is_an_app(monkeypatch):
+    """Кнопка приложения появляется только когда приложение есть.
+
+    Рядом с ней теперь стоит музыка, и «ровно одна кнопка» больше не мера.
+    Гарантия та же и проверяется прямее: без адреса приложения кнопки
+    приложения нет вовсе — ни одной, ни в паре с чем-то ещё.
+    """
     from handlers.onboarding import open_app_keyboard
 
     monkeypatch.setattr(config, "WEBAPP_URL", "")
+    monkeypatch.setattr(config, "MUSIC_URL", "")
     assert open_app_keyboard() is None
+
+    # Музыка есть, приложения нет: кнопка приложения не должна появиться.
+    monkeypatch.setattr(config, "MUSIC_URL", "https://music.example/artist/1")
+    кнопки = [b for row in open_app_keyboard().inline_keyboard for b in row]
+    assert all(b.web_app is None for b in кнопки)
 
     monkeypatch.setattr(config, "WEBAPP_URL", "https://example.com")
     markup = open_app_keyboard()
-    button, = [b for row in markup.inline_keyboard for b in row]
-    assert button.web_app is not None
+    кнопки = [b for row in markup.inline_keyboard for b in row]
+    assert any(b.web_app is not None for b in кнопки)
