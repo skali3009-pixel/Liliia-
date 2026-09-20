@@ -377,22 +377,20 @@ async def owner_status(message: Message) -> None:
     if message.from_user.id not in config.ADMIN_IDS:
         return
 
-    import asyncio
-
-    # Внутри есть обращение к git через отдельный процесс: в общем цикле
-    # это короткая, но настоящая остановка всего бота. Уводим в поток.
-    text = await asyncio.to_thread(_sync_status)
-    for part in _split(text, STATUS_CHUNK):
-        await message.answer(part)
-
-
-def _sync_status() -> str:
-    """Собрать сводку в отдельном потоке — со своим циклом событий."""
-    import asyncio
-
     from services import status as status_service
 
-    return asyncio.run(status_service.collect())
+    # Собираем в том же цикле событий, в котором живёт бот. Раньше сводка
+    # уезжала в отдельный поток со своим циклом (`asyncio.run`) — ради
+    # обращения к git, которое и правда останавливает весь бот. Но вместе с
+    # git туда уехали и запросы к базе, а соединения asyncpg принадлежат
+    # тому циклу, в котором они открыты: взятое из общего пула соединение в
+    # чужом цикле падает с «attached to a different loop». Поймано у Лилии
+    # на живом сервере — команда диагностики оказалась единственной, которая
+    # не работает. Медленные места теперь уходят в поток поодиночке, внутри
+    # `collect`, а база остаётся здесь.
+    text = await status_service.collect()
+    for part in _split(text, STATUS_CHUNK):
+        await message.answer(part)
 
 
 def _split(text: str, limit: int) -> list[str]:

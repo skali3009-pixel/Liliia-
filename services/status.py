@@ -156,10 +156,16 @@ async def collect() -> str:
         notes = await notifications.stats(session, days=30)
         button_use = await buttons.usage(session)
         button_since = await buttons.counting_since(session)
-    disk = disk_usage()
+    # Два медленных места, и только они уходят в поток: git запускает
+    # отдельный процесс, а подсчёт диска ходит в файловую систему. В общем
+    # цикле это короткая, но настоящая остановка всего бота. Раньше в поток
+    # уезжала вся сводка целиком — вместе с запросами к базе, — и в чужом
+    # цикле событий они падали.
+    version = await asyncio.to_thread(_git_version)
+    disk = await asyncio.to_thread(disk_usage)
 
     lines = [
-        f"Версия: {_git_version()}",
+        f"Версия: {version}",
         "",
         *_access_mode(),
         "",
