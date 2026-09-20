@@ -242,3 +242,59 @@ def test_a_breakage_without_anyone_to_answer_still_reaches_the_owner():
         await error_handler.on_error(FakeEvent(boom(), _update()), bot)
         assert len(bot.sent) == 1
     run(scenario)
+
+
+# --- Поломка в приложении на телефоне --------------------------------------
+#
+# Поймано у Лилии на живом телефоне: пришло «🐞 Приложение сломалось на
+# телефоне» с единственной строкой «Что: Script error.» — ни места, ни
+# подробностей. `window.onerror` отдаёт такое ровно тогда, когда поломка
+# случилась внутри чужого скрипта с другого адреса: браузер прячет
+# подробности намеренно. В приложении такой скрипт один — сам Telegram.
+#
+# Значит, это не наш код и починить его нам нечем. А сообщение при этом
+# утверждало, что человек видел пустой или застывший экран, — чего мы знать
+# не можем. Тревога, на которую нельзя ответить, учит не читать тревоги.
+
+def test_a_real_app_crash_still_reaches_the_owner():
+    """Наша собственная поломка приходит как приходила — с местом."""
+    async def scenario():
+        bot = FakeBot()
+        ушло = await crashes.report_client(
+            bot, "TypeError: undefined is not an object",
+            where="today", place="/static/app.js:1204", user_id=1)
+        assert ушло is True
+        assert len(bot.sent) == 1
+        текст = bot.sent[0][1]
+        assert "app.js:1204" in текст
+    run(scenario)
+
+
+def test_an_error_the_browser_hid_does_not_wake_the_owner():
+    """«Script error.» без места — чужой скрипт, и сказать нечего.
+
+    Сломай `_blind` — и тревога, на которую нельзя ответить, вернётся.
+    """
+    async def scenario():
+        bot = FakeBot()
+        ушло = await crashes.report_client(
+            bot, "Script error.", where="today", place="", user_id=OWNER)
+        assert ушло is False, "о такой поломке владелице сказать нечего"
+        assert bot.sent == [], "тревога не должна приходить на телефон"
+    run(scenario)
+
+
+def test_the_same_words_with_a_place_are_not_silenced():
+    """Молчим не по словам, а по отсутствию подробностей.
+
+    Если браузер однажды назовёт файл, поломка станет починяемой — и тогда
+    про неё надо говорить, как бы она ни называлась.
+    """
+    async def scenario():
+        bot = FakeBot()
+        ушло = await crashes.report_client(
+            bot, "Script error.", where="today",
+            place="/static/app.js:88", user_id=1)
+        assert ушло is True
+        assert len(bot.sent) == 1
+    run(scenario)
