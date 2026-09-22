@@ -87,7 +87,7 @@ async def start_by_button(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(FeedbackStates.writing, F.text)
+@router.message(FeedbackStates.writing, F.text, ~F.text.in_(MENU_TEXTS))
 async def take_report(message: Message, state: FSMContext, bot: Bot) -> None:
     text = feedback.clean(message.text)
     if not text:
@@ -137,7 +137,7 @@ async def start_answer(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(FeedbackStates.answering, F.text)
+@router.message(FeedbackStates.answering, F.text, ~F.text.in_(MENU_TEXTS))
 async def send_answer(message: Message, state: FSMContext, bot: Bot) -> None:
     data = await state.get_data()
     user_id = data.get("answer_to")

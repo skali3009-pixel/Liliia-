@@ -286,7 +286,7 @@ async def _persist(message: Message, state: FSMContext, apply) -> None:
     await _show_card(message, user)
 
 
-@router.message(ProfileStates.target_weight, F.text)
+@router.message(ProfileStates.target_weight, F.text, ~F.text.in_(MENU_TEXTS))
 async def save_target_weight(message: Message, state: FSMContext) -> None:
     if await _cancelled(message, state):
         return
@@ -304,7 +304,7 @@ async def save_target_weight(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.message(ProfileStates.height, F.text)
+@router.message(ProfileStates.height, F.text, ~F.text.in_(MENU_TEXTS))
 async def save_height(message: Message, state: FSMContext) -> None:
     if await _cancelled(message, state):
         return
@@ -322,7 +322,7 @@ async def save_height(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.message(ProfileStates.age, F.text)
+@router.message(ProfileStates.age, F.text, ~F.text.in_(MENU_TEXTS))
 async def save_age(message: Message, state: FSMContext) -> None:
     if await _cancelled(message, state):
         return
@@ -340,7 +340,7 @@ async def save_age(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.message(ProfileStates.allergies, F.text)
+@router.message(ProfileStates.allergies, F.text, ~F.text.in_(MENU_TEXTS))
 async def save_allergies(message: Message, state: FSMContext) -> None:
     if await _cancelled(message, state):
         return

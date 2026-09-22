@@ -407,7 +407,7 @@ async def handle_food_voice(message: Message, state: FSMContext) -> None:
     await _handle_moment(message, state, moment, status)
 
 
-@router.message(FoodStates.waiting_input, F.text)
+@router.message(FoodStates.waiting_input, F.text, ~F.text.in_(MENU_TEXTS))
 async def handle_food_text(message: Message, state: FSMContext) -> None:
     status = await message.answer("🔍 Разбираю…")
     await message.bot.send_chat_action(message.chat.id, "typing")
@@ -526,7 +526,7 @@ async def ask_weight(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(FoodStates.correcting_weight, F.text)
+@router.message(FoodStates.correcting_weight, F.text, ~F.text.in_(MENU_TEXTS))
 async def apply_weight(message: Message, state: FSMContext) -> None:
     weight = parse_float(message.text)
     if weight is None or not (MIN_WEIGHT_G <= weight <= MAX_WEIGHT_G):
@@ -552,7 +552,7 @@ async def ask_correct_dish(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-@router.message(FoodStates.correcting_dish, F.text)
+@router.message(FoodStates.correcting_dish, F.text, ~F.text.in_(MENU_TEXTS))
 async def apply_correct_dish(message: Message, state: FSMContext) -> None:
     data = await state.get_data()
     photo_file_id = data.get("photo_file_id")

@@ -158,7 +158,7 @@ async def show_sync(message: Message, state: FSMContext) -> None:
                          reply_markup=main_menu_keyboard())
 
 
-@router.message(StepStates.waiting_number, F.text)
+@router.message(StepStates.waiting_number, F.text, ~F.text.in_(MENU_TEXTS))
 async def take_number(message: Message, state: FSMContext) -> None:
     if not await _save(message, message.text):
         # Состояние не сбрасываем: человек ошибся, а не передумал.
