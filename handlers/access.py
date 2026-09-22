@@ -23,7 +23,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 import config
 from db import get_session
 from models import SubscriptionSource
-from services import analytics, friends, referrals
+from services import analytics, friends, referrals, sources
 from services.step_sync import plural
 from services.subscriptions import Access, activate, check_access, grant_lifetime, stats
 
@@ -492,12 +492,12 @@ async def marketing_report(message: Message) -> None:
         for вид, сколько in sorted(итог.actions.items(), key=lambda п: -п[1]):
             строки.append(f"   {analytics.ACTION_NAMES.get(вид, вид)}: {сколько}")
 
+    # Источники называются словами, а не машинными метками из ссылки, и
+    # старые метки роликов стоят отдельным блоком: склеить их в «VK» значило
+    # бы переписать историю, а бросить вперемешку с площадками — сделать вид,
+    # что их всё ещё выдают. Складывает только итог по VK, и говорит об этом.
     строки += ["", "🔗 Первый источник (все за всё время)"]
-    if итог.sources:
-        for метка, сколько in sorted(итог.sources.items(), key=lambda п: -п[1]):
-            строки.append(f"   {метка}: {сколько}")
-    else:
-        строки.append("   пока никого")
+    строки += sources.свод(итог.sources)
 
     строки += [
         "",

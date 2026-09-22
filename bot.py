@@ -18,8 +18,8 @@ from services.fsm_storage import DatabaseStorage
 from services import commands as bot_commands
 from services import identity
 from handlers import (access, diary, errors, fallback, feedback, food, legal,
-                      notifications, onboarding, profile, progress, steps,
-                      suggestions, supplements, turn, water, workouts)
+                      music, notifications, onboarding, profile, progress,
+                      steps, suggestions, supplements, turn, water, workouts)
 from middlewares.access import AccessMiddleware
 from middlewares.presence import PresenceMiddleware
 from scheduler import start_scheduler
@@ -68,6 +68,7 @@ dp.include_router(supplements.router)
 dp.include_router(progress.router)
 dp.include_router(workouts.router)
 dp.include_router(suggestions.router)
+dp.include_router(music.router)
 # Последним: сюда попадает только то, что не разобрал никто выше.
 # До него бот на непонятое просто молчал, и человек не знал, дошло
 # ли сообщение вообще.

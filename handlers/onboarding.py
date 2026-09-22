@@ -34,7 +34,7 @@ from services.profile import (
     MIN_HEIGHT_CM,
     MIN_WEIGHT_KG,
 )
-from services import analytics, referrals, sources
+from services import analytics, music, referrals, sources
 from services.subscriptions import check_access, ensure_trial
 from services.slides import send_slide
 from services.video_notes import send_circle
@@ -513,33 +513,27 @@ def first_step_text() -> str:
 
 
 def open_app_keyboard() -> InlineKeyboardMarkup | None:
-    """Кнопки под итогом анкеты: приложение и, необязательно, музыка.
+    """Кнопка под итогом анкеты: приложение.
 
-    Музыка стоит здесь и больше нигде. Это единственное место, где у
-    человека уже есть результат и появляется свободная минута; в меню и на
-    экранах она была бы навязчивой, а «кнопка повсюду» — это не
-    предложение, а реклама.
+    Музыки здесь больше нет, и это исправление, а не отказ от неё. Кнопка,
+    прицепленная к чужому сообщению, живёт ровно столько, сколько это
+    сообщение остаётся последним: следом уходят кружок, слайд, подарок за
+    приглашение и предложение дозаполнить анкету — и до кнопки человек уже
+    не дотягивается. Теперь у музыки своё сообщение, и приходит оно
+    последним (`services/music.py`).
 
-    Ничего не задерживает и ничем не управляет: обычная ссылка, без
-    подписки, без автозапуска и без обещаний, что музыка на что-то влияет.
-    Не открылась — остальное работает как работало.
+    Здесь остаётся одно дело: открыть приложение.
     """
     builder = InlineKeyboardBuilder()
-    сколько = 0
-
-    if config.WEBAPP_URL:
-        builder.button(text="📱 Открыть приложение",
-                       web_app=WebAppInfo(url=config.WEBAPP_URL))
-        сколько += 1
-    if config.MUSIC_URL:
-        builder.button(text=config.MUSIC_BUTTON, url=config.MUSIC_URL)
-        сколько += 1
 
     # Пустая клавиатура — не то же самое, что её отсутствие: Telegram на неё
-    # ругается. Раньше функция возвращала None без адреса приложения, и это
+    # ругается. Без адреса приложения функция возвращала None, и это
     # поведение обязано сохраниться.
-    if not сколько:
+    if not config.WEBAPP_URL:
         return None
+
+    builder.button(text="📱 Открыть приложение",
+                   web_app=WebAppInfo(url=config.WEBAPP_URL))
     builder.adjust(1)
     return builder.as_markup()
 
@@ -688,3 +682,9 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
     # и одно понятное действие; отсюда любой его ответ добровольный.
     await _offer_the_rest(message, нужен_вес=нужен_вес,
                           нужны_аллергии=нужны_аллергии)
+
+    # Самой последней — карточка второго проекта Лилии. Последней нарочно:
+    # всё, что придёт после, уводит её выше экрана, а прошлый раз она
+    # именно так и пропадала. Ничем не управляет и ничего не задерживает:
+    # не отправилась — анкета всё равно закончена (`services/music.py`).
+    await music.отправить(message)
