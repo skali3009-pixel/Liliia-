@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 
 from aiogram import F, Router
 from aiogram.exceptions import TelegramBadRequest
+from aiogram.dispatcher.event.bases import SkipHandler
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -23,7 +24,7 @@ from keyboards.food import (
     CB_WRONG_DISH,
     food_card_keyboard,
 )
-from keyboards.main_menu import MENU_ADD_MEAL, main_menu_keyboard
+from keyboards.main_menu import MENU_ADD_MEAL, MENU_TEXTS, main_menu_keyboard
 from models import MealSourceEnum, User
 from services.food_vision import (
     CONFIDENCE_RU,
@@ -162,6 +163,21 @@ async def _ensure_onboarded(message: Message) -> User | None:
         )
         return None
     return user
+
+
+# Кнопка меню важнее недописанного ответа — то же правило, что в шагах,
+# жалобах и профиле. Без него нажатие уезжало в разбор еды: человек нажимал
+# «Добавить еду», передумывал, жал «Воду» — и слово «💧 Вода» уходило в
+# модель как описание блюда. Ошибка тихая: ни сообщения, ни отказа, просто
+# ответ не про то, и потраченные на это деньги.
+#
+# Проверено перебором зарегистрированных обработчиков: в состоянии
+# `FoodStates.waiting_input` нажатие любой кнопки меню, кроме «Добавить
+# еду», доставалось `handle_food_text`.
+@router.message(StateFilter(FoodStates), F.text.in_(MENU_TEXTS))
+async def leave_food_input(message: Message, state: FSMContext) -> None:
+    await state.clear()
+    raise SkipHandler
 
 
 @router.message(F.text == MENU_ADD_MEAL)

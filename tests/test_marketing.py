@@ -614,15 +614,24 @@ def test_повторный_старт_карточку_не_шлёт():
 
 
 def test_карточка_возвращается_командой():
-    """Один раз — правильно. Один раз без пути назад — это «никогда»."""
-    import inspect
+    """Один раз — правильно. Один раз без пути назад — это «никогда».
 
+    Проверяется поведением, а не строкой внутри функции: раньше здесь
+    искалось «music.отправить» прямо в теле `cmd_music`, и тест упал, как
+    только у команды и кнопки появилась общая дорога. Требование было не к
+    строке, а к тому, что команда правда доносит карточку.
+    """
     from handlers import music as handler
-    from aiogram.filters import Command
+    from services import music
 
-    assert any(isinstance(ф.callback, Command) or "music" in str(ф.callback)
-               for ф in handler.router.message.handlers[0].filters)
-    assert "music.отправить" in inspect.getsource(handler.cmd_music)
+    отправлено = []
+
+    class Чат:
+        async def answer(self, текст, **kwargs):
+            отправлено.append(текст)
+
+    asyncio.run(handler.cmd_music(Чат()))
+    assert отправлено == [music.ТЕКСТ]
 
 
 def test_команда_музыки_не_молчит_при_выключенном_адресе(monkeypatch):
@@ -755,3 +764,176 @@ def test_отчёт_собирается_целиком_на_живых_данн
             assert "vk_a1_food: 1" in текст
             assert "Итого с VK (новая метка и старые): 1" in текст
     run(scenario)
+
+
+# --- 6. Кнопка «Музыка SCALIA» в главном меню -------------------------------
+#
+# Команда `/music` работала, но её не видно: в синем списке Telegram её нет
+# (список держится на десяти строках). Путь назад, который не найти, — это
+# не путь назад. Кнопка в меню и есть видимый вход.
+
+def test_кнопка_музыки_в_том_же_меню_что_ход_и_вода():
+    """Не в синем списке команд, а в клавиатуре под полем ввода."""
+    from keyboards.main_menu import (MENU_MUSIC, MENU_TURN, MENU_WATER,
+                                     main_menu_keyboard)
+
+    подписи = [к.text for ряд in main_menu_keyboard().keyboard for к in ряд]
+
+    assert MENU_MUSIC in подписи
+    assert MENU_TURN in подписи and MENU_WATER in подписи
+    assert MENU_MUSIC == "🎧 Музыка SCALIA"
+
+
+def test_старые_кнопки_меню_никуда_не_делись():
+    """Новая кнопка добавлена, а не поставлена вместо чьего-то места."""
+    from keyboards.main_menu import main_menu_keyboard
+
+    подписи = [к.text for ряд in main_menu_keyboard().keyboard for к in ряд]
+
+    for прежняя in ("🐆 Мой ход", "📷 Добавить еду", "💧 Вода", "👟 Шаги",
+                    "🏋️ Тренировка", "📊 Прогресс", "🍽️ Что съесть",
+                    "⚙️ Профиль"):
+        assert прежняя in подписи, прежняя
+    assert len(подписи) == 9, подписи
+
+
+def test_прежние_кнопки_остались_на_своих_местах():
+    """Музыка своей строкой, а не в пару к «Профилю».
+
+    Пара сузила бы «Профиль» вдвое — кнопку, которую никто не просил
+    трогать. Лишняя строка стоит высоты клавиатуры, и это честная цена.
+    """
+    from keyboards.main_menu import main_menu_keyboard
+
+    ряды = [[к.text for к in ряд] for ряд in main_menu_keyboard().keyboard]
+
+    assert ряды[:5] == [
+        ["🐆 Мой ход"],
+        ["📷 Добавить еду", "💧 Вода"],
+        ["👟 Шаги", "🏋️ Тренировка"],
+        ["📊 Прогресс", "🍽️ Что съесть"],
+        ["⚙️ Профиль"],
+    ], ряды
+    assert ряды[5] == ["🎧 Музыка SCALIA"]
+
+
+def test_кнопка_меню_записана_в_список_кнопок_меню():
+    """Забыть здесь новую кнопку — тихая ошибка.
+
+    По `MENU_TEXTS` сценарии понимают, что нажатие кнопки — это выход, а не
+    ответ. Разойдись множество с клавиатурой, и человек, начавший вводить
+    шаги, нажал бы «Музыку», а сценарий съел бы нажатие как число.
+    """
+    from keyboards.main_menu import MENU_TEXTS, main_menu_keyboard
+
+    подписи = {к.text for ряд in main_menu_keyboard().keyboard for к in ряд}
+    assert подписи == MENU_TEXTS
+
+
+def test_кнопка_шлёт_ту_же_карточку_что_и_команда():
+    """Второй сборки карточки нет: текст, кнопка и адрес живут в одном месте."""
+    import inspect
+
+    from handlers import music as handler
+
+    кнопка = inspect.getsource(handler.menu_music)
+    команда = inspect.getsource(handler.cmd_music)
+
+    # Обе зовут одну и ту же дорогу, и ни одна не собирает карточку сама.
+    assert "_показать" in кнопка and "_показать" in команда
+    for своё in ("ТЕКСТ", "InlineKeyboard", "answer("):
+        assert своё not in кнопка, своё
+
+
+def test_нажатие_кнопки_доносит_карточку_целиком():
+    """Ровно та же карточка: один текст, одна кнопка, тот самый адрес."""
+    from handlers import music as handler
+    from services import music
+
+    отправлено = []
+
+    class Чат:
+        async def answer(self, текст, **kwargs):
+            отправлено.append((текст, kwargs.get("reply_markup")))
+
+    class Состояние:
+        очищено = False
+
+        async def clear(self):
+            Состояние.очищено = True
+
+    asyncio.run(handler.menu_music(Чат(), Состояние()))
+
+    assert len(отправлено) == 1
+    текст, доска = отправлено[0]
+    assert текст == music.ТЕКСТ
+    кнопки = [к for ряд in доска.inline_keyboard for к in ряд]
+    assert len(кнопки) == 1
+    assert кнопки[0].text == "Слушать SCALIA"
+    assert кнопки[0].url == "https://music.yandex.ru/artist/26100573"
+
+
+def test_кнопка_отпускает_недописанный_ответ():
+    """Человек мог начать вводить шаги или рост и уйти сюда.
+
+    Оставить его в правке значило бы, что следующая фраза молча уедет в
+    поле профиля — ровно то, от чего в шагах и профиле стоят свои выходы.
+    """
+    import inspect
+
+    from handlers import music as handler
+
+    assert "state.clear()" in inspect.getsource(handler.menu_music)
+
+
+def test_нажатие_в_разборе_еды_не_уходит_в_модель():
+    """Проверено перебором обработчиков, а не чтением.
+
+    Пока выхода не было, нажатие любой кнопки меню в ожидании текста еды
+    доставалось разбору блюда: слово «💧 Вода» уходило в модель как
+    описание. Ни сообщения, ни отказа — просто ответ не про то.
+    """
+    import inspect
+
+    from handlers import food
+    from keyboards.main_menu import MENU_TEXTS
+
+    исходник = inspect.getsource(food)
+    выход = исходник.index("async def leave_food_input")
+    разбор = исходник.index("async def handle_food_text")
+    assert выход < разбор, "выход обязан стоять раньше разбора"
+
+    кусок = inspect.getsource(food.leave_food_input)
+    assert "state.clear()" in кусок and "SkipHandler" in кусок
+    assert MENU_TEXTS  # множество, по которому выход и срабатывает
+
+
+def test_команда_музыки_по_прежнему_работает():
+    """Кнопка добавлена рядом, а не вместо команды."""
+    from aiogram.filters import Command
+
+    from handlers import music as handler
+
+    команды = [h for h in handler.router.message.handlers
+               if any(isinstance(ф.callback, Command) for ф in h.filters or [])]
+    assert команды, "обработчик /music пропал"
+    assert any(h.callback.__name__ == "cmd_music" for h in команды)
+
+
+def test_повторный_старт_карточку_не_дублирует_и_с_кнопкой():
+    """Кнопка — это ручной вход, а не новая автоматическая отправка."""
+    import inspect
+
+    from handlers import onboarding
+
+    старт = inspect.getsource(onboarding.cmd_start)
+    assert "music" not in старт
+
+    # И мест отправки по-прежнему два: конец анкеты и обработчик музыки.
+    места = []
+    for папка in ("handlers", "services"):
+        for файл in (КОРЕНЬ / папка).rglob("*.py"):
+            код = _только_код(файл.read_text(encoding="utf-8"))
+            if "music . отправить" in код:
+                места.append(файл.name)
+    assert sorted(места) == ["music.py", "onboarding.py"], места
