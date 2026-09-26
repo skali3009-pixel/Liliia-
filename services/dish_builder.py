@@ -84,7 +84,7 @@ BUILD_TOOL = {
 }
 
 
-def allowed_products(products: list[Product], *, diet: str, allergy_words: set[str]
+def allowed_products(products: list[Product], *, diet: str, allergy_words
                      ) -> list[Product]:
     """Продукты, которые этому человеку можно предлагать."""
     from services.dish_picker import DIET_FIELD, _blocked
@@ -94,7 +94,10 @@ def allowed_products(products: list[Product], *, diet: str, allergy_words: set[s
     for product in products:
         if field and not getattr(product, field):
             continue
-        if allergy_words and _blocked(product, allergy_words):
+        # Раньше сюда уходил сам продукт вместо строки — и сборка блюда для
+        # человека с аллергией падала на первом же продукте.
+        haystack = f"{product.name} {product.aliases} {product.allergens}".lower()
+        if allergy_words and _blocked(haystack, allergy_words, product.name):
             continue
         out.append(product)
     return out

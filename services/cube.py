@@ -115,7 +115,18 @@ class Cube:
         return self.protein_g * 4 / self.kcal if self.kcal else 0.0
 
 
-def _allowed(product: Product, *, no_spoon: bool, exclude: set[str],
+def _rules(exclude):
+    """Аллергии в одном виде: строка, набор фраз или уже разобранные."""
+    from services import allergens
+
+    if exclude is None or isinstance(exclude, allergens.Allergies):
+        return exclude
+    if isinstance(exclude, str):
+        return allergens.parse(exclude)
+    return allergens.parse(", ".join(exclude))
+
+
+def _allowed(product: Product, *, no_spoon: bool, exclude,
              vegan: bool, vegetarian: bool, gluten_free: bool) -> bool:
     """Годится ли продукт этому человеку прямо сейчас."""
     tags = set(product.tags.split(";")) if product.tags else set()
@@ -129,7 +140,12 @@ def _allowed(product: Product, *, no_spoon: bool, exclude: set[str],
         return False
     if gluten_free and not product.gluten_free:
         return False
-    if exclude & set(filter(None, product.allergens.split(";"))):
+    # `exclude` — разобранные аллергии (services/allergens.py). Раньше здесь
+    # сравнивалась фраза целиком с меткой: «орехи» закрывали орехи, а
+    # «арахис» и «орех» не закрывали ничего — и арахис предлагался.
+    if exclude and exclude.blocks(
+            f"{product.name} {product.aliases} {product.allergens}", product.allergens,
+            name=product.name):
         return False
     return True
 
@@ -302,7 +318,7 @@ def build(products: dict[str, Product], *, level: str = "normal",
     recent_set = set(recent or [])
 
     pool = _pool(products, basket=basket, no_spoon=no_spoon,
-                 exclude=exclude or set(), vegan=vegan, vegetarian=vegetarian,
+                 exclude=_rules(exclude), vegan=vegan, vegetarian=vegetarian,
                  gluten_free=gluten_free)
     if not pool:
         return []
@@ -349,7 +365,7 @@ def build(products: dict[str, Product], *, level: str = "normal",
         # Под жёсткое требование могло ничего не собраться. Пустой экран
         # человеку полезен меньше, чем набор без клетчатки.
         return build(products, level=level, craving=craving, no_spoon=no_spoon,
-                     exclude=exclude, vegan=vegan, vegetarian=vegetarian,
+                     exclude=_rules(exclude), vegan=vegan, vegetarian=vegetarian,
                      gluten_free=gluten_free, basket=basket,
                      recent=recent, limit=limit, rng=rng)
 
@@ -442,7 +458,7 @@ def _named(codes: set[str], groups: set[str]) -> str | None:
 
 # Если ничего не подошло — берём из запасных, но не случайно: один и тот же
 # набор должен называться одинаково, иначе человек решит, что это разное.
-SPARE = ("Не съем кассира", "До ужина доживу", "Съела и побежала",
+SPARE = ("Не съем кассира", "До ужина доживу", "Перекус на бегу",
          "Перекус без драмы", "Мне некогда готовить", "Магазинный набор")
 
 

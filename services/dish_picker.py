@@ -75,17 +75,20 @@ class Pick:
         }
 
 
-def _allergen_words(raw: str | None) -> set[str]:
-    """Аллергии человек пишет свободным текстом — разбираем по словам."""
-    if not raw:
-        return set()
-    cleaned = raw.lower().replace(",", " ").replace(";", " ").replace("/", " ")
-    return {word.strip(".!") for word in cleaned.split() if len(word) > 2}
+def _allergen_words(raw: str | None):
+    """Аллергии человек пишет свободным текстом — разбор в services/allergens.py.
+
+    Имя оставлено для прежних вызовов; разбор один на весь подбор, иначе
+    кубик и книга рецептов снова понимали бы «арахис» по-разному.
+    """
+    from services import allergens
+
+    return allergens.parse(raw)
 
 
-def _blocked(haystack: str, words: set[str]) -> bool:
-    """Продукт под запретом, если совпал с аллергией по названию или метке."""
-    return any(word in haystack for word in words)
+def _blocked(haystack: str, words, name: str | None = None) -> bool:
+    """Продукт под запретом, если совпал с аллергией по метке или названию."""
+    return bool(words) and words.blocks(haystack, name=name)
 
 
 def scale_for(dish: CachedDish, budget: float) -> float | None:
@@ -176,11 +179,13 @@ async def candidates(session: AsyncSession, user: User, meal_type: str,
     for dish in dishes:
         ok = True
         for item in dish.components:
-            if item.optional:
-                continue
-            if words and _blocked(item.haystack, words):
+            # Аллергия проверяется и у необязательного: он стоит в рецепте
+            # строкой, и «хлеб по желанию» при глютене — это хлеб.
+            if words and _blocked(item.haystack, words, item.name):
                 ok = False
                 break
+            if item.optional:
+                continue
             if diet_field and not getattr(item, diet_field):
                 ok = False
                 break
