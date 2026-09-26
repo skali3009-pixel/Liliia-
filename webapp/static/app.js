@@ -166,7 +166,7 @@ function renderHero(data) {
   const tiles = [
     { key: 'energy', icon: '⚡', label: 'Энергия',
       value: state.energy ? `${state.energy}` : null, suffix: '/10' },
-    { key: 'mood', icon: '🤍', label: 'Настроение', value: state.mood || null, text: true },
+    { key: 'mood', icon: '🤍', label: 'Настроение', value: state.mood ? moodWord(state.mood) : null, text: true },
     { key: 'focus', icon: '🎯', label: 'Фокус',
       value: state.focus ? `${state.focus}` : null, suffix: '/10' },
     { key: 'stress', icon: '〰️', label: 'Стресс', value: state.stress || null, text: true },
@@ -1909,6 +1909,23 @@ async function renderBody(data) {
   const chips = document.getElementById('body-zones');
   if (!data) { stage.innerHTML = ''; return; }
 
+  // Силуэт нарисован женский, и другого нет. Кому он не подходит, тому
+  // фигуру не рисуем вовсе — остаются замеры по зонам и выводы, они от
+  // пола не зависят. `=== false`: старый сервер поля не присылает, и тогда
+  // всё как было.
+  const switcher = document.getElementById('body-switch');
+  if (data.figure === false) {
+    switcher.hidden = true;
+    note.textContent = '';
+    stage.innerHTML = '<p class="hint">Силуэт в приложении пока только женский, '
+      + 'поэтому здесь — замеры и выводы.</p>';
+    chips.hidden = !(data.zones || []).length;
+    renderZoneChips(data.zones);
+    renderInsights(data.insights);
+    return;
+  }
+  switcher.hidden = false;
+
   note.textContent = data.estimated ? 'примерно — нет замеров' : '';
 
   // Если картинка не загрузилась, фигуру рисуем кривыми: экран прогресса
@@ -3255,7 +3272,7 @@ function openPlayer(exercises, saved = null) {
       hint: item.how && item.how.steps ? item.how.steps[0] : '',
     })),
     index: 0, set: 1, phase: 'exercise', left: 0, paused: false,
-    started: Date.now(), muted: playerMuted(), done: [],
+    started: Date.now(), muted: playerMuted(), done: [], sets: {},
   };
   player.muted = playerMuted();
 
@@ -3322,6 +3339,11 @@ function advance() {
   const item = current();
   if (player.phase === 'exercise') {
     if (!player.done.includes(item.id)) player.done.push(item.id);
+    // Сколько подходов правда сделано. Без этого один подход из трёх
+    // записывался как все три — с их минутами и расходом: «58 ккал за
+    // минуту» на экране итога. У тренировки, сохранённой старой версией,
+    // счёта нет — тогда сервер считает по-прежнему, целиком.
+    if (player.sets) player.sets[item.id] = (player.sets[item.id] || 0) + 1;
     const last = player.set >= item.sets && player.index >= player.list.length - 1;
     if (last) return finishPlayer();
     if (item.rest) return enterPhase('rest');
@@ -3460,7 +3482,7 @@ async function finishPlayer() {
     // пересчитываются сами, дублировать их здесь нечем и незачем.
     const result = await api('/api/workouts/log', {
       method: 'POST',
-      body: JSON.stringify({ exercise_ids: done }),
+      body: JSON.stringify({ exercise_ids: done, sets: player.sets || null }),
     });
     document.getElementById('finish-facts').textContent =
       `${done.length} ${plural(done.length, 'упражнение', 'упражнения', 'упражнений')}`
@@ -3517,7 +3539,7 @@ async function offerResume() {
   const item = saved.list[saved.index];
   const sure = await askYes({
     title: 'Продолжить тренировку?',
-    text: `Ты остановилась на «${item ? item.name : ''}», подход ${saved.set}.`,
+    text: `Остановка была на «${item ? item.name : ''}», подход ${saved.set}.`,
     action: 'Продолжить',
   });
   if (sure) openPlayer([], saved);
@@ -3767,10 +3789,15 @@ function askNumber({ title, hint = '', label = 'Своё число', choices = 
     const close = (result) => { sheet.hidden = true; resolve(result); };
 
     for (const item of choices) {
+      // Вариант бывает числом («200 г») или парой «значение + подпись»
+      // («Как в подборе · 350 г ≈ 520 ккал»): число без подписи не говорит,
+      // что именно из трёх порций выбираешь.
+      const plain = typeof item !== 'object';
+      const value = plain ? item : item.value;
       const button = document.createElement('button');
       button.className = 'state-opt wide';
-      button.textContent = unit ? `${item} ${unit}` : String(item);
-      button.onclick = () => close(item);
+      button.textContent = plain ? (unit ? `${item} ${unit}` : String(item)) : item.label;
+      button.onclick = () => close(value);
       box.appendChild(button);
     }
 
@@ -3897,17 +3924,13 @@ function renderFrequent(items, hiddenCount = 0) {
       (item.times > 2 ? ` · ${item.times} ${plural(item.times, 'раз', 'раза', 'раз')}` : '');
     row.querySelector('.often-kcal').textContent = `${item.calories}`;
 
+    // Здесь порцию не спрашиваем: это своё, уже съеденное не раз, и вес
+    // в строке — из прошлых записей. Зато «Отменить» и «Исправить» — как
+    // везде после записи.
     row.onclick = async () => {
       row.disabled = true;
-      try {
-        await api('/api/meals', { method: 'POST', body: JSON.stringify(item) });
-        haptic('medium');
-        toast(`Записала: ${item.name}`);
-        await refresh();
-      } catch (e) {
-        toast(e.message);
-        row.disabled = false;
-      }
+      await recordMeal(item, { ask: false, fromOffer: false });
+      row.disabled = false;
     };
 
     /* Съел дважды — не значит «буду есть дальше». Без этой кнопки список
@@ -4081,13 +4104,13 @@ function renderOffers(data) {
     row.innerHTML = `
       <div class="sug-head">
         <span class="sug-name"></span>
-        <span class="sug-kcal">${Math.round(item.calories)} ккал</span>
+        <span class="sug-kcal">≈ ${Math.round(item.calories)} ккал</span>
       </div>
       <div class="sug-macros"></div>
       <div class="sug-why"></div>
       <div class="row">
         <button class="chip sug-recipe">Рецепт</button>
-        <button class="chip accent sug-eat">Съела это</button>
+        <button class="chip accent sug-eat">Записать блюдо</button>
       </div>`;
 
     const name = row.querySelector('.sug-name');
@@ -4121,15 +4144,115 @@ function renderOffers(data) {
   });
 }
 
-async function eatOffer(item, row) {
+/* --- Предложенное — не съеденное ---------------------------------------
+   Подбор знает состав блюда, но не порцию на тарелке. Поэтому «Записать
+   блюдо» сначала спрашивает, сколько записать, — с тремя готовыми
+   порциями и своим весом, — и показывает калории со знаком «≈». После
+   записи — «Отменить» и «Исправить» тут же, в плашке: ошибку замечают в
+   эту секунду, а не вечером в дневнике. */
+const PORTION_SHARES = [[0.5, 'Половина'], [1, 'Как в подборе'], [1.5, 'Полторы']];
+
+function scaledMeal(item, grams) {
+  const base = Number(item.weight_g) || 0;
+  const k = base > 0 ? grams / base : 1;
+  const pick = (key) => Math.round((Number(item[key]) || 0) * k * 10) / 10;
+  return {
+    name: item.name, weight_g: Math.round(grams),
+    calories: pick('calories'), protein_g: pick('protein_g'), fat_g: pick('fat_g'),
+    carbs_g: pick('carbs_g'), fiber_g: pick('fiber_g'),
+  };
+}
+
+// Сколько записать. null — человек передумал.
+async function askPortion(item) {
+  const base = Math.round(Number(item.weight_g) || 0);
+  if (base <= 0) return scaledMeal(item, 0);
+  // Калории в подписи — ровно те, что запишутся: тем же пересчётом от
+  // граммов. Иначе вариант обещал бы 299, а в дневник легло бы 300.
+  const kcal = (grams) => Math.round(scaledMeal(item, grams).calories);
+  const grams = await askNumber({
+    title: 'Сколько записать?',
+    hint: `${item.name}. Калории — примерная оценка по справочнику: `
+      + 'порцию никто не взвешивал. Выбери ближе всего или впиши свой вес.',
+    choices: PORTION_SHARES.map(([share, word]) => ({
+      value: Math.round(base * share),
+      label: `${word} · ${Math.round(base * share)} г ≈ ${kcal(Math.round(base * share))} ккал`,
+    })),
+    label: 'Свой вес, г', value: base, min: 5, max: 3000,
+  });
+  return grams === null ? null : scaledMeal(item, grams);
+}
+
+let mealSaving = false;
+
+// Одна дорога записи для подбора, кубика и «ешь как обычно». `ask` —
+// спрашивать ли порцию: у «ешь как обычно» она уже своя, из прошлых записей.
+async function recordMeal(item, { ask = true, fromOffer = true } = {}) {
+  if (mealSaving) return null;       // второй тап, пока идёт первый
+  const meal = ask ? await askPortion(item) : scaledMeal(item, Number(item.weight_g) || 0);
+  if (!meal) return null;
+  mealSaving = true;
   try {
-    await api('/api/meals', { method: 'POST', body: JSON.stringify(item) });
+    const result = await api('/api/meals', {
+      method: 'POST',
+      // Ключ нажатия: повтор того же запроса сервер узнаёт и второй записи
+      // не заводит — на случай переотправки при плохой сети.
+      body: JSON.stringify({ ...meal, from_offer: fromOffer,
+        request_id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}` }),
+    });
     haptic('medium');
-    toast(`Записала: ${item.name}`);
-    if (row) row.remove();
-    document.getElementById('recipe-sheet').hidden = true;
+    savedToast(result.meal || { name: meal.name });
     await refresh();
-  } catch (e) { toast(e.message); }
+    return result.meal;
+  } catch (e) {
+    toast(e.message);
+    return null;
+  } finally {
+    mealSaving = false;
+  }
+}
+
+// Плашка после записи: что записано и две кнопки. Висит дольше обычной —
+// шесть секунд, чтобы успеть прочитать и передумать.
+function savedToast(meal) {
+  const el = document.getElementById('toast');
+  el.innerHTML = '';
+  const text = document.createElement('span');
+  text.textContent = meal.calories !== undefined
+    ? `Записано: ${meal.name}, ${meal.weight_g} г ≈ ${meal.calories} ккал`
+    : `Записано: ${meal.name}`;
+  el.appendChild(text);
+  if (meal.id) {
+    const actions = document.createElement('span');
+    actions.className = 'toast-actions';
+    const fix = document.createElement('button');
+    fix.className = 'toast-btn';
+    fix.textContent = 'Исправить';
+    fix.onclick = () => { el.hidden = true; editWeight(meal); };
+    const undo = document.createElement('button');
+    undo.className = 'toast-btn';
+    undo.textContent = 'Отменить';
+    undo.onclick = async () => {
+      el.hidden = true;
+      try {
+        await api(`/api/meals/${meal.id}`, { method: 'DELETE' });
+        toast('Запись отменена');
+        await refresh();
+      } catch (e) { toast(e.message); }
+    };
+    actions.append(fix, undo);
+    el.appendChild(actions);
+  }
+  el.hidden = false;
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => { el.hidden = true; }, 6000);
+}
+
+async function eatOffer(item, row) {
+  const meal = await recordMeal(item);
+  if (!meal) return;
+  if (row) row.remove();
+  document.getElementById('recipe-sheet').hidden = true;
 }
 
 function openRecipe(index) {
@@ -4223,7 +4346,7 @@ function renderPreps(items) {
         <span class="prep-name"></span>
         <span class="prep-keep"></span>
       </button>
-      <button class="prep-mark" title="Приготовила"></button>`;
+      <button class="prep-mark" title="Приготовлено"></button>`;
     row.querySelector('.prep-name').textContent = prep.name;
     // Пока заготовки нет — показываем срок хранения из справочника. Когда
     // есть — сколько осталось именно у неё.
@@ -4288,15 +4411,22 @@ function openPrep(index) {
 }
 
 /* --- Быстрая отметка состояния прямо с плитки --- */
+// Значение хранится прежним («устала» — так записано у всех, кто отмечал
+// раньше), а показывается в ряд с остальными наречиями: женский род здесь
+// говорил бы с каждым как с женщиной. Та же пара, что MOOD_SHOWN в
+// services/moments.py.
+const MOOD_SHOWN = { 'устала': 'устало' };
+const moodWord = (value) => MOOD_SHOWN[value] || value;
+
 const STATE_FIELDS = {
   energy: {
     title: 'Энергия',
-    hint: '1 — на нуле, 10 — полна сил. Отметится текущим временем.',
+    hint: '1 — на нуле, 10 — сил через край. Отметится текущим временем.',
     scale: 10,
   },
   focus: {
     title: 'Фокус',
-    hint: '1 — мысли разбегаются, 10 — собрана.',
+    hint: '1 — мысли разбегаются, 10 — полный фокус.',
     scale: 10,
   },
   mood: {
@@ -4329,7 +4459,7 @@ function openState(key) {
     const button = document.createElement('button');
     button.className = `state-opt${field.options ? ' wide' : ''}` +
       (String(value) === String(current) ? ' on' : '');
-    button.textContent = value;
+    button.textContent = key === 'mood' ? moodWord(value) : value;
     button.onclick = () => saveState(key, value);
     box.appendChild(button);
   }
@@ -4341,7 +4471,7 @@ async function saveState(key, value) {
     await api('/api/checkin', { method: 'POST', body: JSON.stringify({ [key]: value }) });
     document.getElementById('state-sheet').hidden = true;
     haptic('medium');
-    toast(`${STATE_FIELDS[key].title}: ${value}`);
+    toast(`${STATE_FIELDS[key].title}: ${key === 'mood' ? moodWord(value) : value}`);
     await refresh();
   } catch (e) {
     toast(e.message);
@@ -4576,6 +4706,9 @@ function renderProfile(data) {
     `вода ${(n.water_ml / 1000).toFixed(1)} л`;
 
   optionButtons('prof-goal', data.options.goal, p.goal, (code) => saveProfile({ goal: code }));
+  const conflict = document.getElementById('prof-goal-conflict');
+  conflict.textContent = p.goal_conflict || '';
+  conflict.hidden = !p.goal_conflict;
   optionButtons('prof-activity', data.options.activity, p.activity,
     (code) => saveProfile({ activity: code }));
   optionButtons('prof-diet', data.options.diet, p.diet, (code) => saveProfile({ diet: code }));
@@ -4855,7 +4988,7 @@ const cubeState = { level: '', craving: 'random', recent: [], ready: false,
 function buildCubeControls() {
   const levels = [
     ['light', '🟢', 'Просто пожевать'],
-    ['normal', '🟡', 'Нормально голодна'],
+    ['normal', '🟡', 'Обычный голод'],
     ['hungry', '🔴', 'Сейчас съем кассира'],
     ['meal', '🟣', 'Нужен почти обед'],
   ];
@@ -5198,7 +5331,7 @@ function renderCubes(cubes) {
         ≈ ${item.protein_low}–${item.protein_high} г белка</p>
       <div class="cube-actions">
         <button class="btn ghost" data-roll="1">🎲 Другой</button>
-        <button class="btn" data-eat="1">Съел</button>
+        <button class="btn" data-eat="1">Записать</button>
       </div>`;
 
     card.querySelector('[data-roll]').onclick = () => rollCube();
@@ -5212,21 +5345,13 @@ function renderCubes(cubes) {
 async function eatCube(item, card) {
   const button = card.querySelector('[data-eat]');
   button.disabled = true;
-  try {
-    await api('/api/meals', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: item.items.map((part) => part.name).join(' + ').slice(0, 60),
-        weight_g: item.weight_g, calories: item.kcal,
-        protein_g: item.protein_g, fat_g: item.fat_g, carbs_g: item.carbs_g,
-      }),
-    });
-    toast('Записала в дневник');
-    await refresh();
-  } catch (error) {
-    button.disabled = false;
-    toast(error.message);
-  }
+  const meal = await recordMeal({
+    name: item.items.map((part) => part.name).join(' + ').slice(0, 60),
+    weight_g: item.weight_g, calories: item.kcal,
+    protein_g: item.protein_g, fat_g: item.fat_g, carbs_g: item.carbs_g,
+  });
+  // Передумал или не записалось — кнопка снова доступна.
+  if (!meal) button.disabled = false;
 }
 
 /* --- Подбор занятия: два вопроса вместо каталога ------------------------- */
@@ -5503,7 +5628,7 @@ function shareInvite(link) {
 async function renewInvite() {
   const sure = await askYes({
     title: 'Сменить ссылку?',
-    text: 'Старая перестанет работать: тем, кому ты её уже отправила, '
+    text: 'Старая перестанет работать: у всех, кому она уже отправлена, '
       + 'придётся прислать новую.',
     action: 'Сменить',
   });
@@ -5586,8 +5711,8 @@ const TOUR = {
   gym: [
     { sel: '#pick-card', title: 'Подобрать мне',
       text: 'Скажи, сколько есть минут, — соберу тренировку. Быстрее, чем выбирать из каталога.' },
-    { sel: '#cardio-card', title: 'Я занималась сама',
-      text: 'Бегала, плавала, танцевала — отметь плитку и запиши минуты. Программу выбирать не надо.' },
+    { sel: '#cardio-card', title: 'Своя тренировка',
+      text: 'Бег, плавание, танцы — отметь плитку и запиши минуты. Программу выбирать не надо.' },
     { sel: '#category-switch', title: 'Направления',
       text: 'Тело, лицо, глаза, осанка, женское. У каждого свои программы.' },
   ],

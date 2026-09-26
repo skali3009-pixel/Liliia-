@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from models import Checkin, Meal, SupplementLog, WorkoutLog
 from utils.timeframe import DEFAULT_TIMEZONE, day_bounds, to_local
+from services.moments import mood_word
 
 # Упражнения одной тренировки идут подряд; всё, что записано в пределах этого
 # промежутка, считаем одним занятием, а не пятью отдельными событиями.
@@ -48,7 +49,7 @@ def _state_event(checkin: Checkin) -> Event | None:
     """Отметка состояния — одно событие, даже если сказано несколько вещей."""
     parts = []
     if checkin.mood:
-        parts.append(f"настроение: {checkin.mood}")
+        parts.append(f"настроение: {mood_word(checkin.mood)}")
     if checkin.energy:
         parts.append(f"энергия {checkin.energy}/10")
     if checkin.focus:

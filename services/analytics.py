@@ -43,7 +43,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, timedelta
 
 from sqlalchemy import func, select
@@ -63,6 +63,13 @@ PROFILE_COMPLETED = "profile_completed"
 ACTION_COMPLETED = "action_completed"
 FIRST_ACTION = "first_action_completed"
 ACTIVE_DAY = "active_day"
+# Запись еды отменена или удалена. Отдельным событием, а не минусом к
+# действиям: сколько записей оказалось ошибочными — это мера того, насколько
+# человек верит оценке, и прятать её в разности нельзя.
+MEAL_UNDONE = "meal_undone"
+# Запись еды сделана из подбора («что съесть», кубик), а не описана самим
+# человеком. Без этого рекомендацию не отличить от настоящего ввода.
+MEAL_FROM_OFFER = "meal_from_offer"
 
 # Уточнения к запуску.
 NEW_PROFILE = "new"
@@ -164,6 +171,12 @@ class Report:
     active_days: int         # активных дней всего (людей × дни)
     actions: dict[str, int]  # вид действия → сколько раз (это события, не люди)
     sources: dict[str, int]  # первый источник → сколько новых людей
+    # вид действия → сколько разных людей его сделали. Без этого «80
+    # записей еды» нельзя отличить от «один человек записал восемьдесят раз»,
+    # и вопрос «что главный вход в продукт» решался бы по кликам.
+    actions_people: dict[str, int] = field(default_factory=dict)
+    meals_from_offer: int = 0  # записей еды из подбора (события, не люди)
+    meals_undone: int = 0      # отменённых или удалённых записей еды (события)
 
 
 async def report(session: AsyncSession, *, days: int = 30,
@@ -211,6 +224,15 @@ async def report(session: AsyncSession, *, days: int = 30,
         источники_стмт = источники_стмт.where(User.id.not_in(лишние))
     источники_стмт = источники_стмт.group_by(User.first_source)
 
+    async def событий(event: str) -> int:
+        stmt = select(func.coalesce(func.sum(MarketingEvent.count), 0)).where(
+            MarketingEvent.event == event,
+            MarketingEvent.day >= since, MarketingEvent.day <= until,
+        )
+        if лишние:
+            stmt = stmt.where(MarketingEvent.user_id.not_in(лишние))
+        return int((await session.execute(stmt)).scalar_one())
+
     return Report(
         since=since,
         until=until,
@@ -224,10 +246,14 @@ async def report(session: AsyncSession, *, days: int = 30,
                  (await session.execute(действия_стмт)).all()},
         sources={метка: int(сколько) for метка, сколько in
                  (await session.execute(источники_стмт)).all()},
+        actions_people={вид: await людей(ACTION_COMPLETED, вид) for вид in ACTIONS},
+        meals_from_offer=await событий(MEAL_FROM_OFFER),
+        meals_undone=await событий(MEAL_UNDONE),
     )
 
 
 __all__ = ["ACTIONS", "ACTION_COMPLETED", "ACTIVE_DAY", "BOT_START",
-           "EXISTING_PROFILE", "FIRST_ACTION", "NEW_PROFILE",
+           "EXISTING_PROFILE", "FIRST_ACTION", "MEAL_FROM_OFFER", "MEAL_UNDONE",
+           "NEW_PROFILE",
            "PROFILE_COMPLETED", "REPORT_TZ", "Report", "note", "report",
            "useful_action"]

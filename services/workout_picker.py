@@ -87,8 +87,13 @@ def pick(*, minutes_available: int = 30, energy: int | None = None,
     tired = energy is not None and energy <= 2
 
     scored: list[tuple[float, Pick]] = []
+    from seed.workout_programs import PRIVATE_CATEGORIES
+
     for code, program in PROGRAMS.items():
         if category and program["category"] != category:
+            continue
+        # Личная тема — только по прямому выбору направления, не подбором.
+        if program["category"] in PRIVATE_CATEGORIES and category != program["category"]:
             continue
         if location and program["location"] != location:
             continue

@@ -541,7 +541,7 @@ def test_the_activity_card_is_above_the_catalogue():
     """
     gym = INDEX.split('id="screen-gym"', 1)[1].split("</main>", 1)[0]
     assert gym.index("cardio-card") < gym.index('id="exercises"')
-    assert "Я занималась сама" in gym
+    assert "Записать свою тренировку" in gym
 
 
 def test_the_choice_buttons_are_seen_without_scrolling():

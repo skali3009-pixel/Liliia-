@@ -86,7 +86,7 @@ async def _thank_for_invite(message: Message, кто, inviter_id: int,
     """
     if to_newcomer:
         await message.answer(
-            f"И ещё: ты пришла по ссылке подруги — держи {дни(to_newcomer)} "
+            f"И ещё: ты здесь по приглашению — держи {дни(to_newcomer)} "
             "доступа сверх обычного срока."
         )
 
@@ -100,7 +100,7 @@ async def _thank_for_invite(message: Message, кто, inviter_id: int,
     try:
         await message.bot.send_message(
             inviter_id,
-            f"{имя} завела профиль по твоей ссылке — тебе {дни(to_inviter)} "
+            f"{имя} теперь в AURA по твоей ссылке — тебе {дни(to_inviter)} "
             "доступа в подарок. Спасибо!"
         )
     except Exception as error:  # noqa: BLE001 — чужой чат нам не подчиняется
@@ -279,7 +279,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         await message.answer(
             f"👟 Ты в команде «{team_name}».\n\n"
             "Считаем шаги вместе: у команды общий счёт за неделю и своя "
-            "таблица. Число шагов вносишь сама — смотри его в «Здоровье» "
+            "таблица. Число шагов вносишь вручную — смотри его в «Здоровье» "
             "на телефоне."
         )
 
@@ -315,7 +315,7 @@ async def предложить_продолжить(message: Message, шаг: Ш
     builder.button(text="Начать заново", callback_data=CB_RESTART)
     builder.adjust(1)
     await message.answer(
-        f"Ты остановилась на вопросе {номер_шага(шаг)} из {ВСЕГО_ШАГОВ}. "
+        f"Анкета ждёт тебя на вопросе {номер_шага(шаг)} из {ВСЕГО_ШАГОВ}. "
         f"Осталось {осталось} — это меньше минуты.",
         reply_markup=builder.as_markup(),
     )

@@ -45,6 +45,7 @@ from keyboards.main_menu import MENU_TEXTS, main_menu_keyboard
 СЦЕНАРИИ = [
     ("ждём текст еды", food.router, FoodStates.waiting_input, "handle_food_text"),
     ("правим вес блюда", food.router, FoodStates.correcting_weight, "apply_weight"),
+    ("правим вес уже записанного", food.router, FoodStates.fixing_saved, "apply_fix_saved"),
     ("правим название блюда", food.router, FoodStates.correcting_dish,
      "apply_correct_dish"),
     ("ждём число шагов", steps.router, StepStates.waiting_number, "take_number"),

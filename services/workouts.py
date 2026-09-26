@@ -131,8 +131,13 @@ async def log_session(
     weight_kg: float,
     exercise_ids: list[int],
     minutes: float | None = None,
+    sets_done: dict[int, int] | None = None,
 ) -> tuple[int, float, float]:
     """Записать выполненные упражнения.
+
+    `sets_done` — сколько подходов каждого упражнения правда сделано (из
+    проводника). Минуты и расход делятся в той же доле: один подход из трёх —
+    треть. Упражнения, которого в словаре нет, считаются целиком, как было.
 
     Возвращает (сколько записано, всего минут, всего калорий).
     """
@@ -152,12 +157,19 @@ async def log_session(
         own_minutes = minutes if workout.workout_type == WorkoutTypeEnum.CARDIO else None
         burned = exercise_calories(workout, weight_kg, minutes=own_minutes)
         spent = own_minutes if own_minutes is not None else exercise_minutes(workout)
+        done_sets = workout.sets
+        if (sets_done is not None and own_minutes is None and workout.sets
+                and workout.id in sets_done):
+            done_sets = min(max(sets_done[workout.id], 1), workout.sets)
+            share = done_sets / workout.sets
+            burned *= share
+            spent *= share
 
         session.add(
             WorkoutLog(
                 user_id=user_id,
                 workout_id=workout.id,
-                sets_done=workout.sets,
+                sets_done=done_sets,
                 reps_done=workout.reps,
                 duration_minutes=round(spent, 1),
                 calories_burned=round(burned, 1),

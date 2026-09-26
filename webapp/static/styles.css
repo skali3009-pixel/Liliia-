@@ -257,6 +257,14 @@ button:focus-visible, .tab:focus-visible {
   padding: 10px 16px; border-radius: 12px; font-size: 13px; z-index: 10;
   box-shadow: 0 10px 30px rgba(0, 0, 0, .5);
 }
+/* Плашка после записи еды: текст и две кнопки. Кнопки — строкой ниже,
+   а не рядом: на узком экране название блюда иначе сжалось бы в столбик. */
+.toast:has(.toast-actions) { width: min(92vw, 360px); }
+.toast-actions { display: flex; gap: 8px; margin-top: 8px; }
+.toast-btn {
+  flex: 1; padding: 8px 10px; border-radius: 10px; font: inherit; font-weight: 600;
+  background: transparent; color: var(--lilac); border: 1px solid var(--stroke);
+}
 
 /* --- Прогресс --- */
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 12px; }
@@ -2096,3 +2104,7 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
   0%, 100% { transform: translateX(-13px); }
   50% { transform: translateX(13px); }
 }
+
+/* Предупреждение в профиле: цель и вес цели говорят разное. Золотом, а не
+   красным: это не ошибка человека, а вопрос к нему. */
+.hint.warn { color: var(--gold); margin-top: 8px; }

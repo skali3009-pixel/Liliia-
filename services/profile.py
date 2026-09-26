@@ -184,6 +184,35 @@ async def set_allergies(session: AsyncSession, user: User, text: str) -> None:
     await session.commit()
 
 
+# Меньше этого расхождение цели и веса цели — не противоречие, а весы:
+# полкило гуляют за день от воды и соли.
+CONFLICT_MARGIN_KG = 0.5
+
+
+def goal_conflict(user: User) -> str | None:
+    """Цель и вес цели говорят разное — сказать об этом словами.
+
+    Норма считается по цели, а не по весу цели. Человек, поставивший «набор
+    массы» и вес цели ниже текущего, получает норму на набор и не видит,
+    почему. Может быть, он хочет рельеф — меньше жира, больше мышц, —
+    а может, просто забыл сменить цель. Решать за него нельзя ни в ту, ни в
+    другую сторону: поэтому только называем расхождение и что из него
+    следует, а цель остаётся, пока человек сам её не сменит.
+    """
+    weight, target = user.current_weight_kg, user.target_weight_kg
+    if not weight or not target or user.goal is None:
+        return None
+    if user.goal == GoalEnum.GAIN_MASS and target < weight - CONFLICT_MARGIN_KG:
+        return (f"Цель — набор массы, а вес цели ({target:g} кг) ниже нынешнего "
+                f"({weight:g} кг). Норма сейчас посчитана на набор. Хочешь снижать "
+                "вес — смени цель; меньше жира и больше мышц — это цель «Рельеф».")
+    if user.goal == GoalEnum.LOSE_WEIGHT and target > weight + CONFLICT_MARGIN_KG:
+        return (f"Цель — снижение веса, а вес цели ({target:g} кг) выше нынешнего "
+                f"({weight:g} кг). Норма сейчас посчитана со снижением. Если "
+                "хочешь набрать — смени цель или поправь вес цели.")
+    return None
+
+
 async def set_target_weight(session: AsyncSession, user: User, value: float) -> None:
     user.target_weight_kg = value
     await session.commit()

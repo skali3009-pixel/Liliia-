@@ -17,6 +17,7 @@ from services import events as event_service
 from services import cycle
 from services import notifications
 from services import preps as prep_service
+from services import profile as profile_service
 from services.checkins import save_checkin, today_state
 from services.preps import expiring_names
 from services.workouts import recent_program_codes
@@ -27,7 +28,9 @@ from services import usage
 from services.gamification import awards_summary, sync_today
 from services import context
 from services import turn as turn_service
-from services.meals import get_today_totals, list_today_meals, save_meal
+from services.meals import (
+    delete_meal, get_today_totals, list_today_meals, rescale_meal, save_meal,
+)
 from services.menu import board as menu_board
 from services.moments import Moment, analyze_moment, facts as moment_facts
 from services.export import build_export
@@ -77,7 +80,7 @@ from utils.disk import usage as disk_usage
 from utils import images
 from utils.macros import GAP_LABELS, dominant_gap, remaining
 from utils.meal_time import MEAL_TYPE_RU, guess_meal_type
-from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G, scale_nutrition
+from utils.portions import MAX_WEIGHT_G, MIN_WEIGHT_G
 from utils.timeframe import (DEFAULT_TIMEZONE, get_zone, is_known_zone,
                             to_local, today_in)
 from webapp.auth import AuthError, verify_init_data
@@ -376,25 +379,7 @@ async def update_meal(request: web.Request) -> web.Response:
             return web.json_response({"error": "Запись не найдена"}, status=404)
         if not meal.weight_g:
             return web.json_response({"error": "У записи не указан вес"}, status=400)
-
-        scaled = scale_nutrition(
-            {
-                "calories": meal.calories,
-                "protein_g": meal.protein_g,
-                "fat_g": meal.fat_g,
-                "carbs_g": meal.carbs_g,
-                "fiber_g": meal.fiber_g or 0,
-            },
-            from_weight_g=meal.weight_g,
-            to_weight_g=weight,
-        )
-        meal.weight_g = weight
-        meal.calories = scaled["calories"]
-        meal.protein_g = scaled["protein_g"]
-        meal.fat_g = scaled["fat_g"]
-        meal.carbs_g = scaled["carbs_g"]
-        meal.fiber_g = scaled["fiber_g"]
-        await session.commit()
+        await rescale_meal(session, meal, weight)
         return web.json_response(_meal_json(meal, request["timezone"]))
 
 
@@ -404,8 +389,7 @@ async def delete_meal_entry(request: web.Request) -> web.Response:
         meal = await session.get(Meal, meal_id)
         if meal is None or meal.user_id != request["user_id"]:
             return web.json_response({"error": "Запись не найдена"}, status=404)
-        await session.delete(meal)
-        await session.commit()
+        await delete_meal(session, meal)
     return web.json_response({"ok": True})
 
 
@@ -508,6 +492,11 @@ def _body_block(user: User, measures: dict[str, float], *, weight_kg: float | No
     )
 
     return {
+        # Рисунок фигуры — женский силуэт, другого нет. Мужчине и тому, кто
+        # пол не указал, его не показываем: чужое тело в «Твоё тело» — это
+        # не прогресс, а ошибка. Замеры, зоны и выводы от пола не зависят и
+        # остаются у всех.
+        "figure": user.gender == GenderEnum.FEMALE,
         "now": now.to_dict(),
         "goal": goal.to_dict() if goal else None,
         # Насколько растянуть рисунок фигуры под это тело и под цель.
@@ -825,14 +814,21 @@ async def get_workouts(request: web.Request) -> web.Response:
             "exercise_id": id_for(workout.name),
         }
 
-    from seed.workout_programs import CATEGORIES, CATEGORIES_WITH_CALORIES
+    from seed.workout_programs import (CATEGORIES, CATEGORIES_WITH_CALORIES,
+                                       PRIVATE_CATEGORIES)
     from services.workout_picker import program_minutes
+
+    gender = user.gender.value if user.gender else None
+    # Кто уже стоит в направлении (пришёл по ссылке), чип не теряет: иначе
+    # экран показывал бы программу раздела, которого нет в ряду.
+    shown = [(code, label) for code, label in CATEGORIES
+             if PRIVATE_CATEGORIES.get(code, gender) == gender or code == category]
 
     chosen_program = next((p for p in programs if p.code == chosen), None)
 
     return web.json_response(
         {
-            "categories": [{"code": code, "label": label} for code, label in CATEGORIES],
+            "categories": [{"code": code, "label": label} for code, label in shown],
             "styles": [{"code": code, "label": label} for code, label in styles_for(category)],
             "category": category,
             "style": style,
@@ -887,6 +883,17 @@ async def post_workout_log(request: web.Request) -> web.Response:
         if not 1 <= minutes <= 300:
             return web.json_response({"error": "Время от 1 до 300 минут"}, status=400)
 
+    # Сколько подходов правда сделано — из проводника. Нет поля — значит,
+    # отметка из каталога («сделала упражнение»), и считается оно целиком.
+    sets_done: dict[int, int] | None = None
+    if isinstance(body.get("sets"), dict):
+        sets_done = {}
+        for key, value in body["sets"].items():
+            try:
+                sets_done[int(key)] = max(int(value), 0)
+            except (TypeError, ValueError):
+                continue
+
     async with get_session() as session:
         user = await session.get(User, request["user_id"])
         count, total_minutes, calories = await log_session(
@@ -895,6 +902,7 @@ async def post_workout_log(request: web.Request) -> web.Response:
             weight_kg=user.current_weight_kg or 70,
             exercise_ids=exercise_ids,
             minutes=minutes,
+            sets_done=sets_done,
         )
         summary = await week_summary(session, user.id, timezone_name=request["timezone"])
         # Завершение тренировки, а не её начало: сюда приходят уже
@@ -907,8 +915,19 @@ async def post_workout_log(request: web.Request) -> web.Response:
     )
 
 
+# Недавние записи по ключу запроса: (человек, ключ) → (номер записи, когда).
+# Приложение присылает ключ на каждое нажатие «Записать», и повтор того же
+# нажатия — двойной тап, переотправка после плохой сети — возвращает уже
+# сделанную запись, а не заводит вторую. В памяти, а не в базе: окно в
+# минуту, и после перезапуска повторять уже нечего.
+_RECENT_MEALS: dict[tuple[int, str], tuple[int, float]] = {}
+REPEAT_WINDOW_S = 60.0
+
+
 async def post_meal(request: web.Request) -> web.Response:
     """Записать блюдо целиком — например, выбранное из рекомендаций."""
+    import time
+
     body = await request.json()
     name = str(body.get("name", "")).strip()
     if not name:
@@ -919,6 +938,28 @@ async def post_meal(request: web.Request) -> web.Response:
             return max(float(body.get(key, 0)), 0)
         except (TypeError, ValueError):
             return 0.0
+
+    user_id = request["user_id"]
+    now = time.monotonic()
+    for old_key, (_, when) in list(_RECENT_MEALS.items()):
+        if now - when > REPEAT_WINDOW_S:
+            _RECENT_MEALS.pop(old_key, None)
+    request_key = str(body.get("request_id") or "")[:64]
+    slot = (user_id, request_key) if request_key else None
+    if slot and slot in _RECENT_MEALS and _RECENT_MEALS[slot][0] == 0:
+        # Первый такой же запрос ещё пишет: ответить надо, не дожидаясь,
+        # и не заводя вторую запись.
+        return web.json_response({"error": "Уже записываю"}, status=409)
+    if slot and slot in _RECENT_MEALS:
+        async with get_session() as session:
+            meal = await session.get(Meal, _RECENT_MEALS[slot][0])
+            totals = await get_today_totals(session, user_id, timezone_name=request["timezone"])
+            if meal is not None and meal.user_id == user_id:
+                return web.json_response({
+                    "ok": True, "repeat": True,
+                    "meal": _meal_json(meal, request["timezone"]),
+                    "calories_today": round(totals.calories),
+                })
 
     analysis = FoodAnalysis(
         name=name[:60],
@@ -932,18 +973,39 @@ async def post_meal(request: web.Request) -> web.Response:
         comment="",
     )
 
+    if slot:
+        # Место занимается до первого ожидания: два одновременных запроса
+        # иначе оба прошли бы проверку выше, пока первый ещё пишет.
+        _RECENT_MEALS[slot] = (0, now)
+    try:
+        meal, totals = await _save_offered(request, user_id, analysis, body)
+    except Exception:
+        if slot:
+            _RECENT_MEALS.pop(slot, None)
+        raise
+    if slot:
+        _RECENT_MEALS[slot] = (meal.id, now)
+
+    # Запись возвращается целиком: по ней приложение показывает «Отменить» и
+    # «Исправить» сразу после сохранения, не разыскивая её в дневнике.
+    return web.json_response({"ok": True, "meal": _meal_json(meal, request["timezone"]),
+                              "calories_today": round(totals.calories)})
+
+
+async def _save_offered(request: web.Request, user_id: int, analysis: FoodAnalysis,
+                        body: dict):
     async with get_session() as session:
-        user = await session.get(User, request["user_id"])
-        await save_meal(
+        user = await session.get(User, user_id)
+        meal = await save_meal(
             session,
             user_id=user.id,
             analysis=analysis,
             source=MealSourceEnum.TEXT,
             meal_type=guess_meal_type(datetime.now(get_zone(request["timezone"]))),
+            from_offer=bool(body.get("from_offer")),
         )
         totals = await get_today_totals(session, user.id, timezone_name=request["timezone"])
-
-    return web.json_response({"ok": True, "calories_today": round(totals.calories)})
+    return meal, totals
 
 
 async def post_moment(request: web.Request) -> web.Response:
@@ -1131,6 +1193,9 @@ def _profile_json(user: User, prefs=None) -> dict:
             "reminders": bool(user.reminders_enabled),
             "cycle": bool(user.cycle_enabled),
             "steps_goal": user.daily_steps or 0,
+            # Цель и вес цели противоречат друг другу — та же строка, что в
+            # чате (`services.profile.goal_conflict`): два текста разошлись бы.
+            "goal_conflict": profile_service.goal_conflict(user),
         },
         "norms": {
             "calories": user.daily_calories or 0,

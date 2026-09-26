@@ -543,7 +543,7 @@
                placeholder="Одна рука (бицепс), см">
       </div>
       <button id="m-save" class="btn primary">Сохранить замер</button>
-      <p class="hint">Заполни то, что мерила — остальное можно пропустить.
+      <p class="hint">Заполни то, что измерено, — остальное можно пропустить.
         <button class="link-btn" id="measure-help">как мерить</button></p>
       <p class="hint" id="measure-help-text" hidden>«Бёдра» — вокруг таза по
         самой широкой точке ягодиц, это один обхват на двоих. «Одна нога» —
@@ -586,7 +586,7 @@
          половина страницы. Показываем шесть, остальные под кнопкой: даже
          плитками двенадцать штук — это стена. -->
     <section class="card" id="cardio-card">
-      <div class="card-head"><h2>Я занималась сама</h2></div>
+      <div class="card-head"><h2>Записать свою тренировку</h2></div>
       <p class="hint">Бег, бассейн, урок танцев, дорога пешком — отметь, и
         я посчитаю время и расход.</p>
       <div class="chips wrap" id="cardio-list"></div>
@@ -786,12 +786,12 @@
     <section class="card" id="cube-basket-card">
       <div class="card-head"><h2 class="cube-q">Что у тебя в корзине</h2>
         <button class="link-btn" id="cube-basket-toggle">показать</button></div>
-      <p class="hint">Отметь, что уже нашла — соберу только из этого.</p>
+      <p class="hint">Отметь, что уже в корзине, — соберу только из этого.</p>
       <div id="cube-basket" hidden></div>
     </section>
 
     <section class="card" id="cube-ask">
-      <h2 class="cube-q">Насколько голодна?</h2>
+      <h2 class="cube-q">Насколько хочется есть?</h2>
       <div class="cube-levels" id="cube-levels"></div>
 
       <h2 class="cube-q">Чего хочется?</h2>
@@ -874,7 +874,7 @@
 
     <div id="moment-input">
       <textarea id="moment-text" class="input area" rows="3"
-                placeholder="Позавтракала, выпила кофе и чувствую себя бодрее"></textarea>
+                placeholder="Омлет на завтрак, кофе — и чувствую себя бодрее"></textarea>
       <button class="btn" id="moment-send">Распознать</button>
       <p class="hint">Голосом — отправь голосовое боту в чат: он поймёт так же,
         а сюда всё придёт само.</p>
@@ -964,6 +964,8 @@
 
     <div class="eyebrow ruled">Цель</div>
     <div class="state-options" id="prof-goal"></div>
+    <!-- Цель и вес цели говорят разное: называем, а не решаем за человека. -->
+    <p class="hint warn" id="prof-goal-conflict" hidden></p>
 
     <div class="eyebrow ruled">Активность</div>
     <div class="state-options" id="prof-activity"></div>
@@ -1041,7 +1043,7 @@
         <select class="input tight" id="notif-to"></select>
       </label>
       <p class="hint">Ночью бот молчит. Напоминания о добавках это не трогает —
-        их время ты назначаешь сама.</p>
+        их время назначаешь ты.</p>
     </div>
 
     <div class="eyebrow ruled">Мои данные</div>
@@ -1054,7 +1056,7 @@
          и выгонять его отсюда ради жалобы — значит не получить жалобу. -->
     <div class="eyebrow ruled">Что-то не так</div>
     <textarea class="input" id="prof-problem" rows="3" maxlength="1000"
-      placeholder="Что нажала, что ожидала увидеть и что увидела вместо этого"></textarea>
+      placeholder="Какую кнопку нажимали, что ждали увидеть и что вышло"></textarea>
     <button class="btn ghost" id="prof-problem-send">✍️ Рассказать</button>
     <p class="hint" id="prof-problem-hint">Прочтёт живой человек. Если понадобится
       уточнить, ответят прямо в чат боту.</p>
@@ -1073,7 +1075,7 @@
     <div class="eyebrow ruled">Как приготовить</div>
     <p class="recipe-steps" id="recipe-steps"></p>
     <p class="hint" id="recipe-source"></p>
-    <button class="btn" id="recipe-eat">Съела это</button>
+    <button class="btn" id="recipe-eat">Записать блюдо</button>
   </div>
 </div>
 

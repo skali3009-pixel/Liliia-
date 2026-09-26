@@ -54,12 +54,12 @@ class Arrival:
 
 def render(arrival: Arrival) -> str:
     """Поздравление и один вопрос. Без «а теперь давай ещё пять килограммов»."""
-    lines = ["🎯 Ты дошла до своей цели.", ""]
+    lines = ["🎯 Цель достигнута.", ""]
     if arrival.change_kg >= 0.5:
         lines.append(f"Было {arrival.started_kg:g}, стало {arrival.weight_kg:g} — "
                      f"это {arrival.change_kg:.1f} кг пути.")
     else:
-        lines.append(f"На весах {arrival.weight_kg:g} кг — ровно то, к чему шла.")
+        lines.append(f"На весах {arrival.weight_kg:g} кг — ровно та цифра, что стояла целью.")
 
     lines += [
         "",

@@ -94,7 +94,8 @@ def profile_text(user: User) -> str:
         f"Аллергии: {user.allergies or 'нет'}\n"
         f"Напоминания: {'включены' if user.reminders_enabled else 'выключены'}\n\n"
         f"{norms_line(user)}\n\n"
-        "Что-то изменилось? Поправь кнопками ниже 👇"
+        + (f"⚠️ {conflict}\n\n" if (conflict := profile_service.goal_conflict(user)) else "")
+        + "Что-то изменилось? Поправь кнопками ниже 👇"
     )
 
 

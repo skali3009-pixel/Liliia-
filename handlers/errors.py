@@ -38,7 +38,7 @@ def _tell_button():
     момент, когда рассказать и легко, и есть о чём.
     """
     builder = InlineKeyboardBuilder()
-    builder.button(text="✍️ Рассказать, что я делала", callback_data=CB_TELL)
+    builder.button(text="✍️ Рассказать, что случилось", callback_data=CB_TELL)
     return builder.as_markup()
 
 

@@ -1,28 +1,28 @@
 """Кнопка «Что съесть» в чате: подбор блюда под остаток нормы.
 
 Показывает то же, что и приложение: блюда из меню Анастасии со значком и
-блюда, собранные по её принципам, — без пометок. Всё КБЖУ посчитано по
-справочнику, поэтому запись в дневник точная, а не «примерно».
+блюда, собранные по её принципам, — без пометок. КБЖУ посчитано по
+справочнику — но для порции из подбора, а не для той, что оказалась на
+тарелке. Поэтому «Записать блюдо» не пишет сразу, а открывает ту же
+карточку, что фото и текст: с весом, «≈» у калорий, «меньше/больше» и
+«Сохранить». Подбор — это предложение, а дневник — то, что съедено.
 """
 
 from __future__ import annotations
 
 import logging
-from datetime import datetime
 
 from aiogram import F, Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from db import get_session
 from keyboards.main_menu import MENU_WHAT_TO_EAT
-from models import MealSourceEnum, Prep, User
+from models import Prep, User
 from services.food_vision import FoodAnalysis
-from services.meals import get_today_totals, save_meal
 from services.menu import MEAL_RU, Offer, board
-from utils.meal_time import guess_meal_type
-from utils.timeframe import get_zone
 
 logger = logging.getLogger(__name__)
 router = Router(name="suggestions")
@@ -43,7 +43,9 @@ def _keyboard(key: str, *, with_recipe: bool) -> InlineKeyboardMarkup:
     builder = InlineKeyboardBuilder()
     if with_recipe:
         builder.button(text="📖 Рецепт", callback_data=f"{CB_RECIPE}{key}")
-    builder.button(text="✅ Съела это", callback_data=f"{CB_EAT}{key}")
+    # Нейтрально: у бота нет права угадывать, кто держит телефон. Данные
+    # кнопки прежние — нажатия на старые сообщения доходят туда же.
+    builder.button(text="✍️ Записать блюдо", callback_data=f"{CB_EAT}{key}")
     builder.adjust(2)
     return builder.as_markup()
 
@@ -66,7 +68,7 @@ def offer_text(offer: Offer) -> str:
     mark = f" {AUTHOR_MARK}" if offer.author else ""
     lines = [
         f"🍽 {offer.name}{mark}",
-        f"{round(offer.weight_g)} г · {round(offer.calories)} ккал · {offer.minutes} мин",
+        f"{round(offer.weight_g)} г · ≈ {round(offer.calories)} ккал · {offer.minutes} мин",
         f"Б {round(offer.protein_g)} · Ж {round(offer.fat_g)} · У {round(offer.carbs_g)} г",
     ]
     if offer.fiber_g:
@@ -195,7 +197,11 @@ async def show_recipe(callback: CallbackQuery) -> None:
 
 
 @router.callback_query(F.data.startswith(CB_EAT))
-async def eat_suggestion(callback: CallbackQuery) -> None:
+async def eat_suggestion(callback: CallbackQuery, state: FSMContext) -> None:
+    # Карточка живёт в handlers/food.py; импорт здесь, чтобы не завязывать
+    # порядок загрузки двух роутеров друг на друга.
+    from handlers.food import _show_card
+
     key = callback.data.removeprefix(CB_EAT)
     offer = _offered.get(key)
     if offer is None:
@@ -204,27 +210,28 @@ async def eat_suggestion(callback: CallbackQuery) -> None:
 
     async with get_session() as session:
         user = await session.get(User, callback.from_user.id)
-        if user is None:
-            await callback.answer("Сначала настрой профиль: /start", show_alert=True)
-            return
+    if user is None or not user.onboarding_completed:
+        await callback.answer("Сначала настрой профиль: /start", show_alert=True)
+        return
 
-        await save_meal(
-            session,
-            user_id=user.id,
-            analysis=FoodAnalysis(
-                name=offer.name, weight_g=offer.weight_g, calories=offer.calories,
-                protein_g=offer.protein_g, fat_g=offer.fat_g, carbs_g=offer.carbs_g,
-                fiber_g=offer.fiber_g,
-                # Состав известен до грамма — это не догадка распознавания.
-                confidence="high", comment="",
-            ),
-            source=MealSourceEnum.TEXT,
-            meal_type=guess_meal_type(datetime.now(get_zone(user.timezone))),
-        )
-        totals = await get_today_totals(session, user.id, timezone_name=user.timezone)
-
-    _offered.pop(key, None)
-    await callback.message.edit_text(
-        f"{callback.message.text}\n\n✅ Записала. Сегодня: {round(totals.calories)} ккал"
+    # Ничего не записываем: только карточка «что будет записано». Вариант из
+    # списка не убираем — передумавший вернётся к нему той же кнопкой.
+    await _show_card(
+        callback.message, state,
+        FoodAnalysis(
+            name=offer.name, weight_g=offer.weight_g, calories=offer.calories,
+            protein_g=offer.protein_g, fat_g=offer.fat_g, carbs_g=offer.carbs_g,
+            fiber_g=offer.fiber_g,
+            # Состав известен, порция — нет: её никто не взвешивал.
+            confidence="medium",
+            comment=OFFER_BASIS,
+        ),
+        photo_file_id=None, from_offer=True,
     )
-    await callback.answer("Записала")
+    await callback.answer("Проверь порцию и сохрани")
+
+
+OFFER_BASIS = (
+    "Калории — по справочнику для порции из подбора. Порция другая — "
+    "поправь «меньше/больше» или вес, пересчитаю."
+)

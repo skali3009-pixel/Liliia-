@@ -17,15 +17,18 @@ import config
 from db import get_session
 from keyboards.food import (
     CB_CANCEL,
+    CB_FIX,
     CB_LESS,
     CB_MORE,
     CB_SAVE,
+    CB_UNDO,
     CB_WEIGHT,
     CB_WRONG_DISH,
     food_card_keyboard,
+    saved_keyboard,
 )
-from keyboards.main_menu import MENU_ADD_MEAL, MENU_TEXTS, main_menu_keyboard
-from models import MealSourceEnum, User
+from keyboards.main_menu import MENU_ADD_MEAL, MENU_TEXTS
+from models import Meal, MealSourceEnum, User
 from services.food_vision import (
     CONFIDENCE_RU,
     FoodAnalysis,
@@ -39,8 +42,10 @@ from services import alerts
 from services.checkins import save_checkin, today_state
 from services.gamification import sync_today
 from services import turn as turn_service
-from services.meals import get_today_totals, list_today_meals, save_meal
-from services.moments import Moment, analyze_moment
+from services.meals import (
+    delete_meal, get_today_totals, list_today_meals, rescale_meal, save_meal,
+)
+from services.moments import Moment, analyze_moment, mood_word
 from services.transcription import TranscriptionError, VoiceNotConfigured, transcribe
 from services.water import today_total_ml
 from services import usage
@@ -97,7 +102,9 @@ def _render_card(analysis: FoodAnalysis, meal_type_label: str) -> str:
         f"🍽 {analysis.name}",
         f"⚖️ ~{_num(analysis.weight_g)} г · {meal_type_label}",
         "",
-        f"🔥 {_num(analysis.calories)} ккал",
+        # «≈», а не голое число: калории здесь всегда оценка — по фото, по
+        # словам или по справочнику для порции, которую никто не взвешивал.
+        f"🔥 ≈ {_num(analysis.calories)} ккал",
         f"🥩 Б {_num(analysis.protein_g)} · 🥑 Ж {_num(analysis.fat_g)} · "
         f"🍚 У {_num(analysis.carbs_g)} г",
         f"🥦 Клетчатка {_num(analysis.fiber_g)} г",
@@ -116,9 +123,17 @@ def _current_meal_label(timezone_name: str = DEFAULT_TIMEZONE) -> str:
 
 
 async def _show_card(
-    message: Message, state: FSMContext, analysis: FoodAnalysis, *, photo_file_id: str | None
+    message: Message, state: FSMContext, analysis: FoodAnalysis, *, photo_file_id: str | None,
+    from_offer: bool = False,
 ) -> None:
-    """Показать карточку распознавания и запомнить её для последующих правок."""
+    """Показать карточку распознавания и запомнить её для последующих правок.
+
+    Через неё же идёт и блюдо из подбора (`from_offer`): предложенное — не
+    съеденное, и записывать его одним нажатием значило выдавать порцию из
+    справочника за ту, что лежала на тарелке. Карточка одна на всё: второй
+    путь записи разошёлся бы с первым в правке порции и защите от двойного
+    нажатия.
+    """
     card = await message.answer(
         _render_card(analysis, _current_meal_label()), reply_markup=food_card_keyboard()
     )
@@ -127,6 +142,7 @@ async def _show_card(
         analysis=analysis.to_dict(),
         photo_file_id=photo_file_id,
         card_message_id=card.message_id,
+        from_offer=from_offer,
     )
 
 
@@ -188,7 +204,7 @@ async def start_adding_food(message: Message, state: FSMContext) -> None:
     await state.set_state(FoodStates.waiting_input)
     await message.answer(
         "Пришли фото блюда 📷 — распознаю и посчитаю КБЖУ.\n"
-        "Или расскажи словами — голосовым 🎤 или текстом: «позавтракала омлетом "
+        "Или расскажи словами — голосовым 🎤 или текстом: «на завтрак омлет "
         "из трёх яиц, чувствую себя бодрее». Запишу и еду, и самочувствие.\n\n"
         "Посмотреть, что уже записано за сегодня, — /day"
     )
@@ -433,7 +449,7 @@ def _render_state_line(moment: Moment) -> str:
     if moment.focus:
         parts.append(f"🎯 фокус {moment.focus}/10")
     if moment.mood:
-        parts.append(f"🤍 настроение: {moment.mood}")
+        parts.append(f"🤍 настроение: {mood_word(moment.mood)}")
     if moment.stress:
         parts.append(f"〰️ стресс {moment.stress}")
     if moment.sleep_minutes:
@@ -607,20 +623,53 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
 
     data = await state.get_data()
     photo_file_id = data.get("photo_file_id")
-    meal_type = guess_meal_type(datetime.now(get_zone(DEFAULT_TIMEZONE)))
+    from_offer = bool(data.get("from_offer"))
 
     # Пока считаются итоги, человек может нажать «Сохранить» ещё раз —
     # кнопка ведь на месте. Забываем карточку сразу: второе нажатие
     # запишет то же блюдо второй раз.
     await state.set_data({})
 
+    try:
+        saved = await _save_and_sum(callback, analysis, photo_file_id, from_offer)
+    except Exception:
+        # Карточку забыли до записи — от двойного нажатия. Не записалось —
+        # значит, её надо вернуть: иначе человек остаётся с кнопкой, которая
+        # отвечает «карточка устарела», и с едой, которой нет в дневнике.
+        logger.exception("Не сохранилась запись еды")
+        await state.set_data(data)
+        await callback.message.answer(
+            "Не получилось записать — в дневник ничего не попало. "
+            "Нажми «✅ Сохранить» ещё раз через минуту."
+        )
+        return
+    if saved is None:
+        return
+    meal_id, meal_type, totals, norms, game, cheetah = saved
+
+    await state.clear()
+    await callback.message.edit_reply_markup(reply_markup=None)
+    # Под итогом — «Исправить вес» и «Отменить». Нижнее меню от этого не
+    # пропадает: обычная клавиатура держится, пока её не убрали явно.
+    await callback.message.answer(
+        _render_day_summary(analysis, MEAL_TYPE_RU[meal_type], totals, norms, game,
+                            cheetah=cheetah),
+        reply_markup=saved_keyboard(meal_id),
+    )
+
+
+async def _save_and_sum(callback: CallbackQuery, analysis: FoodAnalysis,
+                        photo_file_id: str | None, from_offer: bool):
     async with get_session() as session:
         user = await session.get(User, callback.from_user.id)
         if user is None or not user.onboarding_completed:
             await callback.message.answer("Сначала настрой профиль: /start")
-            return
+            return None
 
-        await save_meal(
+        # Приём пищи — по местному времени человека, а не по часам сервера:
+        # иначе вечерний перекус в Новосибирске записывался бы обедом.
+        meal_type = guess_meal_type(datetime.now(get_zone(user.timezone or DEFAULT_TIMEZONE)))
+        meal = await save_meal(
             session,
             user_id=user.id,
             analysis=analysis,
@@ -628,8 +677,8 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
             # него не остаётся следа, но по нему видно, откуда взялась запись.
             source=MealSourceEnum.PHOTO if photo_file_id else MealSourceEnum.TEXT,
             meal_type=meal_type,
+            from_offer=from_offer,
         )
-        totals = await get_today_totals(session, user.id, timezone_name=user.timezone)
         norms = (
             user.daily_calories,
             user.daily_protein_g,
@@ -637,35 +686,135 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
             user.daily_carbs_g,
             user.daily_fiber_g,
         )
-        # Игровой итог считаем здесь же: запись еды может закрыть задание дня,
-        # и узнать об этом приятнее сразу, а не при следующем входе в приложение.
-        # Отдельное имя — переменная `state` в этой функции уже занята FSM.
-        day_state = await today_state(session, user.id, timezone_name=user.timezone)
-        water_ml = await today_total_ml(session, user.id, timezone_name=user.timezone)
-        game = await sync_today(
-            session,
-            user,
-            meals_count=len(await list_today_meals(session, user.id, timezone_name=user.timezone)),
-            calories=totals.calories,
-            fiber_g=totals.fiber_g,
-            water_ml=water_ml,
-            timezone_name=user.timezone,
-            stress_marked=day_state.stress is not None,
-        )
-        # Гепард отзывается и в чате — тем же правилом, что и в приложении.
-        # Совет здесь не даём: он живёт под кнопкой «Мой ход», а показанный
-        # без спроса тратит дневной лимит повторов на подсказку, которую
-        # человек сейчас не просил.
-        cheetah = await turn_service.cheetah_for(
-            session, user, user.timezone or DEFAULT_TIMEZONE,
-            game=game, state=day_state, water=water_ml)
+        zone, owner, meal_id = user.timezone or DEFAULT_TIMEZONE, user.id, meal.id
+        # Запись уже в базе. Всё, что ниже, — итоги и игра: их сбой не
+        # повод говорить «не записалось» и возвращать карточку — повторное
+        # «Сохранить» завело бы вторую запись. Итоги тогда просто короче.
+        try:
+            totals, game, day_state, water_ml = await _sync_day(session, user)
+            # Гепард отзывается и в чате — тем же правилом, что и в приложении.
+            # Совет здесь не даём: он живёт под кнопкой «Мой ход», а показанный
+            # без спроса тратит дневной лимит повторов на подсказку, которую
+            # человек сейчас не просил.
+            cheetah = await turn_service.cheetah_for(
+                session, user, user.timezone or DEFAULT_TIMEZONE,
+                game=game, state=day_state, water=water_ml)
+        except Exception:
+            logger.exception("Запись еды сохранена, а итоги дня не посчитались")
+            # После отката поля пользователя сброшены, и чтение их в async
+            # упало бы — поэтому номер и пояс взяты заранее.
+            await session.rollback()
+            totals = await get_today_totals(session, owner, timezone_name=zone)
+            game = cheetah = None
+    return meal_id, meal_type, totals, norms, game, cheetah
 
-    await state.clear()
-    await callback.message.edit_reply_markup(reply_markup=None)
+
+async def _sync_day(session, user: User):
+    """Итоги дня и игровой пересчёт после любой перемены в дневнике.
+
+    Запись, отмена и правка веса идут через одно место: задание дня, которое
+    закрыла запись, обязано открыться обратно, когда запись отменили, — иначе
+    кристаллы за день остались бы за еду, которой в дневнике нет.
+    """
+    tz = user.timezone or DEFAULT_TIMEZONE
+    totals = await get_today_totals(session, user.id, timezone_name=tz)
+    day_state = await today_state(session, user.id, timezone_name=tz)
+    water_ml = await today_total_ml(session, user.id, timezone_name=tz)
+    game = await sync_today(
+        session,
+        user,
+        meals_count=len(await list_today_meals(session, user.id, timezone_name=tz)),
+        calories=totals.calories,
+        fiber_g=totals.fiber_g,
+        water_ml=water_ml,
+        timezone_name=tz,
+        stress_marked=day_state.stress is not None,
+    )
+    return totals, game, day_state, water_ml
+
+
+async def _own_meal(session, callback: CallbackQuery, prefix: str) -> Meal | None:
+    """Запись по кнопке — только своя: номер в кнопке подделать нетрудно."""
+    try:
+        meal_id = int(callback.data.removeprefix(prefix))
+    except ValueError:
+        return None
+    meal = await session.get(Meal, meal_id)
+    if meal is None or meal.user_id != callback.from_user.id:
+        return None
+    return meal
+
+
+@router.callback_query(F.data.startswith(CB_UNDO))
+async def undo_saved(callback: CallbackQuery) -> None:
+    """«Отменить запись» под итогом. Состояние разговора не нужно: номер в кнопке."""
+    async with get_session() as session:
+        meal = await _own_meal(session, callback, CB_UNDO)
+        if meal is None:
+            # Второе нажатие, или запись уже убрана из /day или приложения.
+            await callback.answer("Этой записи уже нет")
+            await callback.message.edit_reply_markup(reply_markup=None)
+            return
+        name = meal.name
+        user = await session.get(User, callback.from_user.id)
+        await delete_meal(session, meal)
+        totals, *_ = await _sync_day(session, user)
+        norm = user.daily_calories
+
+    await callback.answer("Запись отменена")
+    await callback.message.edit_text(
+        f"↩️ Запись отменена: {name}\n\n"
+        f"🔥 Сегодня {_num(totals.calories)}" + (f" / {norm} ккал" if norm else " ккал")
+    )
+
+
+@router.callback_query(F.data.startswith(CB_FIX))
+async def ask_fix_saved(callback: CallbackQuery, state: FSMContext) -> None:
+    async with get_session() as session:
+        meal = await _own_meal(session, callback, CB_FIX)
+    if meal is None:
+        await callback.answer("Этой записи уже нет")
+        await callback.message.edit_reply_markup(reply_markup=None)
+        return
+    if not meal.weight_g:
+        await callback.answer("У этой записи нет веса — её можно только отменить",
+                              show_alert=True)
+        return
+    await state.set_state(FoodStates.fixing_saved)
+    await state.set_data({"fix_meal_id": meal.id})
     await callback.message.answer(
-        _render_day_summary(analysis, MEAL_TYPE_RU[meal_type], totals, norms, game,
-                            cheetah=cheetah),
-        reply_markup=main_menu_keyboard(),
+        f"Сколько граммов на самом деле? Сейчас записано {_num(meal.weight_g)} г "
+        f"«{meal.name}». Например: 250"
+    )
+    await callback.answer()
+
+
+@router.message(FoodStates.fixing_saved, F.text, ~F.text.in_(MENU_TEXTS))
+async def apply_fix_saved(message: Message, state: FSMContext) -> None:
+    weight = parse_float(message.text)
+    if weight is None or not (MIN_WEIGHT_G <= weight <= MAX_WEIGHT_G):
+        await message.answer(
+            f"Введи вес числом от {MIN_WEIGHT_G:.0f} до {MAX_WEIGHT_G:.0f} г, например: 250"
+        )
+        return
+
+    meal_id = (await state.get_data()).get("fix_meal_id")
+    await state.clear()
+    async with get_session() as session:
+        meal = await session.get(Meal, meal_id) if meal_id else None
+        if meal is None or meal.user_id != message.from_user.id or not meal.weight_g:
+            await message.answer("Этой записи уже нет — поправить нечего.")
+            return
+        meal = await rescale_meal(session, meal, weight)
+        name, calories, meal_id = meal.name, meal.calories, meal.id
+        user = await session.get(User, message.from_user.id)
+        totals, *_ = await _sync_day(session, user)
+        norm = user.daily_calories
+
+    await message.answer(
+        f"✏️ Исправлено: {name} — {_num(weight)} г, ≈ {_num(calories)} ккал\n\n"
+        f"🔥 Сегодня {_num(totals.calories)}" + (f" / {norm} ккал" if norm else " ккал"),
+        reply_markup=saved_keyboard(meal_id),
     )
 
 

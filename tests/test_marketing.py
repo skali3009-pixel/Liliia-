@@ -508,6 +508,8 @@ def test_отчёт_не_смешивает_людей_с_событиями():
 
             итог = await analytics.report(session, days=7)
             assert итог.actions["meal"] == 6     # событий
+            assert итог.actions_people["meal"] == 2   # а людей за ними — двое
+            assert итог.actions_people["workout"] == 0
             assert итог.active_people == 2        # людей
             assert итог.active_days == 2          # человеко-дней
     run(scenario)

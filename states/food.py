@@ -12,3 +12,5 @@ class FoodStates(StatesGroup):
     correcting_dish = State()
     # Пользователь вводит вес порции в граммах.
     correcting_weight = State()
+    # Правка веса уже сохранённой записи (кнопка «Исправить вес» под итогом).
+    fixing_saved = State()

@@ -64,13 +64,13 @@ def render(result: Result) -> str:
     lines = ["🏁 Неделя закрыта", ""]
     if result.days_done:
         days = plural(result.days_done, "день", "дня", "дней")
-        lines.append(f"Ты прошла {result.steps} шагов, норму взяла "
+        lines.append(f"За неделю — {result.steps} шагов, норма взята "
                      f"{result.days_done} {days} из 7.")
     else:
         # Начинать итог с «ноль дней из семи» — значит открыть его упрёком.
         # А цель, которую не удалось взять ни разу, чаще великовата, чем
         # человек ленив: об этом полезнее сказать, чем о нуле.
-        lines.append(f"Ты прошла {result.steps} шагов.")
+        lines.append(f"За неделю — {result.steps} шагов.")
         lines.append(f"До цели в {result.goal} ни разу не хватило — может, она "
                      "сейчас великовата. Поменять её можно в профиле.")
 

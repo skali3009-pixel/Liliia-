@@ -32,6 +32,7 @@ async def save_meal(
     source: MealSourceEnum,
     meal_type: MealTypeEnum,
     logged_at: datetime | None = None,
+    from_offer: bool = False,
 ) -> Meal:
     """Сохранить распознанный приём пищи.
 
@@ -64,7 +65,12 @@ async def save_meal(
     from services import analytics
 
     await analytics.useful_action(session, user_id, "meal")
+    if from_offer:
+        await analytics.note(session, user_id, analytics.MEAL_FROM_OFFER)
     await session.commit()
+    # Время записи ставит база; без перечитывания оно осталось бы
+    # незагруженным, и первое же обращение к нему в async упало бы.
+    await session.refresh(meal)
     return meal
 
 
@@ -92,9 +98,49 @@ async def get_today_totals(
 
 
 async def delete_meal(session: AsyncSession, meal: Meal) -> None:
-    """Удалить запись (кнопка «Отменить» сразу после сохранения)."""
+    """Удалить запись (кнопка «Отменить» сразу после сохранения).
+
+    Отмена отмечается в учёте отдельным событием, а не вычитается из
+    `action_completed`: запись правда была, и счётчик действий не должен
+    переписываться задним числом. Зато по двум числам рядом видно, какая
+    доля записей оказалась ошибочной, — а это и есть мера доверия к оценке.
+    """
+    from services import analytics
+
+    await analytics.note(session, meal.user_id, analytics.MEAL_UNDONE)
     await session.delete(meal)
     await session.commit()
+
+
+async def rescale_meal(session: AsyncSession, meal: Meal, weight_g: float) -> Meal:
+    """Поправить вес уже записанной порции; КБЖУ пересчитываются пропорционально.
+
+    Одна дорога для чата и приложения: вторая копия пересчёта однажды
+    разошлась бы с первой, и одна и та же правка давала бы разные калории.
+    """
+    from utils.portions import scale_nutrition
+
+    if not meal.weight_g:
+        raise ValueError("У записи не указан вес")
+    scaled = scale_nutrition(
+        {
+            "calories": meal.calories,
+            "protein_g": meal.protein_g,
+            "fat_g": meal.fat_g,
+            "carbs_g": meal.carbs_g,
+            "fiber_g": meal.fiber_g or 0,
+        },
+        from_weight_g=meal.weight_g,
+        to_weight_g=weight_g,
+    )
+    meal.weight_g = weight_g
+    meal.calories = scaled["calories"]
+    meal.protein_g = scaled["protein_g"]
+    meal.fat_g = scaled["fat_g"]
+    meal.carbs_g = scaled["carbs_g"]
+    meal.fiber_g = scaled["fiber_g"]
+    await session.commit()
+    return meal
 
 
 async def list_today_meals(
