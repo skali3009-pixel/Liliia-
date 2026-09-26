@@ -144,7 +144,7 @@ def _allowed(product: Product, *, no_spoon: bool, exclude,
     # сравнивалась фраза целиком с меткой: «орехи» закрывали орехи, а
     # «арахис» и «орех» не закрывали ничего — и арахис предлагался.
     if exclude and exclude.blocks(
-            f"{product.name} {product.aliases} {product.allergens}", product.allergens,
+            f"{product.name} {product.aliases} {product.allergens} {product.category}", product.allergens,
             name=product.name):
         return False
     return True

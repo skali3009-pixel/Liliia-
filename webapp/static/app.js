@@ -4731,6 +4731,9 @@ function renderProfile(data) {
     : 'Текущий вес добавляется замером на «Прогрессе».';
 
   document.getElementById('prof-allergies').value = p.allergies || '';
+  const understood = document.getElementById('prof-allergies-understood');
+  understood.textContent = p.allergies_understood || '';
+  understood.hidden = !p.allergies_understood;
 
   // Цель по шагам: готовые числа плюс своё. Это не медицинская норма, а
   // договорённость с собой, поэтому выбирает её человек, а не формула.
@@ -4750,8 +4753,7 @@ function renderProfile(data) {
 
   // Календарь показываем только женщинам: мужчине он бессмыслен, и строка
   // настройки у него была бы просто непонятной.
-  const cycleRow = document.getElementById('prof-cycle-row');
-  cycleRow.hidden = p.gender !== 'female';
+  document.getElementById('prof-cycle-block').hidden = p.gender !== 'female';
   const cycleButton = document.getElementById('prof-cycle');
   cycleButton.textContent = p.cycle ? 'включён' : 'выключен';
   cycleButton.classList.toggle('on', !!p.cycle);

@@ -222,3 +222,45 @@ def test_the_conflict_is_named_but_the_goal_is_not_changed():
 
 def run(scenario):
     asyncio.run(scenario())
+
+
+def test_goal_is_not_reached_by_editing_the_target():
+    """Запись 26.09: вес цели сменили с 73 на 67 при весе 69 из анкеты и цели
+    «набор массы» — и приложение тут же выдало «Цель взята». Награда теперь
+    выдаётся только после взвешивания."""
+    async def scenario():
+        from models import Achievement, BodyMeasurement
+        from services.gamification import sync_today
+        from sqlalchemy import select
+
+        async with webapp_client() as (client, _):
+            async with maker_holder["maker"]() as session:
+                user = await session.get(User, USER_ID)
+                user.goal, user.current_weight_kg = GoalEnum.GAIN_MASS, 69
+                user.target_weight_kg = 67
+                await session.commit()
+                await sync_today(session, user, meals_count=0, calories=0, fiber_g=0,
+                                 water_ml=0, timezone_name="Europe/Moscow")
+                codes = set((await session.execute(select(Achievement.code).where(
+                    Achievement.user_id == USER_ID))).scalars())
+                assert "goal_reached" not in codes, "награда за правку профиля"
+
+                # Взвесился — и тогда «дошёл» честный.
+                session.add(BodyMeasurement(user_id=USER_ID, weight_kg=69))
+                await session.commit()
+                await sync_today(session, user, meals_count=0, calories=0, fiber_g=0,
+                                 water_ml=0, timezone_name="Europe/Moscow")
+                codes = set((await session.execute(select(Achievement.code).where(
+                    Achievement.user_id == USER_ID))).scalars())
+                assert "goal_reached" in codes
+    run(scenario)
+
+
+def test_the_whole_calendar_block_hides_for_men():
+    """Раньше пряталась только кнопка, а заголовок «Женский календарь» и
+    пояснение про месячные оставались в профиле мужчины (запись 26.09)."""
+    page = pathlib.Path("webapp/static/index.html").read_text(encoding="utf-8")
+    block = page.split('id="prof-cycle-block"', 1)[1].split("</div>\n\n", 1)[0]
+    assert "Женский календарь" in block and "месячными" in block
+    app = pathlib.Path("webapp/static/app.js").read_text(encoding="utf-8")
+    assert "getElementById('prof-cycle-block').hidden = p.gender !== 'female'" in app

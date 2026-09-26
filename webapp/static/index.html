@@ -1000,6 +1000,9 @@
     <p class="hint">Это не медицинская норма, а договорённость с собой. Лучше
       взять то число, которое точно получится каждый день.</p>
 
+    <!-- Весь блок, а не одна кнопка: заголовок и пояснение без кнопки
+         всё равно начинали с мужчиной разговор о месячных (запись 26.09). -->
+    <div id="prof-cycle-block">
     <div class="eyebrow ruled">Женский календарь</div>
     <div class="prof-row switch" id="prof-cycle-row">
       <span>Показывать цикл</span>
@@ -1007,10 +1010,13 @@
     </div>
     <p class="hint">Живёт на «Прогрессе», рядом с весом. Нужен затем, чтобы
       объяснять прибавку перед месячными, а не пугать ею.</p>
+    </div>
 
     <div class="eyebrow ruled">Аллергии и что не ешь</div>
     <input class="input" id="prof-allergies" type="text" maxlength="200"
            placeholder="Например: орехи, лактоза. Или «нет»">
+    <!-- Что подбор понял из написанного: ошибку разбора здесь видно сразу. -->
+    <p class="hint" id="prof-allergies-understood" hidden></p>
 
     <div class="eyebrow ruled">Напоминания</div>
     <div class="prof-row switch">

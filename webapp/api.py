@@ -18,6 +18,7 @@ from services import cycle
 from services import notifications
 from services import preps as prep_service
 from services import profile as profile_service
+from services import allergens as allergens_service
 from services.checkins import save_checkin, today_state
 from services.preps import expiring_names
 from services.workouts import recent_program_codes
@@ -1190,6 +1191,8 @@ def _profile_json(user: User, prefs=None) -> dict:
             "activity": user.activity_level.value if user.activity_level else None,
             "diet": user.diet_type.value if user.diet_type else None,
             "allergies": user.allergies or "",
+            # Как подбор понял строку — та же фраза, что в чате.
+            "allergies_understood": allergens_service.understood(user.allergies),
             "reminders": bool(user.reminders_enabled),
             "cycle": bool(user.cycle_enabled),
             "steps_goal": user.daily_steps or 0,
@@ -1355,8 +1358,10 @@ async def post_cube(request: web.Request) -> web.Response:
             needs.add(cube.NEED_FIBER)
 
         diet = user.diet_type.value if user.diet_type else "regular"
-        allergies = {part.strip().lower() for part in (user.allergies or "").split(",")
-                     if part.strip()}
+        # Строка аллергий целиком, а не набор кусков по запятым: у набора нет
+        # порядка, и «кроме банана» могло бы захватить соседний кусок —
+        # «тыквенные семечки» оказались бы разрешены.
+        allergies = allergens_service.parse(user.allergies)
 
         # Режим, который человек выбрал сам, менять нельзя. Тот, что мы
         # подставили за него, — можно: он был догадкой, а не просьбой.

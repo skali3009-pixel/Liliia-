@@ -132,3 +132,53 @@ def test_the_dish_builder_survives_an_allergy():
         finally:
             await engine.dispose()
     run(scenario)
+
+
+# --- Формулировка с записи 26.09 --------------------------------------------
+# Настоящая строка из анкеты тестового профиля. В ней всё, что ломает
+# простой разбор: исключения («кроме»), «сырые», которые начинаются с «сыр»,
+# и несколько групп сразу.
+FROM_VIDEO = ("аллергия на сырые фрукты и овощи, кроме банана, манго и всего "
+              "экзотического, Так же аллергия на орехи все и на тыквенные семечки.")
+
+
+def test_exceptions_are_allowed_and_the_rest_is_blocked():
+    rules = allergens.parse(FROM_VIDEO)
+    assert "орехи" in rules.codes
+    assert rules.blocks("яблоко фрукты", name="Яблоко")
+    assert rules.blocks("морковь овощи", name="Морковь")
+    assert not rules.blocks("банан фрукты", name="Банан")
+    assert rules.blocks("кешью орехи", "орехи", name="Кешью")
+
+
+def test_raw_is_not_cheese():
+    """«Сырые фрукты» — не про молоко: сыр в подборе остаётся."""
+    rules = allergens.parse(FROM_VIDEO)
+    assert "молоко" not in rules.codes
+    assert not rules.blocks("сыр твёрдый молоко молочное", "молоко", name="Сыр твёрдый")
+    assert "молоко" in allergens.parse("сыр").codes
+
+
+def test_an_exception_does_not_swallow_the_next_sentence():
+    """«кроме» действует до конца фразы: семечки после «Так же» — запрет."""
+    rules = allergens.parse(FROM_VIDEO)
+    assert "семеч" in rules.stems
+    assert not any("семеч" in stem for stem in rules.allowed)
+
+
+def test_the_person_sees_how_the_allergy_was_understood():
+    line = allergens.understood(FROM_VIDEO)
+    assert "не предлагаю: фрукты, овощи, орехи" in line
+    assert "кроме: банана, манго" in line
+    assert "Сырое и приготовленное я не различаю" in line
+    assert "целиком убираю: орехи" in allergens.understood("арахис")
+    assert allergens.understood("нет") == ""
+
+
+def test_the_cube_endpoint_passes_the_whole_line():
+    """Набор кусков по запятым не имеет порядка — «кроме» захватил бы чужое."""
+    import pathlib
+
+    api = pathlib.Path("webapp/api.py").read_text(encoding="utf-8")
+    assert "allergies = allergens_service.parse(user.allergies)" in api
+    assert '(user.allergies or "").split(",")' not in api

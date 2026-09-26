@@ -41,10 +41,21 @@ GROUPS: dict[str, tuple[str, ...]] = {
     "мёд": ("мёд", "мед", "мёда", "меда"),
 }
 
-# Слова, которые окружают аллерген, но сами ничего не запрещают.
+# Слова, которые окружают аллерген, но сами ничего не запрещают. «Сырые» —
+# отдельно: с «сыр» они начинаются, а про молоко не говорят ничего («на сырые
+# фрукты» — так и было написано в анкете на записи 26.09). «Белок» — не
+# аллерген, а категория справочника: без запрета он убрал бы всё мясо.
 НЕ_АЛЛЕРГЕНЫ = {"аллергия", "аллергии", "аллергию", "на", "и", "или", "нет",
                 "без", "не", "ем", "ест", "переношу", "непереносимость", "есть",
-                "сильная", "лёгкая", "легкая", "немного", "все", "всё", "виды"}
+                "сильная", "лёгкая", "легкая", "немного", "все", "всё", "виды",
+                "всего", "всех", "любые", "любых", "белок", "белка",
+                "сырые", "сырых", "сырая", "сырую", "сырое", "сырой", "сырым",
+                "сырыми", "свежие", "свежих"}
+
+# «кроме банана, манго» — исключения. Действуют до конца фразы: точки, точки
+# с запятой, перевода строки или слова, с которого начинается новая мысль.
+ИСКЛЮЧЕНИЕ = "кроме"
+КОНЕЦ_ИСКЛЮЧЕНИЯ = {"так", "также", "ещё", "еще", "но", "а", "аллергия"}
 
 
 @dataclass(frozen=True)
@@ -53,6 +64,12 @@ class Allergies:
 
     codes: frozenset[str]   # метки справочника: «орехи», «молоко»…
     stems: frozenset[str]   # основы незнакомых слов — ищутся в названии
+    # Основы того, что названо после «кроме»: это человек есть может.
+    allowed: frozenset[str] = frozenset()
+    # Как слова были написаны — для ответа «понимаю так».
+    named: tuple[str, ...] = ()
+    allowed_named: tuple[str, ...] = ()
+    raw_mentioned: bool = False
 
     def __bool__(self) -> bool:
         return bool(self.codes or self.stems)
@@ -67,13 +84,16 @@ class Allergies:
         перца — проверено на справочнике.
         """
         text = (haystack or "").lower()
+        title = (name if name is not None else text).lower()
+        # «кроме банана» — банан можно, даже если он в запрещённой группе.
+        if any(stem in title for stem in self.allowed):
+            return False
         marks = {part.strip() for part in (allergens or "").lower().split(";") if part}
         marks |= {word for word in re.split(r"[^а-яё]+", text) if word in GROUPS}
         if self.codes & marks:
             return True
         # Метка у продукта может быть не проставлена («Ореховая паста» без
         # «орехи») — тогда узнаём группу по основам в названии.
-        title = (name if name is not None else text).lower()
         for code in self.codes:
             if any(stem in title for stem in GROUPS[code]):
                 return True
@@ -89,16 +109,62 @@ def parse(raw: str | None) -> Allergies:
     """Строка аллергий из анкеты → метки и основы."""
     codes: set[str] = set()
     stems: set[str] = set()
-    for word in re.split(r"[^а-яёa-z]+", (raw or "").lower()):
-        if len(word) < 3 or word in НЕ_АЛЛЕРГЕНЫ:
+    allowed: set[str] = set()
+    named: list[str] = []
+    allowed_named: list[str] = []
+    raw_mentioned = False
+    excepting = False
+    for token in re.findall(r"[а-яёa-z]+|[.;\n]", (raw or "").lower()):
+        if token in {".", ";", "\n"} or token in КОНЕЦ_ИСКЛЮЧЕНИЯ:
+            excepting = False
+            continue
+        if token == ИСКЛЮЧЕНИЕ:
+            excepting = True
+            continue
+        if token.startswith("сыр") and token in НЕ_АЛЛЕРГЕНЫ:
+            raw_mentioned = True
+        if len(token) < 3 or token in НЕ_АЛЛЕРГЕНЫ:
+            continue
+        if excepting:
+            allowed.add(_stem(token))
+            allowed_named.append(token)
             continue
         found = {code for code, bases in GROUPS.items()
-                 if any(word.startswith(base) for base in bases)}
+                 if any(token.startswith(base) for base in bases)}
         if found:
             codes |= found
         else:
-            stems.add(_stem(word))
-    return Allergies(frozenset(codes), frozenset(stems))
+            stems.add(_stem(token))
+        named.append(token)
+    return Allergies(frozenset(codes), frozenset(stems), frozenset(allowed),
+                     tuple(dict.fromkeys(named)), tuple(dict.fromkeys(allowed_named)),
+                     raw_mentioned)
 
 
-__all__ = ["Allergies", "GROUPS", "parse"]
+def understood(raw: str | None) -> str:
+    """Как подбор понял строку аллергий — одной фразой для человека.
+
+    Аллергию пишут свободным текстом, и разбор неизбежно где-то ошибается. Раз
+    так, человек должен видеть, что именно мы поняли: «кроме банана» без
+    этой строки проверить невозможно, а ошибка здесь — не неудобство, а
+    здоровье. Пусто — если ограничений нет.
+    """
+    rules = parse(raw)
+    if not rules:
+        return ""
+    parts = [f"не предлагаю: {', '.join(rules.named)}"]
+    if rules.codes:
+        # «арахис» закрывает все орехи — об этом надо сказать, иначе человек
+        # не поймёт, куда пропал миндаль.
+        parts.append(f"целиком убираю: {', '.join(sorted(rules.codes))}")
+    if rules.allowed_named:
+        parts.append(f"кроме: {', '.join(rules.allowed_named)}")
+    text = "Понимаю так — " + "; ".join(parts) + "."
+    if rules.raw_mentioned:
+        # Справочник не знает, сырой продукт в блюде или приготовленный, и
+        # угадывать здесь нельзя — поэтому убираем и то и другое и говорим.
+        text += " Сырое и приготовленное я не различаю, поэтому убираю и то и другое."
+    return text
+
+
+__all__ = ["Allergies", "GROUPS", "parse", "understood"]

@@ -521,7 +521,8 @@ def test_the_cycle_calendar_is_wired_in_the_app():
 def test_the_cycle_can_be_switched_off_from_the_profile():
     """Женщине он может быть просто не нужен, а мужчине бессмыслен."""
     assert 'id="prof-cycle"' in INDEX
-    assert "prof-cycle-row" in APP_JS
+    # Прячется весь блок с заголовком и пояснением, а не одна строка.
+    assert "prof-cycle-block" in APP_JS
     assert "'female'" in APP_JS      # строка настройки скрыта не для всех
 
 

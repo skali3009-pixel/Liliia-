@@ -26,6 +26,7 @@ from keyboards.onboarding import activity_keyboard, diet_type_keyboard, goal_key
 from keyboards.profile import (CB_BACK, CB_EDIT, CB_EXPORT, CB_REMINDERS,
                                edit_menu_keyboard, with_back)
 from models import User
+from services import allergens
 from services import profile as profile_service
 from services.export import build_export
 from services.profile import ACTIVITY_RU, DIET_RU, GENDER_RU, GOAL_RU
@@ -92,7 +93,9 @@ def profile_text(user: User) -> str:
         f"Цель: {_enum_ru(user.goal, GOAL_RU)}\n"
         f"Питание: {_enum_ru(user.diet_type, DIET_RU)}\n"
         f"Аллергии: {user.allergies or 'нет'}\n"
-        f"Напоминания: {'включены' if user.reminders_enabled else 'выключены'}\n\n"
+        # Как подбор понял аллергию — чтобы ошибку разбора было видно сразу.
+        + (f"   {line}\n" if (line := allergens.understood(user.allergies)) else "")
+        + f"Напоминания: {'включены' if user.reminders_enabled else 'выключены'}\n\n"
         f"{norms_line(user)}\n\n"
         + (f"⚠️ {conflict}\n\n" if (conflict := profile_service.goal_conflict(user)) else "")
         + "Что-то изменилось? Поправь кнопками ниже 👇"

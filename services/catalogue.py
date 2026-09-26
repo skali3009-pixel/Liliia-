@@ -128,7 +128,7 @@ async def load(session: AsyncSession) -> tuple[CachedDish, ...]:
                 is_seasoning=product.is_seasoning, gram_per_piece=product.gram_per_piece,
                 vegan=product.vegan, vegetarian=product.vegetarian,
                 gluten_free=product.gluten_free,
-                haystack=f"{product.name} {product.aliases} {product.allergens}".lower(),
+                haystack=f"{product.name} {product.aliases} {product.allergens} {product.category}".lower(),
             ))
         if components is None:
             continue

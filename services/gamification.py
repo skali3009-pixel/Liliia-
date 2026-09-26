@@ -146,6 +146,15 @@ async def _sync_achievements(
     )
     workouts_total = await _workout_days_total(session, user.id, timezone_name)
     weight_lost, waist_lost = await _losses(session, user)
+    # «Цель взята» — только по взвешиванию, а не по правке профиля. На записи
+    # 26.09 вес цели сменили с 73 на 67 при весе 69 из анкеты, ни разу не
+    # взвесившись, — и награда выпала тут же. По числам это не отличить от
+    # честного «похудела на килограмм дальше цели», а по тому, было ли
+    # взвешивание, — отличить: без него никто ни до чего не дошёл.
+    weighed = (await session.execute(
+        select(BodyMeasurement.id).where(BodyMeasurement.user_id == user.id,
+                                         BodyMeasurement.weight_kg.is_not(None)).limit(1)
+    )).first() is not None
 
     deserved = earned_codes(
         meals_total=meals_total,
@@ -157,7 +166,7 @@ async def _sync_achievements(
         steps_total=steps_total,
         steps_streak=steps_streak,
         steps_best=steps_best,
-        goal_reached=goal_service.reached(user, user.current_weight_kg),
+        goal_reached=weighed and goal_service.reached(user, user.current_weight_kg),
     )
 
     owned = set(
