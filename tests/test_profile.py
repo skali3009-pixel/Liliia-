@@ -363,7 +363,7 @@ def test_wrong_number_does_not_get_saved(monkeypatch):
             await module.save_age(message, state)
 
             assert user.age == 30
-            assert "от 10 до 100" in message.answers[-1][0]
+            assert "от 18 до 100" in message.answers[-1][0]
             assert await state.get_state() is module.ProfileStates.age
     run(scenario)
 
