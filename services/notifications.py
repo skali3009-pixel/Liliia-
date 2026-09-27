@@ -28,6 +28,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.age import adult_clause
 from models import (NotificationLog, NotificationPrefs, NotificationSnooze,
                     User)
 from models.notification import (KIND_ACHIEVEMENT, KIND_EVENING, KIND_MEAL,
@@ -528,7 +529,8 @@ async def candidates(session: AsyncSession, *,
     moment = now_utc or datetime.now(timezone.utc)
     zones = (await session.execute(
         select(User.timezone).where(
-            User.onboarding_completed.is_(True), User.reminders_enabled.is_(True)
+            User.onboarding_completed.is_(True), User.reminders_enabled.is_(True),
+            adult_clause()
         ).distinct()
     )).scalars().all()
     return zones_at_minute(moment, 0, zones)
@@ -734,6 +736,7 @@ async def due(session: AsyncSession, *,
     users = (await session.execute(
         select(User).where(
             User.onboarding_completed.is_(True), User.reminders_enabled.is_(True),
+            adult_clause(),
             User.timezone.in_(zones),
         )
     )).scalars().all()

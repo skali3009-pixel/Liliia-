@@ -1063,9 +1063,9 @@ def test_a_team_is_made_joined_and_shown_with_its_table():
             assert board["team"]["name"] == "Лисы"
             assert board["team"]["people"] == 2
             assert [row["steps"] for row in board["team"]["rows"]] == [9000, 5000]
-            # Наружу уходит только имя и шаги — ни веса, ни калорий, ни еды.
-            assert set(board["team"]["rows"][0]) == {"user_id", "name", "steps",
-                                                     "days", "me"}
+            # Наружу уходит только имя и шаги — ни веса, ни калорий, ни еды,
+            # ни номера в Telegram (по нему чужого человека можно найти).
+            assert set(board["team"]["rows"][0]) == {"name", "steps", "days", "me"}
     run(scenario)
 
 

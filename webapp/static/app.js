@@ -79,9 +79,24 @@ async function api(path, options = {}) {
       showPaywall(body);
       throw new Error('Подписка закончилась');
     }
+    // Профиль младше 18: нормы и подбор выключены, объясняем один раз
+    // тем же окном, что и доступ, — вместо россыпи ошибок по экранам.
+    if (response.status === 403 && body.minor) {
+      showMinor(body.error);
+      throw new Error('Только для взрослых');
+    }
     throw new Error(body.error || `Ошибка ${response.status}`);
   }
   return response.json();
+}
+
+function showMinor(text) {
+  document.getElementById('paywall-title').textContent = 'AURA — для взрослых';
+  document.getElementById('paywall-text').textContent = text;
+  document.getElementById('paywall-open').textContent = 'Вернуться в чат';
+  document.getElementById('paywall').querySelector('.pop-icon').textContent = '🌙';
+  document.getElementById('paywall').hidden = false;
+  document.getElementById('loading').hidden = true;
 }
 
 function showPaywall(body) {
@@ -4934,7 +4949,7 @@ function renderTop(data) {
   } else {
     (data.top || []).forEach((row, index) => rows.appendChild(boardRow(row, index + 1)));
     document.getElementById('top-place').textContent =
-      data.place ? `ты ${data.place}-я` : '';
+      data.place ? `твоё место: ${data.place}` : '';
   }
 
   // Прошлая неделя: иначе понедельник обнуляет всё, чего человек добился.
@@ -4947,6 +4962,33 @@ function renderTop(data) {
   document.getElementById('top-hint').textContent =
     `В зачёт идёт не больше ${data.cap} шагов за день: приписывать бессмысленно, `
     + 'а до потолка проще дойти ногами.';
+  renderBoardPrivacy(data.privacy);
+}
+
+// Как человек виден другим. По умолчанию — псевдоним: таблица общая, в ней
+// в основном незнакомые люди. Имя и выход из таблицы — только своим выбором,
+// дневник шагов, команда и друзья при этом остаются.
+function renderBoardPrivacy(privacy) {
+  if (!privacy) return;
+  const me = document.getElementById('top-me');
+  me.textContent = privacy.hidden
+    ? 'Ты не участвуешь в общей таблице: другие тебя не видят. Шаги и команда на месте.'
+    : `Другие видят тебя как «${privacy.show_name ? 'твоё имя из Telegram' : privacy.pseudonym}».`;
+  const nameButton = document.getElementById('top-show-name');
+  nameButton.hidden = privacy.hidden;
+  nameButton.textContent = privacy.show_name ? 'Показывать псевдоним' : 'Показывать моё имя';
+  nameButton.onclick = () => saveBoardPrivacy({ show_name: !privacy.show_name });
+  const hideButton = document.getElementById('top-hide');
+  hideButton.textContent = privacy.hidden ? 'Вернуться в таблицу' : 'Не участвовать';
+  hideButton.onclick = () => saveBoardPrivacy({ hidden: !privacy.hidden });
+}
+
+async function saveBoardPrivacy(change) {
+  try {
+    await api('/api/steps/board/prefs', { method: 'POST', body: JSON.stringify(change) });
+    await refreshBoard();
+    haptic();
+  } catch (error) { toast(error.message); }
 }
 
 async function teamAction(body) {

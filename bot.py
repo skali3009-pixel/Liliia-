@@ -21,6 +21,7 @@ from handlers import (access, diary, errors, fallback, feedback, food, legal,
                       music, notifications, onboarding, profile, progress,
                       steps, suggestions, supplements, turn, water, workouts)
 from middlewares.access import AccessMiddleware
+from middlewares.minor import MinorMiddleware
 from middlewares.presence import PresenceMiddleware
 from scheduler import start_scheduler
 from webapp.server import start_webapp
@@ -38,6 +39,11 @@ dp = Dispatcher(storage=DatabaseStorage())
 # только про оплату.
 dp.message.outer_middleware(AccessMiddleware())
 dp.callback_query.outer_middleware(AccessMiddleware())
+
+# Профиль младше 18: без персональных норм и советов, со своими данными
+# (services/age.py). Сразу после доступа — до всех обработчиков.
+dp.message.outer_middleware(MinorMiddleware())
+dp.callback_query.outer_middleware(MinorMiddleware())
 
 # Отметка «человек сейчас здесь»: по ней движок уведомлений не пишет
 # первым тому, кто и так разговаривает с ботом.

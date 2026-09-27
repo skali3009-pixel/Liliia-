@@ -35,6 +35,7 @@ from datetime import datetime, time, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.age import adult_clause
 from models import User
 from utils.timeframe import DEFAULT_TIMEZONE, matching_zones, to_local, today_in
 
@@ -134,6 +135,8 @@ async def due(session: AsyncSession, *, now_utc: datetime | None = None) -> list
             User.reminders_enabled.is_(True),
             User.legal_accepted_at.is_not(None),
             User.timezone.in_(ready),
+            # Младшим 18 анкета отказала сама — звать их обратно незачем.
+            adult_clause(),
         )
     )).scalars().all()
     if not users:

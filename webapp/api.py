@@ -18,6 +18,7 @@ from services import cycle
 from services import notifications
 from services import preps as prep_service
 from services import profile as profile_service
+from services import age as age_rules
 from services import allergens as allergens_service
 from services.checkins import save_checkin, today_state
 from services.preps import expiring_names
@@ -162,7 +163,17 @@ async def auth_middleware(request: web.Request, handler):
         request["user_id"] = user.id
         request["timezone"] = user.timezone
 
+        # Профиль младше 18: в приложении — только профиль (возраст мог быть
+        # указан с ошибкой), выгрузка и «что-то не так». Нормы, подбор еды и
+        # тренировок — нет: они считаются по взрослым формулам.
+        if age_rules.is_minor(user) and request.path not in MINOR_OPEN_PATHS:
+            return web.json_response(
+                {"error": age_rules.NOTICE, "minor": True}, status=403)
+
     return await handler(request)
+
+
+MINOR_OPEN_PATHS = {"/api/profile", "/api/export", "/api/feedback", "/api/crash"}
 
 
 def _meal_json(meal: Meal, timezone_name: str) -> dict:
@@ -1836,6 +1847,9 @@ async def get_steps_board(request: web.Request) -> web.Response:
         last_rows = await step_service.global_top(session, me=user_id, limit=10 ** 6,
                                                   timezone_name=tz, period=last_period)
         mine = next((row for row in last_rows if row.user_id == user_id), None)
+        from services import board_privacy
+
+        privacy = await board_privacy.mine(session, user_id)
 
     invite = teams.invite_link(team.code) if team is not None else ""
 
@@ -1850,7 +1864,23 @@ async def get_steps_board(request: web.Request) -> web.Response:
         },
         "cap": step_service.RANKED_CAP,
         "max_members": teams.MAX_MEMBERS,
+        "privacy": privacy,
     })
+
+
+async def post_board_prefs(request: web.Request) -> web.Response:
+    """Как человек виден в общей таблице: псевдоним или имя, участвует ли."""
+    from services import board_privacy
+
+    body = await request.json() if request.can_read_body else {}
+    show = body.get("show_name")
+    hidden = body.get("hidden")
+    async with get_session() as session:
+        mine = await board_privacy.set_mine(
+            session, request["user_id"],
+            show_name=bool(show) if show is not None else None,
+            hidden=bool(hidden) if hidden is not None else None)
+    return web.json_response(mine)
 
 
 async def post_team(request: web.Request) -> web.Response:
@@ -2076,6 +2106,7 @@ def add_routes(app: web.Application) -> None:
     app.router.add_get("/api/steps/check", get_steps_check)
     app.router.add_post("/api/steps/sync", get_steps_sync)
     app.router.add_post("/api/team", post_team)
+    app.router.add_post("/api/steps/board/prefs", post_board_prefs)
     app.router.add_post("/api/workouts/pick", post_workout_pick)
     app.router.add_get("/api/preps", get_preps)
     app.router.add_post("/api/preps/mine", post_my_prep)

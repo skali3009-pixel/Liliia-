@@ -26,7 +26,9 @@ logger = logging.getLogger(__name__)
 # Границы правдоподобия. Живут здесь, а не в обработчике: анкета и
 # редактирование профиля должны проверять ввод одинаково, иначе через одну
 # дверь пройдёт то, что не пустили в другую.
-MIN_AGE, MAX_AGE = 10, 100
+# С 18: так написано в согласии и оферте, а нормы здесь считаются по
+# взрослым формулам (services/age.py).
+MIN_AGE, MAX_AGE = 18, 100
 MIN_HEIGHT_CM, MAX_HEIGHT_CM = 100.0, 250.0
 MIN_WEIGHT_KG, MAX_WEIGHT_KG = 30.0, 300.0
 MIN_TARGET_KG, MAX_TARGET_KG = MIN_WEIGHT_KG, MAX_WEIGHT_KG

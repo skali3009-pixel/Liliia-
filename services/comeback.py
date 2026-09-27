@@ -31,6 +31,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.age import adult_clause
 from models import User
 from services.metrics import ACTIVITY
 from utils.timeframe import DEFAULT_TIMEZONE, matching_zones, to_local, today_in
@@ -171,7 +172,8 @@ async def due(session: AsyncSession, *, now_utc: datetime | None = None) -> list
 
     zones = (await session.execute(
         select(User.timezone).where(
-            User.onboarding_completed.is_(True), User.reminders_enabled.is_(True)
+            User.onboarding_completed.is_(True), User.reminders_enabled.is_(True),
+            adult_clause()
         ).distinct()
     )).scalars().all()
     ready = matching_zones(moment, SEND_AT, zones)
@@ -181,6 +183,7 @@ async def due(session: AsyncSession, *, now_utc: datetime | None = None) -> list
     users = (await session.execute(
         select(User).where(
             User.onboarding_completed.is_(True), User.reminders_enabled.is_(True),
+            adult_clause(),
             User.timezone.in_(ready),
         )
     )).scalars().all()

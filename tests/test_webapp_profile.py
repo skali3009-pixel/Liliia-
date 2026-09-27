@@ -26,7 +26,7 @@ def test_profile_returns_fields_options_and_limits():
             # копии переводов, которая разойдётся с ботом.
             goals = {item["code"]: item["label"] for item in data["options"]["goal"]}
             assert goals["lose_weight"] == "похудение"
-            assert data["limits"]["age"] == [10, 100]
+            assert data["limits"]["age"] == [18, 100]
     run(scenario)
 
 

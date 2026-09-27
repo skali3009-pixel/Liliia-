@@ -35,6 +35,8 @@ from services.profile import (
     MIN_WEIGHT_KG,
 )
 from services import analytics, music, referrals, sources
+from services import age as age_rules
+from services.age import ADULT_AGE
 from services.subscriptions import check_access, ensure_trial
 from services.slides import send_slide
 from services.video_notes import send_circle
@@ -381,6 +383,18 @@ async def process_gender(callback: CallbackQuery, state: FSMContext) -> None:
 @router.message(OnboardingStates.age, F.text)
 async def process_age(message: Message, state: FSMContext) -> None:
     age = parse_int(message.text)
+    if age is not None and 0 < age < ADULT_AGE:
+        # Младше 18 — не «введи ещё раз», а честный отказ: иначе человек
+        # просто напишет 18, и взрослая норма уйдёт подростку. Возраст
+        # запоминаем, чтобы письмо «анкета ждёт» его не звало обратно.
+        await state.clear()
+        async with get_session() as session:
+            user = await session.get(User, message.from_user.id)
+            if user is not None:
+                user.age = age
+                await session.commit()
+        await message.answer(age_rules.REFUSAL)
+        return
     if age is None or not (MIN_AGE <= age <= MAX_AGE):
         await message.answer(f"Введи возраст числом от {MIN_AGE} до {MAX_AGE}, например: 28")
         return

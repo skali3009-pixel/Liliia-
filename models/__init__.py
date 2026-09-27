@@ -5,6 +5,7 @@ workout_log, body_measurements, progress_photos, achievements)."""
 
 from models.achievement import Achievement
 from models.base import Base
+from models.board import BoardPrefs
 from models.body import BodyMeasurement, ProgressPhoto
 from models.button import ButtonPress
 from models.checkin import Checkin
@@ -41,6 +42,7 @@ from models.workout import LevelEnum, LocationEnum, Workout, WorkoutLog, Workout
 
 __all__ = [
     "Base",
+    "BoardPrefs",
     "CycleLog",
     "ButtonPress",
     "FsmState",

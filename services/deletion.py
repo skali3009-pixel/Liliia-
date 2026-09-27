@@ -31,7 +31,7 @@ import logging
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import Friendship, Referral, Team, TeamMember, User
+from models import BoardPrefs, Friendship, Referral, Team, TeamMember, User
 
 logger = logging.getLogger(__name__)
 
@@ -94,6 +94,9 @@ async def purge(session: AsyncSession, user_id: int) -> bool:
     forgotten = await _forget_friendships(session, user_id)
     invites = await _forget_invites(session, user_id)
     await _leave_team(session, user_id)
+    # Как человек был виден в таблице — тоже его данные; каскаду в SQLite
+    # не верим по той же причине, что и выше.
+    await session.execute(delete(BoardPrefs).where(BoardPrefs.user_id == user_id))
 
     await session.delete(user)
     await session.commit()

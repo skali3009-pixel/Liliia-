@@ -328,7 +328,9 @@ class Row:
     is_me: bool = False
 
     def to_dict(self) -> dict:
-        return {"user_id": self.user_id, "name": self.name, "steps": self.steps,
+        # Номера в Telegram наружу не отдаём: странице он не нужен, а чужому
+        # человеку по нему можно найти и написать (он уходил в общую таблицу).
+        return {"name": self.name, "steps": self.steps,
                 "days": self.days, "me": self.is_me}
 
 
@@ -402,7 +404,22 @@ async def global_top(session: AsyncSession, *, limit: int = 20,
 
     rows = await week_rows(session, ids, me=me, timezone_name=timezone_name,
                            period=(start, end))
-    return rows[:limit]
+    # Общая таблица — среди незнакомых: псевдоним вместо имени, если человек
+    # сам не выбрал имя, и без тех, кто из неё вышел (кроме самого себя —
+    # своё место человек видит всегда).
+    from services import board_privacy
+
+    prefs = await board_privacy.prefs_for(session, [row.user_id for row in rows])
+    shown = []
+    for row in rows:
+        pref = prefs.get(row.user_id)
+        if pref is not None and pref.hidden and row.user_id != me:
+            continue
+        name = row.name if (pref is not None and pref.show_name) else \
+            board_privacy.pseudonym(row.user_id)
+        shown.append(Row(user_id=row.user_id, name=name, steps=row.steps,
+                         days=row.days, is_me=row.is_me))
+    return shown[:limit]
 
 
 def place_of(rows: list[Row], user_id: int) -> int | None:

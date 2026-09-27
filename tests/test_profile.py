@@ -117,8 +117,10 @@ def test_target_weight_limits(value, ok):
     assert svc.valid_target(value) is ok
 
 
-@pytest.mark.parametrize("value,ok", [(28, True), (10, True), (100, True),
-                                      (9, False), (101, False), (None, False)])
+# С 18: так написано в согласии и оферте, а нормы — по взрослым формулам.
+@pytest.mark.parametrize("value,ok", [(28, True), (18, True), (100, True),
+                                      (17, False), (10, False), (101, False),
+                                      (None, False)])
 def test_age_limits(value, ok):
     assert svc.valid_age(value) is ok
 

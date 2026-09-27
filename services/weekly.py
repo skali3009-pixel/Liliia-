@@ -18,6 +18,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from services.age import adult_clause
 from models import BodyMeasurement, Meal, User, WaterLog, WorkoutLog
 from utils.timeframe import day_bounds, matching_zones, to_local
 
@@ -215,7 +216,8 @@ async def users_for_summary(
     moment = now_utc or datetime.now(timezone.utc)
     zones = (await session.execute(
         select(User.timezone).where(
-            User.onboarding_completed.is_(True), User.reminders_enabled.is_(True)
+            User.onboarding_completed.is_(True), User.reminders_enabled.is_(True),
+            adult_clause()
         ).distinct()
     )).scalars().all()
     ready = [zone for zone in matching_zones(moment, SUMMARY_TIME, zones)
@@ -227,6 +229,7 @@ async def users_for_summary(
         await session.execute(
             select(User).where(
                 User.onboarding_completed.is_(True), User.reminders_enabled.is_(True),
+            adult_clause(),
                 User.timezone.in_(ready),
             )
         )
