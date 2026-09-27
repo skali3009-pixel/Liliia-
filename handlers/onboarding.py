@@ -520,16 +520,47 @@ def norms_text(macros, water_ml: int) -> str:
 
 
 def first_step_text() -> str:
-    """Одно действие, а не список возможностей."""
+    """Один следующий шаг — на выбор из двух, а не список возможностей.
+
+    Решение 27.09: не доказано, что всем нужна именно запись еды, поэтому
+    первым делом можно выбрать и еду, и движение. Оба — одно нажатие и
+    результат сразу; второе не обязательно.
+    """
     return (
-        "С чего начать прямо сейчас:\n\n"
-        "📷 Сфотографируй то, что ешь или пьёшь — хоть кофе, хоть печенье. "
-        "Я узнаю блюдо и посчитаю КБЖУ сама.\n\n"
-        "Можно и словами: «два бутерброда с сыром».\n\n"
-        "Остальное подождёт: шаги, вода, тренировки и подбор еды — на кнопках "
-        "внизу. А всё красивое — кольца, мир и таблица команды — живёт в "
-        "приложении."
+        "С чего начать — выбери одно, второе подождёт:\n\n"
+        "📷 Записать еду. Сфотографируй то, что ешь или пьёшь, или напиши "
+        "словами: «два бутерброда с сыром». Калории — оценка: порцию можно "
+        "поправить.\n\n"
+        "🏃 Короткая тренировка. 5–15 минут дома, каждое движение показано.\n\n"
+        "Остальное — вода, шаги, подбор еды — на кнопках внизу и в приложении."
     )
+
+
+CB_FIRST_MEAL = "first:meal"
+CB_FIRST_MOVE = "first:move"
+
+
+def first_step_keyboard() -> InlineKeyboardMarkup:
+    """Две кнопки выбора. Еда — прямо в чате; тренировка — на «Спорте»."""
+    builder = InlineKeyboardBuilder()
+    builder.button(text="📷 Записать еду", callback_data=CB_FIRST_MEAL)
+    if config.WEBAPP_URL:
+        base = config.WEBAPP_URL.rstrip("/")
+        builder.button(text="🏃 Короткая тренировка",
+                       web_app=WebAppInfo(url=f"{base}?screen=gym"))
+    else:
+        builder.button(text="🏃 Короткая тренировка", callback_data=CB_FIRST_MOVE)
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+@router.callback_query(F.data == CB_FIRST_MOVE)
+async def first_move_without_app(callback: CallbackQuery) -> None:
+    """Приложения нет — честно сказать, где тренировки, а не молчать."""
+    await callback.answer()
+    await callback.message.answer(
+        "Тренировки с показом движений живут в приложении, а оно сейчас не "
+        "подключено. Отметить своё занятие можно кнопкой «Тренировка» внизу.")
 
 
 def open_app_keyboard() -> InlineKeyboardMarkup | None:
@@ -684,7 +715,7 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
     # Вторым сообщением — одно действие. Список возможностей в конце анкеты
     # человек не читает: он только что ответил на девять вопросов и ждёт,
     # что теперь. Ответ должен быть один и выполнимый прямо сейчас.
-    await message.answer(first_step_text(), reply_markup=open_app_keyboard())
+    await message.answer(first_step_text(), reply_markup=first_step_keyboard())
     # И кружком — то же самое голосом. Последним, а не первым: кнопка
     # «Открыть приложение» должна остаться под большим пальцем.
     await send_circle(message, "ready")

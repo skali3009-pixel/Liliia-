@@ -3503,7 +3503,10 @@ async function finishPlayer() {
     document.getElementById('finish-facts').textContent =
       `${done.length} ${plural(done.length, 'упражнение', 'упражнения', 'упражнений')}`
       + ` · ~${result.calories} ккал`;
-    document.getElementById('finish-note').textContent = 'Записано в дневник';
+    // Первая тренировка — что дальше, одной строкой и без обещаний.
+    document.getElementById('finish-note').textContent = result.first
+      ? 'Первая тренировка есть. Следующую подберу под твоё время на «Спорте».'
+      : 'Записано в дневник';
     haptic('medium');
     await refreshWorkouts();
     await refresh();

@@ -908,6 +908,14 @@ async def post_workout_log(request: web.Request) -> web.Response:
 
     async with get_session() as session:
         user = await session.get(User, request["user_id"])
+        # Первая тренировка в жизни — приложение скажет, что дальше.
+        from sqlalchemy import func, select
+
+        from models import WorkoutLog
+
+        first = (await session.execute(
+            select(func.count()).select_from(WorkoutLog).where(WorkoutLog.user_id == user.id)
+        )).scalar_one() == 0
         count, total_minutes, calories = await log_session(
             session,
             user_id=user.id,
@@ -923,7 +931,8 @@ async def post_workout_log(request: web.Request) -> web.Response:
         await session.commit()
 
     return web.json_response(
-        {"logged": count, "minutes": total_minutes, "calories": calories, "week": summary}
+        {"logged": count, "minutes": total_minutes, "calories": calories, "week": summary,
+         "first": first}
     )
 
 

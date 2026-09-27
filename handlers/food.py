@@ -207,18 +207,29 @@ async def leave_food_input(message: Message, state: FSMContext) -> None:
     raise SkipHandler
 
 
+FOOD_PROMPT = (
+    "Пришли фото блюда 📷 — распознаю и посчитаю КБЖУ.\n"
+    "Или расскажи словами — голосовым 🎤 или текстом: «на завтрак омлет "
+    "из трёх яиц, чувствую себя бодрее». Запишу и еду, и самочувствие.\n\n"
+    "Посмотреть, что уже записано за сегодня, — /day"
+)
+
+
 @router.message(F.text == MENU_ADD_MEAL)
 async def start_adding_food(message: Message, state: FSMContext) -> None:
     if await _ensure_onboarded(message) is None:
         return
 
     await state.set_state(FoodStates.waiting_input)
-    await message.answer(
-        "Пришли фото блюда 📷 — распознаю и посчитаю КБЖУ.\n"
-        "Или расскажи словами — голосовым 🎤 или текстом: «на завтрак омлет "
-        "из трёх яиц, чувствую себя бодрее». Запишу и еду, и самочувствие.\n\n"
-        "Посмотреть, что уже записано за сегодня, — /day"
-    )
+    await message.answer(FOOD_PROMPT)
+
+
+@router.callback_query(F.data == "first:meal")
+async def first_meal_choice(callback: CallbackQuery, state: FSMContext) -> None:
+    """Первый шаг после анкеты — «Записать еду»: то же, что кнопка меню."""
+    await callback.answer()
+    await state.set_state(FoodStates.waiting_input)
+    await callback.message.answer(FOOD_PROMPT)
 
 
 # Одно и то же фото люди пересылают чаще, чем кажется: не расслышал бот с
@@ -656,7 +667,7 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
         return
     if saved is None:
         return
-    meal_id, meal_type, totals, norms, game, cheetah = saved
+    meal_id, meal_type, totals, norms, game, cheetah, first = saved
 
     await state.clear()
     await callback.message.edit_reply_markup(reply_markup=None)
@@ -664,9 +675,16 @@ async def save_food(callback: CallbackQuery, state: FSMContext) -> None:
     # пропадает: обычная клавиатура держится, пока её не убрали явно.
     await callback.message.answer(
         _render_day_summary(analysis, MEAL_TYPE_RU[meal_type], totals, norms, game,
-                            cheetah=cheetah),
+                            cheetah=cheetah) + (FIRST_MEAL_NOTE if first else ""),
         reply_markup=saved_keyboard(meal_id),
     )
+
+
+# После самой первой записи: что дальше — одной строкой и без обещаний.
+FIRST_MEAL_NOTE = (
+    "\n\n🌱 Первая запись есть. Дальше так же: фото или пара слов, когда ешь. "
+    "Порция была другая — «Исправить вес» ниже."
+)
 
 
 async def _save_and_sum(callback: CallbackQuery, analysis: FoodAnalysis,
@@ -698,6 +716,12 @@ async def _save_and_sum(callback: CallbackQuery, analysis: FoodAnalysis,
             user.daily_fiber_g,
         )
         zone, owner, meal_id = user.timezone or DEFAULT_TIMEZONE, user.id, meal.id
+        # Первая запись в жизни — повод сказать, что дальше, одной строкой.
+        from sqlalchemy import func, select
+
+        first = (await session.execute(
+            select(func.count()).select_from(Meal).where(Meal.user_id == owner)
+        )).scalar_one() == 1
         # Запись уже в базе. Всё, что ниже, — итоги и игра: их сбой не
         # повод говорить «не записалось» и возвращать карточку — повторное
         # «Сохранить» завело бы вторую запись. Итоги тогда просто короче.
@@ -717,7 +741,7 @@ async def _save_and_sum(callback: CallbackQuery, analysis: FoodAnalysis,
             await session.rollback()
             totals = await get_today_totals(session, owner, timezone_name=zone)
             game = cheetah = None
-    return meal_id, meal_type, totals, norms, game, cheetah
+    return meal_id, meal_type, totals, norms, game, cheetah, first
 
 
 async def _sync_day(session, user: User):

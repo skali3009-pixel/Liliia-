@@ -220,3 +220,81 @@ def test_the_chat_card_marks_an_attempt_and_the_questionnaire_marks_its_start():
             assert (USER_ID, analytics.MEAL_ATTEMPT) in events
             assert (OTHER_ID, analytics.ONBOARDING_STARTED) in events
     run(scenario)
+
+
+# --- Путь «Первая неделя» ------------------------------------------------
+
+def test_after_the_questionnaire_there_is_a_choice_of_food_or_movement(monkeypatch):
+    import config
+    from handlers.onboarding import CB_FIRST_MEAL, first_step_keyboard, first_step_text
+
+    monkeypatch.setattr(config, "WEBAPP_URL", "https://example.com")
+    buttons = [b for row in first_step_keyboard().inline_keyboard for b in row]
+    assert [b.text for b in buttons] == ["📷 Записать еду", "🏃 Короткая тренировка"]
+    assert buttons[0].callback_data == CB_FIRST_MEAL
+    assert buttons[1].web_app.url == "https://example.com?screen=gym"
+    assert not [b for b in buttons if b.url or "SCALIA" in b.text]
+    # Без приложения — тоже две кнопки, а не пустая клавиатура.
+    monkeypatch.setattr(config, "WEBAPP_URL", "")
+    assert len([b for row in first_step_keyboard().inline_keyboard for b in row]) == 2
+    text = first_step_text()
+    assert "выбери одно" in text and "оценка" in text
+    # Никаких обещаний точности или скорости.
+    for promise in ("точно", "секунд", "похуде", "кг"):
+        assert promise not in text.lower(), promise
+
+
+def test_the_food_choice_opens_the_same_food_input_as_the_menu_button():
+    async def scenario():
+        from handlers.food import FOOD_PROMPT, first_meal_choice
+        from handlers.onboarding import CB_FIRST_MEAL
+        from states.food import FoodStates
+        from tests.test_offer_is_not_meal import Callback, State
+
+        state = State()
+        press = Callback(CB_FIRST_MEAL)
+        await first_meal_choice(press, state)
+        assert state.state == FoodStates.waiting_input
+        assert press.message.said[-1] == FOOD_PROMPT
+    run(scenario)
+
+
+def test_the_questionnaire_ends_with_the_choice_before_the_music_card():
+    import inspect
+    import handlers.onboarding as onboarding
+
+    body = inspect.getsource(onboarding._finish_onboarding)
+    assert "first_step_keyboard()" in body
+    assert body.index("first_step_keyboard()") < body.index("music.отправить")
+
+
+def test_the_first_meal_gets_one_calm_line_and_the_second_does_not():
+    async def scenario():
+        from handlers.food import FIRST_MEAL_NOTE
+        from tests.test_food_saving import ANALYSIS, database
+        from tests.test_offer_is_not_meal import Callback, State, save
+
+        async with database():
+            first = await save(State({"analysis": ANALYSIS.to_dict()}))
+            second = await save(State({"analysis": ANALYSIS.to_dict()}))
+        assert first.message.said[-1].endswith(FIRST_MEAL_NOTE)
+        assert FIRST_MEAL_NOTE not in second.message.said[-1]
+    run(scenario)
+
+
+def test_the_first_workout_is_named_as_first_once():
+    async def scenario():
+        from seed.loader import seed_workouts
+        import webapp.api as api_module
+
+        async with webapp_client() as (client, _):
+            async with api_module.get_session() as session:
+                await seed_workouts(session)
+            data = await (await call(client, "GET", "/api/workouts")).json()
+            ids = [data["exercises"][0]["id"]]
+            one = await (await call(client, "POST", "/api/workouts/log",
+                                    json_body={"exercise_ids": ids})).json()
+            two = await (await call(client, "POST", "/api/workouts/log",
+                                    json_body={"exercise_ids": ids})).json()
+            assert one["first"] is True and two["first"] is False
+    run(scenario)
