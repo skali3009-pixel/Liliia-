@@ -3278,6 +3278,7 @@ function openPlayer(exercises, saved = null) {
   // лежит в сохранённом состоянии. Проверка на пустой список без этой
   // оговорки молча не открывала проводник — поймано в браузере.
   if (!saved && !exercises.length) return;
+  if (!saved) track('workout_started');
   player = saved || {
     list: exercises.map((item) => ({
       id: item.id, name: item.name, sets: item.sets || 1,
@@ -4178,8 +4179,15 @@ function scaledMeal(item, grams) {
   };
 }
 
+// Отметить попытку или открытие для учёта «Первой недели». Молча: учёт не
+// должен мешать делу, даже если сеть моргнула.
+function track(event) {
+  api('/api/track', { method: 'POST', body: JSON.stringify({ event }) }).catch(() => {});
+}
+
 // Сколько записать. null — человек передумал.
 async function askPortion(item) {
+  track('meal_attempt');
   const base = Math.round(Number(item.weight_g) || 0);
   if (base <= 0) return scaledMeal(item, 0);
   // Калории в подписи — ровно те, что запишутся: тем же пересчётом от
@@ -5932,6 +5940,11 @@ function openRequestedScreen() {
     return;                       // адрес без параметров — обычный запуск
   }
   if (asked && SCREENS.includes(asked) && asked !== 'today') switchScreen(asked);
+  // Открыли из итога недели — это и есть «открытие итога»: прочтение
+  // сообщения Telegram боту не сообщает.
+  try {
+    if (new URLSearchParams(window.location.search).get('from') === 'weekly') track('weekly_opened');
+  } catch (error) { /* без параметров */ }
 }
 
 // --- Женский календарь ---------------------------------------------------

@@ -104,3 +104,24 @@ def comeback_keyboard() -> InlineKeyboardMarkup | None:
 
 __all__ = ["CB_LATER", "CB_MUTE", "CB_WATER", "SCREEN", "comeback_keyboard",
            "deep_link", "nudge_keyboard", "unfinished_keyboard"]
+
+
+CB_WEEK_INTEREST = "week_interest"
+
+
+def weekly_keyboard() -> InlineKeyboardMarkup:
+    """Под итогом недели: открыть неделю в приложении и — отдельно — сказать,
+    нужен ли разбор подробнее.
+
+    Вторая кнопка — добровольный вопрос, а не предложение купить: разбора
+    пока нет, и нажавший узнаёт это сразу (решение 27.09: интерес к
+    расширенному разбору проверяется без обещания платной услуги).
+    """
+    builder = InlineKeyboardBuilder()
+    if config.WEBAPP_URL:
+        base = config.WEBAPP_URL.rstrip("/")
+        link = f"{base}?{urlencode({'screen': 'progress', 'from': 'weekly'})}"
+        builder.button(text="📅 Открыть неделю", web_app=WebAppInfo(url=link))
+    builder.button(text="🔎 Хочу разбор подробнее", callback_data=CB_WEEK_INTEREST)
+    builder.adjust(1)
+    return builder.as_markup()

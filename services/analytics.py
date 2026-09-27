@@ -71,6 +71,19 @@ MEAL_UNDONE = "meal_undone"
 # человеком. Без этого рекомендацию не отличить от настоящего ввода.
 MEAL_FROM_OFFER = "meal_from_offer"
 
+# «Первая неделя» (решение 27.09). Только факт и день — никакого содержания:
+# ни еды, ни веса, ни аллергий, ни отметок цикла.
+ONBOARDING_STARTED = "onboarding_started"   # показан первый вопрос анкеты
+MEAL_ATTEMPT = "meal_attempt"               # показана карточка еды или окно порции
+WORKOUT_STARTED = "workout_started"         # открыт проводник тренировки
+WEEKLY_OPENED = "weekly_opened"             # из итога недели открыли приложение
+WEEK_INTEREST = "week_interest"             # «хочу разбор подробнее» — только интерес
+
+# Что приложение может отметить само. Закрытый список: свободная строка от
+# клиента означала бы, что в учёт попадёт что угодно.
+CLIENT_EVENTS = {MEAL_ATTEMPT: "once_a_day", WORKOUT_STARTED: "once_a_day",
+                 WEEKLY_OPENED: "once_a_day"}
+
 # Уточнения к запуску.
 NEW_PROFILE = "new"
 EXISTING_PROFILE = "existing"
@@ -252,8 +265,96 @@ async def report(session: AsyncSession, *, days: int = 30,
     )
 
 
+async def cohorts(session: AsyncSession, *, weeks: int = 4,
+                  exclude: set[int] | None = None) -> list[dict]:
+    """Недели прихода: из прошедших анкету за неделю — кто что сделал за 7 дней.
+
+    Всё — число **людей**. Неделя — по дню завершения анкеты, с понедельника,
+    по Москве. Первая еда и первая тренировка берутся из самих записей
+    дневника (самая ранняя), а не из событий: отменённая запись исчезает, и
+    «первым подтверждённым сохранением» остаётся то, что правда лежит в
+    дневнике. Читается только время записи — не её содержание.
+    """
+    from models import Meal, WorkoutLog
+    from utils.timeframe import to_local
+
+    until = _today()
+    this_monday = until - timedelta(days=until.weekday())
+    since = this_monday - timedelta(weeks=weeks - 1)
+    лишние = exclude or set()
+
+    async def события(event: str, frm: date) -> dict[int, list[date]]:
+        stmt = select(MarketingEvent.user_id, MarketingEvent.day).where(
+            MarketingEvent.event == event, MarketingEvent.day >= frm)
+        out: dict[int, list[date]] = {}
+        for user_id, day in (await session.execute(stmt)).all():
+            if user_id not in лишние:
+                out.setdefault(int(user_id), []).append(day)
+        return out
+
+    completed = {uid: min(days) for uid, days in (await события(PROFILE_COMPLETED, since)).items()}
+    started = {uid: min(days) for uid, days in (await события(ONBOARDING_STARTED, since)).items()}
+    active = await события(ACTIVE_DAY, since)
+    attempts = await события(MEAL_ATTEMPT, since)
+    workout_starts = await события(WORKOUT_STARTED, since)
+    opened = await события(WEEKLY_OPENED, since)
+    interest = await события(WEEK_INTEREST, since)
+
+    async def первые(model, column) -> dict[int, date]:
+        if not completed:
+            return {}
+        rows = (await session.execute(
+            select(model.user_id, func.min(column))
+            .where(model.user_id.in_(list(completed))).group_by(model.user_id)
+        )).all()
+        return {int(uid): to_local(moment, REPORT_TZ).date() for uid, moment in rows if moment}
+
+    first_meal = await первые(Meal, Meal.logged_at)
+    first_workout = await первые(WorkoutLog, WorkoutLog.completed_at)
+
+    def within(day: date | None, start: date, lo: int, hi: int) -> bool:
+        return day is not None and lo <= (day - start).days <= hi
+
+    out = []
+    for n in range(weeks):
+        monday = since + timedelta(weeks=n)
+        sunday = monday + timedelta(days=6)
+        people = [uid for uid, day in completed.items() if monday <= day <= sunday]
+        row = {
+            "week": monday,
+            "started": sum(1 for day in started.values() if monday <= day <= sunday),
+            "completed": len(people),
+            "meal_attempt_7d": sum(1 for uid in people if any(
+                within(day, completed[uid], 0, 6) for day in attempts.get(uid, []))),
+            "first_meal_7d": sum(1 for uid in people
+                                 if within(first_meal.get(uid), completed[uid], 0, 6)),
+            "workout_started_7d": sum(1 for uid in people if any(
+                within(day, completed[uid], 0, 6) for day in workout_starts.get(uid, []))),
+            "first_workout_7d": sum(1 for uid in people
+                                    if within(first_workout.get(uid), completed[uid], 0, 6)),
+            "returned_2_7": sum(1 for uid in people if any(
+                within(day, completed[uid], 1, 6) for day in active.get(uid, []))),
+            "weekly_opened": sum(1 for uid in people if opened.get(uid)),
+            "week_interest": sum(1 for uid in people if interest.get(uid)),
+            "complete": sunday + timedelta(days=6) < until,
+        }
+        out.append(row)
+    return out
+
+
+# Определения — для отчёта владелице, словами.
+COHORT_DEFINITIONS = (
+    "Неделя = неделя, в которую человек дошёл до конца анкеты (пн–вс, по Москве). "
+    "Всё — число людей, не нажатий. «За 7 дней» — с дня анкеты включительно. "
+    "Попытка еды — показана карточка еды или окно порции; еда — запись, которая "
+    "лежит в дневнике (отменённые не считаются). Попытка тренировки — открыт "
+    "проводник; тренировка — записанная. Вернулся — хоть одно полезное действие "
+    "на 2–7 день. Незаконченная неделя помечена «идёт»: её 7 дней ещё не прошли."
+)
+
+
 __all__ = ["ACTIONS", "ACTION_COMPLETED", "ACTIVE_DAY", "BOT_START",
            "EXISTING_PROFILE", "FIRST_ACTION", "MEAL_FROM_OFFER", "MEAL_UNDONE",
            "NEW_PROFILE",
-           "PROFILE_COMPLETED", "REPORT_TZ", "Report", "note", "report",
+           "PROFILE_COMPLETED", "REPORT_TZ", "Report", "cohorts", "note", "report",
            "useful_action"]

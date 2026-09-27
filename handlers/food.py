@@ -137,6 +137,17 @@ async def _show_card(
     card = await message.answer(
         _render_card(analysis, _current_meal_label()), reply_markup=food_card_keyboard()
     )
+    # Попытка записи — отдельно от записи: разница между ними и есть то, где
+    # человек передумал или не поверил цифре. Сбой учёта карточку не ломает.
+    try:
+        from services import analytics
+
+        async with get_session() as session:
+            await analytics.note(session, message.chat.id, analytics.MEAL_ATTEMPT,
+                                 once="once_a_day")
+            await session.commit()
+    except Exception:  # noqa: BLE001
+        logger.warning("Не отметилась попытка записи еды", exc_info=True)
     await state.set_state(FoodStates.confirming)
     await state.update_data(
         analysis=analysis.to_dict(),

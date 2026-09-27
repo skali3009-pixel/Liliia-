@@ -24,6 +24,7 @@ from services import usage
 from services.selfupdate import run_update
 from services.video_notes import ensure_circles
 from services.subscriptions import expire_overdue, expiring_soon, mark_warned
+from keyboards.notifications import weekly_keyboard
 from services.weekly import build_summary, render, users_for_summary
 
 logger = logging.getLogger(__name__)
@@ -201,7 +202,8 @@ async def send_weekly_summaries(bot: Bot) -> None:
             _already_sent.add(key)
             continue
         try:
-            await bot.send_message(user.id, render(summary, goal=goal))
+            await bot.send_message(user.id, render(summary, goal=goal),
+                                   reply_markup=weekly_keyboard())
             _already_sent.add(key)
         except Exception:
             logger.info("Не получилось отправить итоги недели %s", user.id)

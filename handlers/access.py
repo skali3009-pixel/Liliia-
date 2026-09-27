@@ -473,6 +473,7 @@ async def marketing_report(message: Message) -> None:
     async with get_session() as session:
         итог = await analytics.report(session, days=дней,
                                       exclude=set(config.ADMIN_IDS))
+        недели = await analytics.cohorts(session, exclude=set(config.ADMIN_IDS))
 
     строки = [
         f"📈 Воронка за {дней} дн. ({итог.since:%d.%m} — {итог.until:%d.%m}, "
@@ -507,6 +508,9 @@ async def marketing_report(message: Message) -> None:
     строки += ["", "🔗 Первый источник (все за всё время)"]
     строки += sources.свод(итог.sources)
 
+    строки += ["", "🗓 Первая неделя — по неделе прихода (люди)"]
+    строки += первая_неделя(недели)
+
     строки += [
         "",
         f"Учёт ведётся с {analytics.STARTED_ON:%d.%m.%Y}. Того, что было "
@@ -515,6 +519,25 @@ async def marketing_report(message: Message) -> None:
     ]
 
     await message.answer("\n".join(строки))
+
+
+def первая_неделя(недели: list[dict]) -> list[str]:
+    """Строки блока «Первая неделя»: неделя — анкета — что сделали за 7 дней."""
+    строки = []
+    for н in недели:
+        метка = f"{н['week']:%d.%m}" + ("" if н["complete"] else " (идёт)")
+        if not н["completed"] and not н["started"]:
+            строки.append(f"   {метка}: никто не приходил")
+            continue
+        строки.append(
+            f"   {метка}: начали анкету {н['started']}, закончили {н['completed']}"
+            f" → еда: пробовали {н['meal_attempt_7d']}, записали {н['first_meal_7d']}"
+            f"; тренировка: начали {н['workout_started_7d']}, записали {н['first_workout_7d']}"
+            f"; вернулись на 2–7 день {н['returned_2_7']}"
+            f"; открыли итог недели {н['weekly_opened']}"
+            f"; хотят разбор {н['week_interest']}")
+    строки.append("   " + analytics.COHORT_DEFINITIONS)
+    return строки
 
 
 @router.message(Command("report"))

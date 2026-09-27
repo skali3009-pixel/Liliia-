@@ -19,7 +19,7 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery
 
 from db import get_session
-from keyboards.notifications import CB_LATER, CB_MUTE, CB_WATER
+from keyboards.notifications import CB_LATER, CB_MUTE, CB_WATER, CB_WEEK_INTEREST
 from models import User
 from models.notification import (KINDS, RESULT_ACTED, RESULT_MUTED,
                                  RESULT_SNOOZED)
@@ -110,3 +110,23 @@ async def not_today(callback: CallbackQuery) -> None:
 
 
 __all__ = ["router"]
+
+
+WEEK_INTEREST_REPLY = (
+    "Спасибо, отметили. Подробного разбора недели пока нет — мы проверяем, "
+    "нужен ли он, и твоё нажатие как раз это и показывает. Ничего платного "
+    "за этим не стоит."
+)
+
+
+@router.callback_query(F.data == CB_WEEK_INTEREST)
+async def week_interest(callback: CallbackQuery) -> None:
+    """Интерес к разбору — только отметка «человек хочет», без обещаний."""
+    from services import analytics
+
+    async with get_session() as session:
+        await analytics.note(session, callback.from_user.id, analytics.WEEK_INTEREST,
+                             once="once_ever")
+        await session.commit()
+    await callback.answer("Отметили")
+    await callback.message.answer(WEEK_INTEREST_REPLY)

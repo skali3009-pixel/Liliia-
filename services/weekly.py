@@ -153,13 +153,15 @@ def _weight_line(summary: WeeklySummary, goal: str | None) -> str | None:
     # зависит от воды и соли не меньше, чем от еды.
     wrong_way = (goal == "lose_weight" and change > 0) or (goal == "gain_mass" and change < 0)
     if wrong_way:
-        return f"{line}\nВес гуляет от воды, соли и цикла — по одной неделе рано судить."
+        # Без «цикла»: итог получают все, и объяснять им вес циклом, о котором
+        # мы ничего не знаем, — выдумка (решение 27.09).
+        return f"{line}\nВес за неделю гуляет от воды и соли — по одной неделе рано судить."
     return line
 
 
 def render(summary: WeeklySummary, *, goal: str | None = None) -> str:
     """Текст воскресного сообщения."""
-    if summary.days_logged == 0:
+    if summary.is_empty:
         return (
             "🗓 Итоги недели\n\n"
             "На этой неделе в дневнике пусто. Так бывает — неделя может быть "
@@ -168,16 +170,15 @@ def render(summary: WeeklySummary, *, goal: str | None = None) -> str:
             + FOOTER
         )
 
-    lines = [
-        "🗓 Итоги недели",
-        "",
-        f"📔 Дневник: {summary.days_logged} из {WINDOW_DAYS} дней",
-    ]
-
-    average = f"🍽 В среднем: {summary.avg_calories} ккал в день"
-    if summary.norm_calories:
-        average += f" (норма {summary.norm_calories})"
-    lines.append(average)
+    lines = ["🗓 Итоги недели", ""]
+    # Только то, что правда записано: неделя одних тренировок — это неделя
+    # тренировок, а не «в дневнике пусто».
+    if summary.days_logged:
+        lines.append(f"📔 Дневник: {summary.days_logged} из {WINDOW_DAYS} дней")
+        average = f"🍽 В среднем: {summary.avg_calories} ккал в день"
+        if summary.norm_calories:
+            average += f" (норма {summary.norm_calories})"
+        lines.append(average)
 
     weight = _weight_line(summary, goal)
     if weight:
@@ -199,6 +200,8 @@ FOOTER = ("Это итоги недели — приходят по воскре
 
 def _closing(summary: WeeklySummary) -> str:
     """Последняя строка — то, ради чего это сообщение вообще читают."""
+    if not summary.days_logged:
+        return "Еду на этой неделе не записывали — и так бывает. Что было, то и видно."
     if summary.days_logged >= WINDOW_DAYS:
         return ("Записи — каждый день. Это та самая скучная работа, "
                 "из которой всё и складывается.")

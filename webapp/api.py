@@ -1868,6 +1868,22 @@ async def get_steps_board(request: web.Request) -> web.Response:
     })
 
 
+async def post_track(request: web.Request) -> web.Response:
+    """Приложение отмечает попытку или открытие — только из закрытого списка.
+
+    Ничего, кроме кода события и дня: ни экрана, ни текста, ни чисел.
+    """
+    body = await request.json() if request.can_read_body else {}
+    event = str(body.get("event") or "")
+    once = analytics.CLIENT_EVENTS.get(event)
+    if once is None:
+        return web.json_response({"error": "Неизвестное событие"}, status=400)
+    async with get_session() as session:
+        await analytics.note(session, request["user_id"], event, once=once)
+        await session.commit()
+    return web.json_response({"ok": True})
+
+
 async def post_board_prefs(request: web.Request) -> web.Response:
     """Как человек виден в общей таблице: псевдоним или имя, участвует ли."""
     from services import board_privacy
@@ -2107,6 +2123,7 @@ def add_routes(app: web.Application) -> None:
     app.router.add_post("/api/steps/sync", get_steps_sync)
     app.router.add_post("/api/team", post_team)
     app.router.add_post("/api/steps/board/prefs", post_board_prefs)
+    app.router.add_post("/api/track", post_track)
     app.router.add_post("/api/workouts/pick", post_workout_pick)
     app.router.add_get("/api/preps", get_preps)
     app.router.add_post("/api/preps/mine", post_my_prep)

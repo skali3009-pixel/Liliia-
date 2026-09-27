@@ -355,6 +355,12 @@ async def begin_onboarding(message: Message, state: FSMContext, user_id: int) ->
         return
 
     await state.set_state(OnboardingStates.gender)
+    # Начало анкеты — для воронки «начали / закончили» по людям.
+    async with get_session() as session:
+        if await session.get(User, user_id) is not None:
+            await analytics.note(session, user_id, analytics.ONBOARDING_STARTED,
+                                 once="once_ever")
+            await session.commit()
     # Первая строка называет не только цену, но и награду. «Настроим профиль»
     # — это работа без обещания: человек видит, сколько с него спросят, и не
     # видит, что он получит. Норма калорий и воды приходит сразу после
