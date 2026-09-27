@@ -116,6 +116,8 @@ async def _show(message: Message, user_id: int, meal_type: str | None,
     ]
     if result.approximate:
         header.append("\nТочного варианта нет — вот что ближе всего.")
+    if result.allergy_note:
+        header.append(f"\n⚠️ {result.allergy_note}")
     await message.answer("\n".join(header),
                          reply_markup=_meal_keyboard(result.meal_type, no_cook=no_cook))
 

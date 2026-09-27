@@ -18,6 +18,7 @@ from services import cycle
 from services import notifications
 from services import preps as prep_service
 from services import profile as profile_service
+from services.menu import allergy_note as menu_allergy_note
 from services import age as age_rules
 from services import allergens as allergens_service
 from services.checkins import save_checkin, today_state
@@ -617,6 +618,11 @@ async def get_progress(request: web.Request) -> web.Response:
                 "target_weight": user.target_weight_kg,
                 "changed": round((last_weight or 0) - (first_weight or 0), 1),
                 "streak": streak,
+                # Взвешиваний ещё не было — «сейчас» взято из анкеты. Это
+                # исходное значение, а не замер: на графике его нет, и
+                # наград за него не бывает (запись экрана 26.09: «Сейчас
+                # 69 кг», а график пуст, и непонятно почему).
+                "from_questionnaire": not all_weight and bool(user.current_weight_kg),
             },
             "body": _body_block(user, measures, weight_kg=last_weight),
             "photos": [
@@ -1433,6 +1439,7 @@ async def post_cube(request: web.Request) -> web.Response:
         "level": level,
         # Чтобы приложение могло объяснить, почему подобрало именно это.
         "needs": sorted(needs),
+        "allergy_note": menu_allergy_note(user.allergies),
         "cubes": [dict(_cube_to_dict(item, products), label=label)
                   for label, item in cubes],
     })

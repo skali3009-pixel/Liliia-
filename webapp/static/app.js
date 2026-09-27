@@ -1169,7 +1169,14 @@ function buildChart(data) {
   const points = data.points;
 
   if (points.length === 0) {
-    box.innerHTML = '<div class="empty">Пока нет данных за этот период</div>';
+    // Вес из анкеты — исходное значение, а не замер. Называем его, иначе
+    // «сейчас 69 кг» над пустым графиком выглядит как поломка.
+    const start = metric === 'weight' && progress?.summary?.from_questionnaire
+      ? `Из анкеты: ${fmt(progress.summary.current_weight)} кг — это исходное значение. `
+        + 'Первое взвешивание начнёт график.'
+      : 'Пока нет данных за этот период';
+    box.innerHTML = '<div class="empty"></div>';
+    box.firstChild.textContent = start;
     return;
   }
   if (points.length === 1) {
@@ -3176,6 +3183,24 @@ function ExerciseTrainerAnimation(box, exerciseId) {
   video.appendChild(source);
   box.appendChild(video);
 
+  /* Пока ролик и заставка не пришли, квадрат был пустым — на записи 26.09
+     полторы-две секунды на каждом упражнении. Теперь в нём строка: это
+     загрузка, а не поломка. Уходит с первым кадром или заставкой; не
+     пришло совсем — говорим и это. */
+  const wait = document.createElement('span');
+  wait.className = 'media-wait';
+  wait.textContent = 'Загружаю показ…';
+  box.appendChild(wait);
+  const ready = () => wait.remove();
+  video.addEventListener('loadeddata', ready, { once: true });
+  video.addEventListener('playing', ready, { once: true });
+  const posterProbe = new Image();
+  posterProbe.onload = ready;
+  posterProbe.src = poster;
+  source.addEventListener('error', () => {
+    if (wait.isConnected) wait.textContent = 'Показ не загрузился — проверь интернет';
+  }, { once: true });
+
   /* Кольцо считает тот же цикл, что снят в ролике (5,04 секунды), но
      пойти оно должно не раньше самого ролика: браузер запускает его не в
      ту же миллисекунду, а через сколько получится — и тогда «вдох» в
@@ -4116,6 +4141,13 @@ function renderOffers(data) {
     note.textContent = 'Точного варианта нет — вот что ближе всего.';
     box.appendChild(note);
   }
+  // Аллергии учтены по справочнику, но «безопасно» мы не обещаем.
+  if (data.allergy_note) {
+    const note = document.createElement('p');
+    note.className = 'hint warn';
+    note.textContent = data.allergy_note;
+    box.appendChild(note);
+  }
 
   data.offers.forEach((item, index) => {
     const row = document.createElement('div');
@@ -4919,7 +4951,9 @@ function boardRow(row, place) {
     + `<span class="board-name"></span>`
     + `<span class="board-steps">${row.steps}${days}</span>`;
   // Имя приходит от другого человека — вставляем текстом, а не разметкой.
-  item.querySelector('.board-name').textContent = row.name;
+  // Свою строку человек узнаёт сразу: не по псевдониму, которого он не
+  // запомнил, а по слову «Ты».
+  item.querySelector('.board-name').textContent = row.me ? 'Ты' : row.name;
   return item;
 }
 
@@ -5333,7 +5367,7 @@ async function rollCube(inStore = cubeState.shop) {
     });
     // Режим мог подставиться сам по остатку калорий — покажем, какой вышел.
     if (!cubeState.level) { cubeState.level = data.level; markCubeLevel(); }
-    renderCubeNeeds(data.needs);
+    renderCubeNeeds(data.needs, data.allergy_note);
     renderCubes(data.cubes);
   } catch (error) {
     results.innerHTML = '';
@@ -5341,15 +5375,18 @@ async function rollCube(inStore = cubeState.shop) {
   }
 }
 
-function renderCubeNeeds(needs) {
+function renderCubeNeeds(needs, allergyNote = '') {
   // Объясняем, почему подобрали именно это. Молчаливая «умность» выглядит
   // как случайность.
   const hint = document.getElementById('cube-needs');
   const words = { protein: 'белка', fiber: 'клетчатки' };
   const missing = (needs || []).map((code) => words[code]).filter(Boolean);
-  hint.textContent = missing.length
-    ? `Сегодня не хватает ${missing.join(' и ')} — учла это в подборе.` : '';
-  hint.hidden = missing.length === 0;
+  const parts = [];
+  if (missing.length) parts.push(`Сегодня не хватает ${missing.join(' и ')} — учла это в подборе.`);
+  // Аллергии учтены по справочнику, но «безопасно» мы не обещаем.
+  if (allergyNote) parts.push(allergyNote);
+  hint.textContent = parts.join(' ');
+  hint.hidden = parts.length === 0;
 }
 
 function renderCubes(cubes) {

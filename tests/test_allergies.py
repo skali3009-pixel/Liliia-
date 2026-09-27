@@ -182,3 +182,36 @@ def test_the_cube_endpoint_passes_the_whole_line():
     api = pathlib.Path("webapp/api.py").read_text(encoding="utf-8")
     assert "allergies = allergens_service.parse(user.allergies)" in api
     assert '(user.allergies or "").split(",")' not in api
+
+
+# --- Честная пометка под подбором (решение 27.09) ---------------------------
+
+def test_the_menu_says_allergies_were_considered_not_that_food_is_safe():
+    from services.menu import allergy_note
+
+    assert allergy_note(None) == "" and allergy_note("нет") == ""
+    note = allergy_note("орехи")
+    assert "учтены" in note and "сверяй" in note
+    for promise in ("безопасн", "гарантир", "можно есть"):
+        assert promise not in note.lower()
+    assert "Сырое и приготовленное" in allergy_note(FROM_VIDEO)
+
+
+def test_the_note_reaches_the_chat_and_both_app_screens():
+    import pathlib
+
+    chat = pathlib.Path("handlers/suggestions.py").read_text(encoding="utf-8")
+    assert "result.allergy_note" in chat
+    app = pathlib.Path("webapp/static/app.js").read_text(encoding="utf-8")
+    assert "data.allergy_note" in app and "allergyNote" in app
+    api = pathlib.Path("webapp/api.py").read_text(encoding="utf-8")
+    assert '"allergy_note": menu_allergy_note(user.allergies)' in api
+
+
+def test_switching_the_allergy_to_no_lifts_every_rule():
+    """Смена аллергии на «нет» (запись 26.09) — орехи снова возможны."""
+    from services.profile import clean_allergies
+
+    assert clean_allergies("нет") is None
+    assert not allergens.parse(clean_allergies("нет"))
+    assert allergens.understood(clean_allergies("нет")) == ""

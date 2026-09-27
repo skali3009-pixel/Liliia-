@@ -99,9 +99,13 @@ class Board:
     offers: list[Offer]
     approximate: bool = False
     no_cook: bool = False
+    # Пометка про аллергии: учли, но справочник знает не всё. Пусто — если
+    # аллергий в профиле нет.
+    allergy_note: str = ""
 
     def to_dict(self) -> dict:
         return {
+            "allergy_note": self.allergy_note,
             "meal_type": self.meal_type,
             "meal_name": self.meal_name,
             "budget": self.budget,
@@ -260,7 +264,27 @@ async def board(session: AsyncSession, user: User, *, meal_type: str | None = No
         left_calories=int(left), gap=gap,
         hint=method.plate_hint(meal) if not no_cook else NO_COOK_HINT,
         offers=offers, approximate=approximate, no_cook=no_cook,
+        allergy_note=allergy_note(user.allergies),
     )
+
+
+def allergy_note(raw: str | None) -> str:
+    """Одна честная строка под подбором, если в профиле есть аллергии.
+
+    Подбор фильтрует по справочнику, а справочник не знает ни состава
+    конкретной марки, ни сырое ли в блюде или приготовленное. Называть
+    предложенное безопасным поэтому нельзя — только «учли».
+    """
+    from services import allergens
+
+    rules = allergens.parse(raw)
+    if not rules:
+        return ""
+    text = ("Аллергии из профиля учтены по нашему справочнику. Он знает не всё — "
+            "состав продуктов сверяй по упаковке.")
+    if rules.raw_mentioned:
+        text += " Сырое и приготовленное справочник не различает."
+    return text
 
 
 __all__ = ["Board", "MEAL_CODES", "MEAL_RU", "Offer", "board", "default_meal"]
