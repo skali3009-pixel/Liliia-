@@ -7,3 +7,17 @@ venv/
 # Данные завода: каталог песен, черновики, очередь.
 # Это её рабочие материалы, в репозиторий не уходят.
 data/
+
+# набор для монтажа: тяжёлое и чужие репозитории не храним
+montage/tools/venv/
+montage/tools/hf/
+montage/tools/**/node_modules/
+montage/tools/**/package-lock.json
+montage/tools/youtube-agent-skill/
+montage/tools/hyperframes/test-title/gsap.min.js
+montage/tools/hyperframes/test-title/renders/
+montage/tools/pip.log
+montage/FableCut/
+montage/refs/
+montage/projects/test/*.wav
+montage/projects/test/hdr_iphone_like.mov

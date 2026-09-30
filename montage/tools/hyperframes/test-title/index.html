@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ru" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="gsap.min.js"></script>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #0d0b10; }
+      #root { width: 100%; height: 100%; position: relative; font-family: "DejaVu Sans", sans-serif; }
+      .line { position: absolute; left: 0; width: 100%; text-align: center; color: #f4f1ec; font-weight: 700; font-size: 92px; }
+      #l1 { top: 760px; }
+      #l2 { top: 910px; color: #e8b04a; font-size: 70px; }
+      #brand { position: absolute; bottom: 280px; width: 100%; text-align: center; color: #f4f1ec; font-size: 54px; letter-spacing: 14px; opacity: .8; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="3" data-width="1080" data-height="1920">
+      <div id="l1" class="line clip" data-start="0" data-duration="3" data-track-index="0">Она не сломалась.</div>
+      <div id="l2" class="line clip" data-start="0" data-duration="3" data-track-index="1">Она разархивировалась.</div>
+      <div id="brand" class="clip" data-start="0" data-duration="3" data-track-index="2">SCALIA</div>
+    </div>
+    <script>
+      const tl = gsap.timeline({ paused: true });
+      tl.fromTo("#l1", { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.6, ease: "power3.out" }, 0);
+      tl.fromTo("#l2", { opacity: 0, scale: 0.8 }, { opacity: 1, scale: 1, duration: 0.7, ease: "back.out(2)" }, 0.8);
+      tl.fromTo("#brand", { opacity: 0 }, { opacity: 0.8, duration: 0.5 }, 1.8);
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
