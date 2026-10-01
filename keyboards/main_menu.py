@@ -20,6 +20,10 @@ MENU_PROFILE = "⚙️ Профиль"
 # путь даёт, но её не видно — в синем списке команд её нет (список держится
 # на десяти строках). Кнопка в меню и есть видимый вход.
 MENU_MUSIC = "🎧 Музыка SCALIA"
+# Документы показываются один раз, при согласии, и дальше жили только за
+# командой `/legal` в синем списке — туда не смотрит никто. Лилия так и
+# сказала: «появляются один раз в начале, и всё, потом их не посмотреть».
+MENU_DOCS = "📄 Документы"
 
 
 # Все кнопки меню одним множеством. Нужно тем сценариям, которые ждут от
@@ -29,7 +33,7 @@ MENU_MUSIC = "🎧 Музыка SCALIA"
 # или правку роста, нажмёт её, и сценарий съест нажатие как ответ. Стоит
 # тест, что множество и клавиатура описывают одни и те же кнопки.
 MENU_TEXTS = {MENU_TURN, MENU_ADD_MEAL, MENU_WATER, MENU_STEPS, MENU_WORKOUT,
-              MENU_PROGRESS, MENU_WHAT_TO_EAT, MENU_PROFILE, MENU_MUSIC}
+              MENU_PROGRESS, MENU_WHAT_TO_EAT, MENU_PROFILE, MENU_MUSIC, MENU_DOCS}
 
 
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
@@ -43,6 +47,7 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
     builder.button(text=MENU_WHAT_TO_EAT)
     builder.button(text=MENU_PROFILE)
     builder.button(text=MENU_MUSIC)
+    builder.button(text=MENU_DOCS)
     # «Мой ход» во всю ширину сверху, дальше парами. Шаги вносят
     # каждый день, поэтому кнопка нужна на виду, а не в приложении.
     #
@@ -52,5 +57,9 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
     # её рядом с «Профилем» значило бы сузить его вдвое — кнопку, которую
     # никто не просил трогать. Лишняя строка стоит высоты клавиатуры, и это
     # честная цена: остальные кнопки остались ровно там, где были.
-    builder.adjust(1, 2, 2, 2, 1, 1)
+    #
+    # Документы — в ту же нижнюю строку, в пару к музыке. Новой строки они
+    # не стоят: открывают их редко, и клавиатура выше не становится. Обе
+    # подписи короткие и на узком экране помещаются в половину ширины.
+    builder.adjust(1, 2, 2, 2, 1, 2)
     return builder.as_markup(resize_keyboard=True)

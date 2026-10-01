@@ -14,7 +14,7 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from db import get_session
-from keyboards.main_menu import MENU_PROFILE
+from keyboards.main_menu import MENU_DOCS, MENU_PROFILE
 from models import User
 from services import age as age_rules
 
@@ -30,7 +30,7 @@ def _is_open(event: TelegramObject, raw_state: str | None) -> bool:
         return True
     if isinstance(event, Message):
         text = (event.text or "").strip()
-        if text == MENU_PROFILE:
+        if text in (MENU_PROFILE, MENU_DOCS):
             return True
         return bool(text.startswith("/") and
                     text.split()[0].split("@")[0] in OPEN_COMMANDS)

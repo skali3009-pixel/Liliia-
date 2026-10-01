@@ -16,6 +16,7 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 import config
 from db import get_session
 from handlers.access import CB_BUY, buy_keyboard, paywall_text
+from keyboards.main_menu import MENU_DOCS
 from services.subscriptions import check_access
 
 logger = logging.getLogger(__name__)
@@ -40,6 +41,10 @@ def _is_open(event: TelegramObject) -> bool:
         if event.successful_payment is not None:
             return True
         text = (event.text or "").strip()
+        # Кнопка «Документы» — то же, что `/legal`, и закон про неё
+        # спрашивает так же: оплачена подписка или нет.
+        if text == MENU_DOCS:
+            return True
         return text.split()[0].split("@")[0] in OPEN_COMMANDS if text.startswith("/") else False
 
     if isinstance(event, CallbackQuery):

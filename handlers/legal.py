@@ -19,6 +19,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 import config
 from db import get_session
+from keyboards.main_menu import MENU_DOCS
 from models import User
 from services import deletion
 from services.legal import LEGAL_VERSION, document_url, links_ready
@@ -219,3 +220,18 @@ async def show_documents(message: Message) -> None:
         f"Действующая редакция: {LEGAL_VERSION}.",
         reply_markup=builder.as_markup(),
     )
+
+
+@router.message(F.text == MENU_DOCS)
+async def menu_documents(message: Message, state: FSMContext) -> None:
+    """Те же документы по кнопке меню.
+
+    Роутер документов стоит первым, поэтому снимать недописанный ответ
+    приходится здесь: человек мог начать вводить шаги или правку роста, и
+    без этого следующая его фраза молча уехала бы в то поле. Анкету не
+    трогаем — её ответы дороже, а документы ничего не спрашивают.
+    """
+    current = await state.get_state()
+    if current and not current.startswith("OnboardingStates:"):
+        await state.clear()
+    await show_documents(message)
