@@ -450,6 +450,41 @@ async def owner_backup(message: Message) -> None:
         "Если так повторится, это разбираем вместе.")
 
 
+@router.message(Command("timur"))
+async def owner_grant_timur(message: Message) -> None:
+    """Технический доступ Тимура к серверу — без консоли хостинга.
+
+    `/timur` — выдать или поправить, `/timur проверить` — только показать,
+    `/timur убрать` — снять. Делает всё `grant-timur.sh`, тот же, что и из
+    консоли: серийная консоль у Лилии перестала отвечать, а ждать, пока она
+    оживёт, ради одной команды незачем.
+    """
+    if message.from_user.id not in config.ADMIN_IDS:
+        return   # для остальных команды словно не существует
+
+    import asyncio
+
+    from services import server_access
+
+    аргументы = server_access.режим(message.text or "")
+    if аргументы is None:
+        await message.answer("Можно так:\n"
+                             "/timur — выдать доступ Тимуру\n"
+                             "/timur проверить — только посмотреть, что настроено\n"
+                             "/timur убрать — снять доступ")
+        return
+
+    await message.answer("🔑 Смотрю сервер и настраиваю доступ — это несколько секунд.")
+
+    # В поток, а не в общий цикл: внутри чужие процессы, и в цикле это
+    # остановка всего бота.
+    получилось, вывод = await asyncio.to_thread(server_access.выполнить, аргументы)
+
+    заголовок = "✅ Готово." if получилось else "🛑 Не получилось — вот что ответил сервер."
+    for part in _split(f"{заголовок}\n\n{вывод}", STATUS_CHUNK):
+        await message.answer(part)
+
+
 @router.message(Command("sources"))
 async def marketing_report(message: Message) -> None:
     """Воронка: откуда пришли и дошли ли до пользы. Только владельцу.
