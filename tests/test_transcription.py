@@ -97,3 +97,71 @@ def test_transcribe_rejects_oversized_audio(monkeypatch):
 
     with pytest.raises(TranscriptionError, match="слишком длинное"):
         asyncio.run(transcribe(b"x" * (transcription.MAX_AUDIO_BYTES + 1)))
+
+
+# --- Тишина и шум: «не расслышал», а не выдуманная фраза ----------------------
+#
+# На тишине Whisper часто не молчит, а сочиняет («Продолжение следует…»), и
+# бот принимал это за речь. Подробный ответ несёт для каждого куска записи
+# вероятность, что речи там нет, — по ней тишина и отличается.
+
+
+class _Sequence:
+    """Отдаёт ответы по очереди — для проверки повторного запроса."""
+
+    def __init__(self, responses, captured: list):
+        self._responses = list(responses)
+        self._captured = captured
+
+    def __call__(self, *args, **kwargs):
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def post(self, url, **kwargs):
+        self._captured.append(kwargs["data"]["response_format"])
+        return self._responses.pop(0)
+
+
+def test_silence_is_reported_as_not_heard(monkeypatch):
+    captured: dict = {}
+    payload = {"text": "Продолжение следует...",
+               "segments": [{"no_speech_prob": 0.93}, {"no_speech_prob": 0.81}]}
+    _mock_http(monkeypatch, _FakeResponse(payload=payload), captured)
+
+    with pytest.raises(TranscriptionError, match="Не расслышал"):
+        asyncio.run(transcribe(AUDIO))
+
+
+def test_speech_with_one_quiet_piece_is_still_speech(monkeypatch):
+    captured: dict = {}
+    payload = {"text": "банан",
+               "segments": [{"no_speech_prob": 0.02}, {"no_speech_prob": 0.9}]}
+    _mock_http(monkeypatch, _FakeResponse(payload=payload), captured)
+
+    assert asyncio.run(transcribe(AUDIO)) == "банан"
+
+
+def test_detailed_answer_is_asked_for(monkeypatch):
+    captured: dict = {}
+    _mock_http(monkeypatch, _FakeResponse(payload={"text": "борщ"}), captured)
+
+    asyncio.run(transcribe(AUDIO))
+
+    assert captured["data"]["response_format"] == "verbose_json"
+
+
+def test_service_without_detailed_answer_is_asked_again_plainly(monkeypatch):
+    """Не всякий сервис понимает verbose_json: голосовое не должно от этого ломаться."""
+    asked: list = []
+    monkeypatch.setattr(transcription.httpx, "AsyncClient", _Sequence(
+        [_FakeResponse(status_code=400, text="response_format not supported"),
+         _FakeResponse(payload={"text": "банан"})], asked))
+    monkeypatch.setattr(transcription.config, "VOICE_API_KEY", "gsk_test")
+
+    assert asyncio.run(transcribe(AUDIO)) == "банан"
+    assert asked == ["verbose_json", "json"]

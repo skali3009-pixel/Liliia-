@@ -14,7 +14,8 @@ from datetime import datetime
 from typing import Any
 
 import config
-from services.food_vision import FoodAnalysis, FoodRecognitionError, get_client
+from services.food_vision import (FoodAnalysis, FoodRecognitionError, friendly_errors,
+                                  get_client)
 
 logger = logging.getLogger(__name__)
 
@@ -185,19 +186,24 @@ async def analyze_moment(text: str, *, now: datetime | None = None) -> Moment:
         raise FoodRecognitionError("Пустая фраза — расскажи, что происходит.")
 
     moment_time = (now or datetime.now()).strftime("%H:%M")
-    response = await get_client().messages.create(
-        model=config.VISION_MODEL,
-        max_tokens=MAX_TOKENS,
-        system=SYSTEM_PROMPT,
-        tools=[MOMENT_TOOL],
-        tool_choice={"type": "auto"},
-        messages=[
-            {
-                "role": "user",
-                "content": f"Сейчас {moment_time}. Фраза человека: {text.strip()}",
-            }
-        ],
-    )
+    # Отказы Anthropic — те же, что у фото: деньги, ключ, доступ к модели,
+    # перегрузка. Раньше здесь их не переводили, и любой из них доходил до
+    # человека общим «не получилось распознать блюдо» — и для голосового,
+    # и для фразы в чате, и для приложения. Причину не видел никто.
+    with friendly_errors():
+        response = await get_client().messages.create(
+            model=config.VISION_MODEL,
+            max_tokens=MAX_TOKENS,
+            system=SYSTEM_PROMPT,
+            tools=[MOMENT_TOOL],
+            tool_choice={"type": "auto"},
+            messages=[
+                {
+                    "role": "user",
+                    "content": f"Сейчас {moment_time}. Фраза человека: {text.strip()}",
+                }
+            ],
+        )
 
     tool_use = next((block for block in response.content if block.type == "tool_use"), None)
     if tool_use is None:

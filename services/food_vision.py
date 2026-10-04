@@ -205,6 +205,20 @@ def friendly_errors():
     """
     try:
         yield
+    except anthropic.APIError as error:
+        # Человеку — понятная фраза, в журнал — настоящая причина: класс
+        # ошибки, код и ответ Anthropic. Без этого по журналу было не
+        # понять, кончились деньги, не принят ключ или просто перегрузка.
+        logger.warning("Claude отказал: %s %s — %s", type(error).__name__,
+                       getattr(error, "status_code", ""),
+                       str(getattr(error, "message", "") or error)[:300])
+        _explain(error)
+
+
+def _explain(error: anthropic.APIError) -> None:
+    """Перевести отказ Anthropic в понятную человеку ошибку."""
+    try:
+        raise error
     except anthropic.AuthenticationError:
         raise VisionNotConfigured(
             "Ключ Anthropic не принят — он неверный, отозван или скопирован не полностью.\n\n"
@@ -225,7 +239,6 @@ def friendly_errors():
                 "На счёте Anthropic закончились деньги — пополни баланс "
                 "на console.anthropic.com/settings/billing."
             ) from None
-        logger.warning("Claude ответил %s: %s", e.status_code, details[:300])
         raise FoodRecognitionError(
             f"Claude ответил ошибкой ({e.status_code}). Попробуй ещё раз чуть позже."
         ) from None
