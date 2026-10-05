@@ -904,3 +904,18 @@ def test_the_still_frame_draws_the_same_character():
     show = APP_JS.split("function showMove(", 1)[1].split("\n}", 1)[0]
     still = show.split("if (!motion())", 1)[1]
     assert "moverSvg(MOVES[code][0]" in still
+
+
+def test_collapsible_groups_do_not_cross_screen_boundaries():
+    from html.parser import HTMLParser
+    class Sections(HTMLParser):
+        def __init__(self): super().__init__(); self.stack = []
+        def handle_starttag(self, tag, attrs):
+            if tag in {"main", "details"}: self.stack.append(tag)
+        def handle_endtag(self, tag):
+            if tag in {"main", "details"}:
+                assert self.stack and self.stack[-1] == tag, (tag, self.stack)
+                self.stack.pop()
+    parser = Sections()
+    parser.feed(INDEX)
+    assert not parser.stack

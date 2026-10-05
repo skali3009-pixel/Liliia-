@@ -2156,6 +2156,8 @@ const doneExercises = new Set();
 let restTimer = null;
 
 function renderWorkouts(data) {
+  const direction = data.categories.find((item) => item.code === category);
+  document.getElementById('pick-category').textContent = `Направление: ${direction?.label || 'Тело'}`;
   const program = data.programs.find((p) => p.code === data.selected);
   document.getElementById('program-title').textContent = program ? program.title : 'Программа';
   document.getElementById('program-sub').textContent = program ? program.subtitle : '';
@@ -3712,7 +3714,6 @@ function exerciseRow(exercise) {
       <div class="ex-sub"></div>
       <div class="ex-actions">
         <a class="ex-link how-link"></a>
-        <button class="ex-link rest-btn">запустить отдых</button>
       </div>
     </div>`;
 
@@ -3740,14 +3741,9 @@ function exerciseRow(exercise) {
     else {
       doneExercises.add(exercise.id);
       haptic();
-      // После отметки сразу предлагаем отдых — так и делают между подходами.
-      if (exercise.rest_seconds) startRest(exercise.rest_seconds);
     }
     renderWorkouts(gym);
   };
-
-  const restButton = row.querySelector('.rest-btn');
-  if (restButton) restButton.onclick = () => startRest(exercise.rest_seconds);
 
   return row;
 }

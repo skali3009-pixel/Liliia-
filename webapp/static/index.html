@@ -591,6 +591,7 @@
     <section class="decide" id="pick-card">
       <div class="eyebrow">Подобрать мне</div>
       <p class="decide-text">Сколько у тебя времени?</p>
+      <p class="hint" id="pick-category">Направление: Тело</p>
       <div class="chips" id="pick-time"></div>
       <div id="pick-result"></div>
     </section>
@@ -614,12 +615,12 @@
          один вопрос, либо выбирает сам — и второе не должно лежать за
          экраном. Раньше между ними стоял список занятий в 1180 точек, и
          фильтры начинались на 1626-й: замерено в браузере. -->
+    <details class="workout-catalog"><summary>Направление и программы</summary>
     <div class="filters">
       <div class="chips" id="category-switch"></div>
       <div class="chips" id="style-switch"></div>
     </div>
 
-    <details class="workout-catalog"><summary>Выбрать программу самому</summary>
     <div class="chips programs" id="program-switch"></div>
 
     <section class="card">
