@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Добавить или заменить ключ в .env и перезапустить бота.
 #
-#   bash set-key.sh ANTHROPIC_API_KEY sk-ant-api03-...
-#   bash set-key.sh VOICE_API_KEY gsk_...
+#   bash set-key.sh ANTHROPIC_API_KEY
+#   bash set-key.sh VOICE_API_KEY
 
 set -euo pipefail
+umask 077
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$APP_DIR/.env"
@@ -29,7 +30,12 @@ if [ -z "$VALUE" ]; then
         while read -r -t 0.3 _ </dev/tty 2>/dev/null; do :; done
     fi
     echo "Вставь значение для $NAME и нажми Enter:"
-    read -r VALUE <"$TTY_IN"
+    if [ "$TTY_IN" = /dev/tty ]; then
+        read -r -s VALUE </dev/tty
+    else
+        read -r -s VALUE
+    fi
+    echo
 fi
 
 # Пробелы и переносы по краям при вставке — обычное дело.
@@ -41,7 +47,7 @@ VALUE="$(printf '%s' "$VALUE" | tr -d '[:space:]')"
 
 # Защита от самой частой ошибки: вставили текст-заглушку из инструкции
 # вместо настоящего ключа.
-reject() { echo "✗ Это не похоже на настоящий ключ: $1"; echo "  Скопируй ключ целиком из личного кабинета и вставь его в команду."; exit 1; }
+reject() { echo "✗ Это не похоже на настоящий ключ: $1"; echo "  Скопируй ключ целиком из личного кабинета и вставь его в отдельный запрос скрипта."; exit 1; }
 
 # Настоящий ключ — только латиница, цифры и знаки, так что кириллица в нём
 # означает, что скопировали текст из инструкции.
@@ -60,7 +66,9 @@ fi
 case "$NAME" in
     ANTHROPIC_API_KEY)
         case "$VALUE" in sk-ant-*) ;; *) reject "ключ Anthropic начинается с sk-ant-";; esac
-        [ "${#VALUE}" -ge 80 ] || reject "он слишком короткий (${#VALUE} символов вместо ~108) — вставился не целиком" ;;
+        # Длина секрета не является контрактом API. Проверяем у провайдера,
+        # а не отбрасываем новые форматы по догадке о числе символов.
+        ;;
     VOICE_API_KEY)
         case "$VALUE" in gsk_*|sk-*) ;; *) reject "ключ Groq начинается с gsk_, ключ OpenAI — с sk-";; esac ;;
     BOT_TOKEN)
@@ -70,14 +78,32 @@ esac
 # Спрашиваем сам сервис, рабочий ли ключ: лучше узнать это здесь, чем потом
 # гадать над ошибкой в Telegram.
 verify_key() {
+    if [ "$NAME" = ANTHROPIC_API_KEY ]; then
+        command -v curl >/dev/null 2>&1 || {
+            echo "✗ Не могу проверить ключ: curl не установлен. В файл ничего не записал."
+            exit 1
+        }
+        local code=""
+        echo "  Проверяю ключ у Anthropic…"
+        code="$(curl -s --max-time 20 --output /dev/null --write-out '%{http_code}' \
+            https://api.anthropic.com/v1/models \
+            -H "x-api-key: $VALUE" -H "anthropic-version: 2023-06-01" || true)"
+        case "$code" in
+            200) echo "  ✓ сервис принял ключ"; return 0 ;;
+            401) echo "  ✗ Anthropic не принял ключ (HTTP 401): проверь полноту, срок действия и тип ключа." ;;
+            400) echo "  ✗ Anthropic отклонил запрос (HTTP 400). Проверь, привязан ли ключ к рабочему пространству; для общего ключа может требоваться его ID." ;;
+            402) echo "  ✗ Anthropic сообщил о проблеме оплаты (HTTP 402). Проверь Billing этого аккаунта." ;;
+            403) echo "  ✗ Anthropic запретил доступ (HTTP 403). Проверь права ключа и аккаунта." ;;
+            429) echo "  ✗ Anthropic ограничил запросы (HTTP 429). Повтори проверку позже." ;;
+            *) echo "  ✗ Не удалось подтвердить ключ у Anthropic. Повтори проверку позже." ;;
+        esac
+        echo "    В файл ничего не записал; установленный ключ сохранён."
+        exit 1
+    fi
     command -v curl >/dev/null 2>&1 || return 0
 
     local answer=""
     case "$NAME" in
-        ANTHROPIC_API_KEY)
-            echo "  Проверяю ключ у Anthropic…"
-            answer="$(curl -s --max-time 20 https://api.anthropic.com/v1/models \
-                -H "x-api-key: $VALUE" -H "anthropic-version: 2023-06-01" || true)" ;;
         VOICE_API_KEY)
             echo "  Проверяю ключ у сервиса распознавания речи…"
             answer="$(curl -s --max-time 20 "${VOICE_BASE_URL:-https://api.groq.com/openai/v1}/models" \
