@@ -8,7 +8,7 @@ import subprocess
 import pytest
 
 
-def installer(tmp_path, code, key, curl_exit=0):
+def installer(tmp_path, code, key, curl_exit=0, pasted=None):
     git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
     bash = str(git_bash) if os.name == "nt" and git_bash.exists() else shutil.which("bash")
     if not bash:
@@ -27,11 +27,21 @@ def installer(tmp_path, code, key, curl_exit=0):
         target.chmod(0o700)
     result = subprocess.run(
         [bash, "-c", 'export PATH="$PWD/bin:$PATH"; exec bash ./set-key.sh ANTHROPIC_API_KEY'],
-        input=key + "\n", capture_output=True, text=True, encoding="utf-8", timeout=15,
+        input=(key if pasted is None else pasted) + "\n\n", capture_output=True, text=True, encoding="utf-8", timeout=15,
         cwd=tmp_path, env={**os.environ, "TEST_HTTP_CODE": str(code), "TEST_CURL_EXIT": str(curl_exit)},
     )
     assert key not in result.stdout + result.stderr
     return result
+
+
+@pytest.mark.parametrize("line_end", ["\n", "\r\n"])
+def test_wrapped_clipboard_is_saved_as_one_complete_key(tmp_path, line_end):
+    key = "sk-ant-api03-" + "c" * 96
+    result = installer(tmp_path, 200, key, pasted=key[:76] + line_end + key[76:])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert (tmp_path / ".env").read_text() == f"OTHER=keep\nANTHROPIC_API_KEY={key}\n"
+    assert key[:76] not in result.stdout + result.stderr
+    assert key[76:] not in result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("length", [76, 108])

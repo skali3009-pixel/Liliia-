@@ -21,19 +21,32 @@ if [ -z "$NAME" ]; then
     exit 1
 fi
 
-# Ключ длинный, и вставлять его в одну строку с командой — верный способ
-# что-нибудь потерять. Поэтому спрашиваем отдельным вопросом, на чистой строке.
+# Читаем вставку до пустой строки: мессенджер может добавить переносы в ключ.
+# Один read принимал только первую строку, а хвост попадал в терминал при
+# восстановлении echo. Весь блок ввода скрыт, включая все строки вставки.
+read_secret() {
+    local part=""
+    while IFS= read -r -s part || [ -n "$part" ]; do
+        [ -n "$part" ] || break
+        VALUE+="$part"
+        part=""
+    done
+}
+
 if [ -z "$VALUE" ]; then
     if (: </dev/tty) 2>/dev/null; then TTY_IN=/dev/tty; else TTY_IN=/dev/stdin; fi
-    # Выбрасываем всё, что уже лежит в буфере ввода от прежних вставок.
     if [ "$TTY_IN" = /dev/tty ]; then
-        while read -r -t 0.3 _ </dev/tty 2>/dev/null; do :; done
+        TTY_MODE="$(stty -g </dev/tty)"
+        trap 'stty "$TTY_MODE" </dev/tty 2>/dev/null || true' EXIT
+        stty -echo </dev/tty
     fi
-    echo "Вставь значение для $NAME и нажми Enter:"
+    echo "Вставь значение для $NAME целиком. Нажми Enter, затем ещё раз Enter (пустая строка):"
     if [ "$TTY_IN" = /dev/tty ]; then
-        read -r -s VALUE </dev/tty
+        read_secret </dev/tty
+        stty "$TTY_MODE" </dev/tty
+        trap - EXIT
     else
-        read -r -s VALUE
+        read_secret
     fi
     echo
 fi
