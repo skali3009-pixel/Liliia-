@@ -12,6 +12,11 @@ PYTHON="$DIR/.venv/bin/python"
 cd "$DIR"
 set -a; [ -f .env ] && . ./.env; set +a
 
+# No inference, Telegram messages, DB writes, or secret output.
+if [ "${1:-}" = "--check-ai" ]; then
+  exec "$PYTHON" -m services.provider_check
+fi
+
 if systemctl is-active --quiet nutrition-bot 2>/dev/null; then
   echo "🤖 Бот: работает"
 else
