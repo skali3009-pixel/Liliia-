@@ -146,9 +146,10 @@ class QuickSet:
     exercises: tuple[str, ...]
     minutes: int
     why: str
+    category: str
 
     def to_dict(self) -> dict:
-        return {"code": self.code, "title": self.title, "minutes": self.minutes,
+        return {"code": self.code, "title": self.title, "category": self.category, "minutes": self.minutes,
                 "exercises": list(self.exercises), "why": self.why}
 
 
@@ -162,7 +163,7 @@ def _exercise_minutes(item) -> float:
 
 
 def quick_five(*, energy: int | None = None,
-               recent: tuple[str, ...] = ()) -> list[QuickSet]:
+               recent: tuple[str, ...] = (), category: str | None = None) -> list[QuickSet]:
     """«У меня пять минут» — короткие наборы из тех же упражнений.
 
     Целой программы на пять минут в базе нет, и придумывать её не нужно:
@@ -171,7 +172,7 @@ def quick_five(*, energy: int | None = None,
     пять.
     """
     out: list[QuickSet] = []
-    order = list(QUICK_CATEGORIES) + ["body"]
+    order = (["calm", "posture"] if category == "body" else [category]) if category else list(QUICK_CATEGORIES) + ["body"]
 
     for category in order:
         best = None
@@ -199,6 +200,7 @@ def quick_five(*, energy: int | None = None,
             continue
         out.append(QuickSet(
             code=best,
+            category=PROGRAMS[best]["category"],
             title=QUICK_TITLES.get(category, PROGRAMS[best]["title"]),
             exercises=tuple(chosen),
             minutes=max(round(spent), 1),

@@ -38,9 +38,7 @@
 
         <!-- Фраза дня: первое, что читается на экране. Меняется раз в
              сутки и зависит от цели. -->
-        <figure class="day-line" id="day-line" hidden>
-          <blockquote id="day-line-text"></blockquote>
-        </figure>
+
 
         <div class="hero-state">
           <span class="hero-state-icon" id="hero-state-icon">☀️</span>
@@ -107,22 +105,23 @@
         <span class="eyebrow">Твой ход</span>
       </div>
       <p class="turn-text" id="turn-text"></p>
-      <button class="btn primary" id="turn-cta"></button>
+      <button class="btn ghost" id="turn-cta"></button>
     </section>
 
     <!-- Быстрые действия: четыре самых частых шага одним касанием. Раньше
          на их месте стоял большой блок записи с волной — он занимал экран
          целиком ради одной кнопки. -->
+    <button class="btn primary" id="record-food-main">Записать еду</button>
     <section class="quick">
-      <button class="quick-act" id="quick-food" aria-label="Что съесть">
+      <button class="quick-act" id="quick-food" aria-label="Записать еду">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/>
           <path d="M12 3v18M4 7.5l8 4.5 8-4.5"/></svg>
-        <span>Еда</span>
+        <span>Записать</span>
       </button>
       <button class="quick-act" id="moment-open" aria-label="Рассказать, что происходит">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 0 1-8 8H5l1.5-3A8 8 0 1 1 20 12z"/>
           <path d="M9 11h6M9 14h4"/></svg>
-        <span>Голос</span>
+        <span>Словами</span>
       </button>
       <button class="quick-act" id="quick-water" aria-label="Добавить стакан воды">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3s6 6.5 6 10.5A6 6 0 0 1 6 13.5C6 9.5 12 3 12 3z"/></svg>
@@ -132,7 +131,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14" cy="4.5" r="2"/>
           <path d="M10.5 21l2-6-2.5-2.5 1-4.5 3-1 2 3 2.5 1"/>
           <path d="M12.5 15l-3 1.5L7 21"/></svg>
-        <span>Движение</span>
+        <span>Шаги</span>
       </button>
     </section>
 
@@ -296,7 +295,7 @@
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>Лента дня</h2><span id="timeline-count" class="muted"></span></div>
+      <div class="card-head"><h2>Лента дня</h2><button class="link-btn" id="review-day">Посмотрел записи за день</button><span id="timeline-count" class="muted"></span></div>
       <div id="timeline"></div>
     </section>
 
@@ -308,7 +307,11 @@
     <section class="world-hero">
       <div class="world-art" data-art="world"></div>
       <div class="world-body">
-        <div class="eyebrow">Мой мир</div>
+        <button class="btn ghost" id="world-back">← К прогрессу</button>
+        <div class="eyebrow">Мир и награды</div>
+        <figure class="day-line" id="day-line" hidden>
+          <blockquote id="day-line-text"></blockquote>
+        </figure>
         <h1 class="world-title" id="world-title">Место силы</h1>
         <p class="world-sub" id="world-sub">Растёт с каждым закрытым заданием.</p>
         <p class="world-level" id="world-level"></p>
@@ -464,19 +467,7 @@
         <div class="stat-label" id="stat-streak-label">дней подряд</div></div>
     </section>
 
-    <section class="card body-card">
-      <div class="card-head">
-        <h2>Твоё тело</h2>
-        <span id="body-note" class="muted"></span>
-      </div>
-      <div class="seg" id="body-switch">
-        <button class="seg-btn active" data-body="goal">Сейчас и цель</button>
-        <button class="seg-btn" data-body="zones">Зоны</button>
-      </div>
-      <div id="body-stage" class="body-stage"></div>
-      <div id="body-zones" class="chips" hidden></div>
-      <div id="body-insights" class="insights"></div>
-    </section>
+
 
     <div class="filters">
       <!-- Замеров больше, чем помещается в переключатель, — ряд прокручивается. -->
@@ -502,6 +493,29 @@
       </div>
       <div id="chart-box"></div>
       <div id="chart-table" hidden></div>
+    </section>
+    <section class="card">
+      <div class="card-head"><h2>Новый замер</h2>
+        <button class="link-btn" id="measure-more">объёмы</button></div>
+      <input id="m-weight" class="input" type="number" step="0.1" placeholder="Вес, кг">
+      <div class="grid2" id="measure-extra" hidden>
+        <input id="m-waist" class="input" type="number" step="0.5" placeholder="Талия, см">
+        <input id="m-hips" class="input" type="number" step="0.5"
+               placeholder="Бёдра по ягодицам, см">
+        <input id="m-thigh" class="input" type="number" step="0.5"
+               placeholder="Одна нога вверху, см">
+        <input id="m-chest" class="input" type="number" step="0.5" placeholder="Грудь, см">
+        <input id="m-arm" class="input" type="number" step="0.5"
+               placeholder="Одна рука (бицепс), см">
+      </div>
+      <button id="m-save" class="btn primary">Сохранить замер</button>
+      <p class="hint">Заполни то, что измерено, — остальное можно пропустить.
+        <button class="link-btn" id="measure-help">как мерить</button></p>
+      <p class="hint" id="measure-help-text" hidden>«Бёдра» — вокруг таза по
+        самой широкой точке ягодиц, это один обхват на двоих. «Одна нога» —
+        вокруг одного бедра под ягодицей, «одна рука» — вокруг бицепса. Ногу
+        и руку меряй всегда одну и ту же, иначе замеры не сравнить между
+        собой.</p>
     </section>
 
     <!-- Женский календарь. Стоит рядом с весом намеренно: он здесь не ради
@@ -535,29 +549,7 @@
     <!-- Чаще всего записывают только вес. Пять полей объёмов открываются
          по кнопке, а как мерить — под «как мерить»: пять строк объяснений
          над кнопкой сохранения читал один человек из десяти. -->
-    <section class="card">
-      <div class="card-head"><h2>Новый замер</h2>
-        <button class="link-btn" id="measure-more">объёмы</button></div>
-      <input id="m-weight" class="input" type="number" step="0.1" placeholder="Вес, кг">
-      <div class="grid2" id="measure-extra" hidden>
-        <input id="m-waist" class="input" type="number" step="0.5" placeholder="Талия, см">
-        <input id="m-hips" class="input" type="number" step="0.5"
-               placeholder="Бёдра по ягодицам, см">
-        <input id="m-thigh" class="input" type="number" step="0.5"
-               placeholder="Одна нога вверху, см">
-        <input id="m-chest" class="input" type="number" step="0.5" placeholder="Грудь, см">
-        <input id="m-arm" class="input" type="number" step="0.5"
-               placeholder="Одна рука (бицепс), см">
-      </div>
-      <button id="m-save" class="btn primary">Сохранить замер</button>
-      <p class="hint">Заполни то, что измерено, — остальное можно пропустить.
-        <button class="link-btn" id="measure-help">как мерить</button></p>
-      <p class="hint" id="measure-help-text" hidden>«Бёдра» — вокруг таза по
-        самой широкой точке ягодиц, это один обхват на двоих. «Одна нога» —
-        вокруг одного бедра под ягодицей, «одна рука» — вокруг бицепса. Ногу
-        и руку меряй всегда одну и ту же, иначе замеры не сравнить между
-        собой.</p>
-    </section>
+
 
     <section class="card">
       <div class="card-head"><h2>Фото прогресса</h2>
@@ -566,6 +558,20 @@
       <div id="photo-compare"></div>
       <p class="hint" id="photo-hint">Снимай в одинаковой позе и при одном свете — так разница видна честнее.</p>
     </section>
+    <button class="btn ghost" id="progress-world">Мир и награды</button>
+    <details class="card body-card"><summary>Фигура и детали</summary>
+      <div class="card-head">
+        <h2>Твоё тело</h2>
+        <span id="body-note" class="muted"></span>
+      </div>
+      <div class="seg" id="body-switch">
+        <button class="seg-btn active" data-body="goal">Сейчас и цель</button>
+        <button class="seg-btn" data-body="zones">Зоны</button>
+      </div>
+      <div id="body-stage" class="body-stage"></div>
+      <div id="body-zones" class="chips" hidden></div>
+      <div id="body-insights" class="insights"></div>
+    </details>
   </main>
 
 
@@ -573,7 +579,7 @@
     <section class="hero slim">
       <div class="hero-art" data-art="gym"></div>
       <div class="hero-body">
-        <h1 class="hero-title">Спорт</h1>
+        <h1 class="hero-title">Тренировки</h1>
         <div class="eyebrow">Тело, лицо, глаза, осанка</div>
       </div>
     </section>
@@ -592,7 +598,7 @@
     <!-- Занятия плитками, а не списком: двенадцать строк с описанием — это
          половина страницы. Показываем шесть, остальные под кнопкой: даже
          плитками двенадцать штук — это стена. -->
-    <section class="card" id="cardio-card">
+    <details class="card" id="cardio-card"><summary>Записать свою активность</summary>
       <div class="card-head"><h2>Записать свою тренировку</h2></div>
       <p class="hint">Бег, бассейн, урок танцев, дорога пешком — отметь, и
         я посчитаю время и расход.</p>
@@ -602,7 +608,7 @@
       <!-- Кнопка живёт здесь же: отметила занятие — подтвердила, не
            пролистывая до конца каталога упражнений. -->
       <button id="finish-cardio" class="btn" hidden>Записать занятие</button>
-    </section>
+    </details>
 
     <!-- Кнопки выбора идут сразу за подбором: человек либо отвечает на
          один вопрос, либо выбирает сам — и второе не должно лежать за
@@ -613,6 +619,7 @@
       <div class="chips" id="style-switch"></div>
     </div>
 
+    <details class="workout-catalog"><summary>Выбрать программу самому</summary>
     <div class="chips programs" id="program-switch"></div>
 
     <section class="card">
@@ -636,6 +643,8 @@
       <button class="link-btn" id="exercises-toggle" hidden>Показать все</button>
       <button id="finish-workout" class="btn" hidden>Записать тренировку</button>
     </section>
+
+    </details>
 
     <!-- Итог недели внизу: он не управляет ничем, а места наверху занимал. -->
     <section class="stats">
@@ -752,7 +761,9 @@
       <div class="hero-art" data-art="food"></div>
       <div class="hero-body">
         <div class="eyebrow">Еда</div>
-        <h1 class="hero-title">Что съесть?</h1>
+        <h1 class="hero-title">Еда</h1>
+        <button class="btn primary" id="food-record">Записать еду</button>
+        <p class="hint">Подобрать, что съесть, можно ниже. Выбор блюда ещё не запись в дневник.</p>
         <p class="hero-sub" id="food-hint"></p>
       </div>
     </section>
@@ -766,7 +777,7 @@
     <section class="decide">
       <div class="eyebrow">Не хочу выбирать</div>
       <p class="decide-text" id="decide-text">Дам один вариант — без вопросов.</p>
-      <button class="btn primary" id="decide-btn">Реши за меня</button>
+      <button class="btn ghost" id="decide-btn">Реши за меня</button>
     </section>
 
     <div id="cube-mode">
@@ -781,6 +792,7 @@
     </section>
 
     <!-- Третий путь: ничего не отмечать руками, а просто показать полку. -->
+    <details class="shop-tools"><summary>Полка и корзина в магазине</summary>
     <section class="card" id="cube-shelf-card">
       <h2 class="cube-q">Сфоткай полку</h2>
       <p class="hint">Сними холодильник или пакет с покупками — соберу только из
@@ -796,6 +808,8 @@
       <p class="hint">Отметь, что уже в корзине, — соберу только из этого.</p>
       <div id="cube-basket" hidden></div>
     </section>
+    </details>
+
 
     <section class="card" id="cube-ask">
       <h2 class="cube-q">Насколько хочется есть?</h2>
@@ -852,23 +866,151 @@
     </div>
   </main>
 
+  <main id="screen-profile" class="screen" hidden><div id="profile-sheet" class="profile-panel" hidden>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2>Профиль и доступ</h2>
+      <button class="icon-btn" id="profile-close" aria-label="Закрыть">✕</button>
+    </div>
+
+    <section class="card">
+      <h3>Доступ</h3><p id="prof-access" class="hint"></p>
+      <button class="btn ghost" id="prof-sync">Шаги с телефона</button>
+    </section>
+    <details class="profile-group"><summary>Цель и параметры</summary>
+    <div class="prof-norms">
+      <div class="eyebrow">Твоя норма в день</div>
+      <div class="prof-norms-value" id="prof-norms">—</div>
+      <div class="prof-norms-sub" id="prof-norms-sub"></div>
+    </div>
+
+    <div class="eyebrow ruled">Цель</div>
+    <div class="state-options" id="prof-goal"></div>
+    <!-- Цель и вес цели говорят разное: называем, а не решаем за человека. -->
+    <p class="hint warn" id="prof-goal-conflict" hidden></p>
+
+    <div class="eyebrow ruled">Активность</div>
+    <div class="state-options" id="prof-activity"></div>
+
+    <div class="eyebrow ruled">Питание</div>
+    <div class="state-options" id="prof-diet"></div>
+
+    <div class="eyebrow ruled">Цифры</div>
+    <!-- Поля текстовые, а не number: на русской клавиатуре дробное пишут через
+         запятую, а number-поле молча отдаёт пустое значение — правка исчезала
+         бы без единого слова. Разбирает число сервер, он же и проверяет. -->
+    <label class="prof-row">
+      <span>Рост, см</span>
+      <input class="input tight" id="prof-height" type="text" inputmode="decimal">
+    </label>
+    <label class="prof-row">
+      <span>Возраст</span>
+      <input class="input tight" id="prof-age" type="text" inputmode="numeric">
+    </label>
+    <label class="prof-row">
+      <span>Вес цели, кг</span>
+      <input class="input tight" id="prof-target" type="text" inputmode="decimal">
+    </label>
+    <p class="hint" id="prof-weight-hint"></p>
+
+    <div class="eyebrow ruled">Цель по шагам</div>
+    <div class="state-options" id="prof-steps"></div>
+    <label class="prof-row">
+      <span>Своё число</span>
+      <input class="input tight" id="prof-steps-own" type="text" inputmode="numeric">
+    </label>
+    <p class="hint">Это не медицинская норма, а договорённость с собой. Лучше
+      взять то число, которое точно получится каждый день.</p>
+
+    <!-- Весь блок, а не одна кнопка: заголовок и пояснение без кнопки
+         всё равно начинали с мужчиной разговор о месячных (запись 26.09). -->
+    <div id="prof-cycle-block">
+    <div class="eyebrow ruled">Женский календарь</div>
+    <div class="prof-row switch" id="prof-cycle-row">
+      <span>Показывать цикл</span>
+      <button class="chip" id="prof-cycle">включён</button>
+    </div>
+    <p class="hint">Живёт на «Прогрессе», рядом с весом. Для личных отметок. Сам по себе календарь не определяет причину изменения веса.</p>
+    </div>
+
+    <div class="eyebrow ruled">Аллергии и что не ешь</div>
+    <input class="input" id="prof-allergies" type="text" maxlength="200"
+           placeholder="Например: орехи, лактоза. Или «нет»">
+    <!-- Что подбор понял из написанного: ошибку разбора здесь видно сразу. -->
+    <p class="hint" id="prof-allergies-understood" hidden></p>
+
+    </details><details class="profile-group"><summary>Напоминания</summary>
+    <div class="prof-row switch">
+      <span id="prof-reminders-label">Мягкие напоминания</span>
+      <button class="chip" id="prof-reminders">включены</button>
+    </div>
+    <p class="hint">Бот пишет сам, только когда есть что предложить: обычно одно
+      сообщение в день, часто ни одного. Ночью молчит.</p>
+
+    <!-- Настройки разворачиваются по кнопке: семь галочек, показанные всем
+         сразу, превращают профиль в анкету. -->
+    <button class="btn ghost" id="notif-toggle">Настроить подробнее</button>
+    <!-- Тот, кто пролистал подсказки в первый день, не должен остаться без
+         них навсегда: показать заново — одна кнопка. -->
+    <button class="btn ghost" id="tour-again">Показать подсказки заново</button>
+    <div id="notif-box" hidden>
+      <div class="eyebrow ruled">О чём писать</div>
+      <div class="state-options" id="notif-kinds"></div>
+
+      <div class="eyebrow ruled">Как часто</div>
+      <div class="state-options" id="notif-pace"></div>
+
+      <div class="eyebrow ruled">Тихие часы</div>
+      <label class="prof-row">
+        <span>Не писать с</span>
+        <select class="input tight" id="notif-from"></select>
+      </label>
+      <label class="prof-row">
+        <span>до</span>
+        <select class="input tight" id="notif-to"></select>
+      </label>
+      <p class="hint">Ночью бот молчит. Напоминания о добавках это не трогает —
+        их время назначаешь ты.</p>
+    </div>
+
+    </details>
+    <details class="profile-group"><summary>Документы</summary><div id="prof-documents"></div></details>
+    <details class="profile-group"><summary>Музыка SCALIA</summary><a id="prof-music" class="btn ghost" target="_blank" rel="noopener noreferrer">Открыть музыку SCALIA</a></details>
+    <div class="eyebrow ruled">Мои данные</div>
+    <button class="btn" id="prof-export">📦 Выгрузить всё одним файлом</button>
+    <p class="hint">Придёт в чат: таблицы с едой, водой, весом, тренировками и
+      самочувствием — открываются в Numbers и Excel. Данные твои, забрать их
+      можно в любой момент.</p>
+
+    <!-- Пишется прямо здесь, а не в чате: человек споткнулся на этом экране,
+         и выгонять его отсюда ради жалобы — значит не получить жалобу. -->
+    <div class="eyebrow ruled">Поддержка</div>
+    <textarea class="input" id="prof-problem" rows="3" maxlength="1000"
+      placeholder="Какую кнопку нажимали, что ждали увидеть и что вышло"></textarea>
+    <button class="btn ghost" id="prof-problem-send">✍️ Рассказать</button>
+    <p class="hint" id="prof-problem-hint">Прочтёт живой человек. Если понадобится
+      уточнить, ответят прямо в чат боту.</p>
+  </div>
+</div></main>
   <nav class="tabs">
-    <button class="tab active" data-screen="today">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/>
-        <path d="M12 4a8 8 0 0 1 7 4"/></svg>Сегодня</button>
-    <button class="tab" data-screen="world">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 6-2.5 10h-9L5 9z"/>
-        <path d="M12 3v18M5 9h14"/></svg>Мой мир</button>
-    <button class="tab" data-screen="gym">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6M8 7v10M16 7v10M20 9v6M8 12h8"/></svg>Спорт</button>
-    <button class="tab" data-screen="cube">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/>
-        <path d="M12 3v18M4 7.5l8 4.5 8-4.5"/></svg>Еда</button>
-    <button class="tab" data-screen="progress">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16l5-5 4 3 7-8"/>
-        <path d="M4 20h16"/></svg>Прогресс</button>
+    <button class="tab active" data-screen="today"><span aria-hidden="true">☀</span>Сегодня</button>
+    <button class="tab" data-screen="cube"><span aria-hidden="true">🍽</span>Еда</button>
+    <button class="tab" data-screen="gym"><span aria-hidden="true">🏋</span>Тренировки</button>
+    <button class="tab" data-screen="progress"><span aria-hidden="true">📊</span>Прогресс</button>
+    <button class="tab" data-screen="profile"><span aria-hidden="true">⚙</span>Профиль</button>
   </nav>
 </div>
+
+
+<div id="record-sheet" class="sheet" hidden><div class="sheet-card">
+  <div class="sheet-head"><h2>Записать еду</h2><button id="record-close" class="icon-btn" aria-label="Закрыть">✕</button></div>
+  <button class="btn primary" id="record-words">Описать словами здесь</button>
+  <p class="hint">Сначала покажем оценку порции — запись сохраняется после подтверждения.</p>
+  <button class="btn ghost" id="record-chat">Фото или голос в чат</button>
+  <p class="hint">Фото и голос работают в чате AURA: открой чат, нажми «Начать», если Telegram предложит, затем пришли фото или голосовое.</p>
+  <button class="btn ghost" id="record-repeat">Повторить привычную запись</button>
+  <button class="btn ghost" id="record-catalog">Подобрать из справочника</button>
+</div></div>
 
 <!-- Ввод момента: сначала распознаём, показываем факты, и только потом
      сохраняем — догадки модели человек должен видеть до записи. -->
@@ -953,126 +1095,6 @@
       <button class="btn primary" id="tour-next">Дальше</button>
       <button class="btn ghost" id="tour-skip">Пропустить</button>
     </div>
-  </div>
-</div>
-
-<div id="profile-sheet" class="sheet" hidden>
-  <div class="sheet-card">
-    <div class="sheet-head">
-      <h2>Профиль</h2>
-      <button class="icon-btn" id="profile-close" aria-label="Закрыть">✕</button>
-    </div>
-
-    <div class="prof-norms">
-      <div class="eyebrow">Твоя норма в день</div>
-      <div class="prof-norms-value" id="prof-norms">—</div>
-      <div class="prof-norms-sub" id="prof-norms-sub"></div>
-    </div>
-
-    <div class="eyebrow ruled">Цель</div>
-    <div class="state-options" id="prof-goal"></div>
-    <!-- Цель и вес цели говорят разное: называем, а не решаем за человека. -->
-    <p class="hint warn" id="prof-goal-conflict" hidden></p>
-
-    <div class="eyebrow ruled">Активность</div>
-    <div class="state-options" id="prof-activity"></div>
-
-    <div class="eyebrow ruled">Питание</div>
-    <div class="state-options" id="prof-diet"></div>
-
-    <div class="eyebrow ruled">Цифры</div>
-    <!-- Поля текстовые, а не number: на русской клавиатуре дробное пишут через
-         запятую, а number-поле молча отдаёт пустое значение — правка исчезала
-         бы без единого слова. Разбирает число сервер, он же и проверяет. -->
-    <label class="prof-row">
-      <span>Рост, см</span>
-      <input class="input tight" id="prof-height" type="text" inputmode="decimal">
-    </label>
-    <label class="prof-row">
-      <span>Возраст</span>
-      <input class="input tight" id="prof-age" type="text" inputmode="numeric">
-    </label>
-    <label class="prof-row">
-      <span>Вес цели, кг</span>
-      <input class="input tight" id="prof-target" type="text" inputmode="decimal">
-    </label>
-    <p class="hint" id="prof-weight-hint"></p>
-
-    <div class="eyebrow ruled">Цель по шагам</div>
-    <div class="state-options" id="prof-steps"></div>
-    <label class="prof-row">
-      <span>Своё число</span>
-      <input class="input tight" id="prof-steps-own" type="text" inputmode="numeric">
-    </label>
-    <p class="hint">Это не медицинская норма, а договорённость с собой. Лучше
-      взять то число, которое точно получится каждый день.</p>
-
-    <!-- Весь блок, а не одна кнопка: заголовок и пояснение без кнопки
-         всё равно начинали с мужчиной разговор о месячных (запись 26.09). -->
-    <div id="prof-cycle-block">
-    <div class="eyebrow ruled">Женский календарь</div>
-    <div class="prof-row switch" id="prof-cycle-row">
-      <span>Показывать цикл</span>
-      <button class="chip" id="prof-cycle">включён</button>
-    </div>
-    <p class="hint">Живёт на «Прогрессе», рядом с весом. Нужен затем, чтобы
-      объяснять прибавку перед месячными, а не пугать ею.</p>
-    </div>
-
-    <div class="eyebrow ruled">Аллергии и что не ешь</div>
-    <input class="input" id="prof-allergies" type="text" maxlength="200"
-           placeholder="Например: орехи, лактоза. Или «нет»">
-    <!-- Что подбор понял из написанного: ошибку разбора здесь видно сразу. -->
-    <p class="hint" id="prof-allergies-understood" hidden></p>
-
-    <div class="eyebrow ruled">Напоминания</div>
-    <div class="prof-row switch">
-      <span id="prof-reminders-label">Мягкие напоминания</span>
-      <button class="chip" id="prof-reminders">включены</button>
-    </div>
-    <p class="hint">Бот пишет сам, только когда есть что предложить: обычно одно
-      сообщение в день, часто ни одного. Ночью молчит.</p>
-
-    <!-- Настройки разворачиваются по кнопке: семь галочек, показанные всем
-         сразу, превращают профиль в анкету. -->
-    <button class="btn ghost" id="notif-toggle">Настроить подробнее</button>
-    <!-- Тот, кто пролистал подсказки в первый день, не должен остаться без
-         них навсегда: показать заново — одна кнопка. -->
-    <button class="btn ghost" id="tour-again">Показать подсказки заново</button>
-    <div id="notif-box" hidden>
-      <div class="eyebrow ruled">О чём писать</div>
-      <div class="state-options" id="notif-kinds"></div>
-
-      <div class="eyebrow ruled">Как часто</div>
-      <div class="state-options" id="notif-pace"></div>
-
-      <div class="eyebrow ruled">Тихие часы</div>
-      <label class="prof-row">
-        <span>Не писать с</span>
-        <select class="input tight" id="notif-from"></select>
-      </label>
-      <label class="prof-row">
-        <span>до</span>
-        <select class="input tight" id="notif-to"></select>
-      </label>
-      <p class="hint">Ночью бот молчит. Напоминания о добавках это не трогает —
-        их время назначаешь ты.</p>
-    </div>
-
-    <div class="eyebrow ruled">Мои данные</div>
-    <button class="btn" id="prof-export">📦 Выгрузить всё одним файлом</button>
-    <p class="hint">Придёт в чат: таблицы с едой, водой, весом, тренировками и
-      самочувствием — открываются в Numbers и Excel. Данные твои, забрать их
-      можно в любой момент.</p>
-
-    <!-- Пишется прямо здесь, а не в чате: человек споткнулся на этом экране,
-         и выгонять его отсюда ради жалобы — значит не получить жалобу. -->
-    <div class="eyebrow ruled">Что-то не так</div>
-    <textarea class="input" id="prof-problem" rows="3" maxlength="1000"
-      placeholder="Какую кнопку нажимали, что ждали увидеть и что вышло"></textarea>
-    <button class="btn ghost" id="prof-problem-send">✍️ Рассказать</button>
-    <p class="hint" id="prof-problem-hint">Прочтёт живой человек. Если понадобится
-      уточнить, ответят прямо в чат боту.</p>
   </div>
 </div>
 

@@ -11,9 +11,10 @@ from aiohttp import web
 import config
 from db import get_session
 from models import (GenderEnum, Meal, MealSourceEnum, Prep, PrepComponent,
-                    Product, ProgressPhoto,
+                    Product, ProgressPhoto, MarketingEvent,
                     ScheduleTypeEnum, Supplement, User, WorkoutTypeEnum)
 from services import events as event_service
+from services.entry_points import public_links
 from services import cycle
 from services import notifications
 from services import preps as prep_service
@@ -1204,6 +1205,7 @@ def _notify_json(prefs) -> dict:
 
 def _profile_json(user: User, prefs=None) -> dict:
     return {
+        "entry_points": public_links(),
         "notifications": _notify_json(prefs) if prefs is not None else None,
         "profile": {
             "name": (user.full_name or "").split(" ")[0],
@@ -1554,6 +1556,10 @@ async def post_workout_pick(request: web.Request) -> web.Response:
 
     body = await request.json() if request.can_read_body else {}
     quick = bool(body.get("quick"))
+    from seed.workout_programs import CATEGORIES, PRIVATE_CATEGORIES
+    category = body.get("category") or "body"
+    if not isinstance(category, str) or category not in {code for code, _ in CATEGORIES}:
+        return web.json_response({"error": "Выбери направление тренировки"}, status=400)
 
     try:
         minutes = max(int(body.get("minutes") or 30), 5)
@@ -1561,6 +1567,10 @@ async def post_workout_pick(request: web.Request) -> web.Response:
         minutes = 30
 
     async with get_session() as session:
+        user = await session.get(User, request["user_id"])
+        required_gender = PRIVATE_CATEGORIES.get(category)
+        if required_gender and (not user or not user.gender or user.gender.value != required_gender):
+            return web.json_response({"error": "Направление недоступно для этого профиля"}, status=403)
         state = await today_state(session, request["user_id"],
                                   timezone_name=request["timezone"])
         # Что делали в последние дни — чтобы не предлагать то же самое.
@@ -1572,12 +1582,18 @@ async def post_workout_pick(request: web.Request) -> web.Response:
         return web.json_response({
             "quick": True,
             "sets": [item.to_dict()
-                     for item in workout_picker.quick_five(energy=energy, recent=recent)],
+                     for item in workout_picker.quick_five(energy=energy, recent=recent, category=category)],
         })
 
     location = body.get("location") or None
     picks = workout_picker.pick(minutes_available=minutes, energy=energy,
-                                location=location, recent=recent)
+                                location=location, recent=recent, category=category)
+    if not picks:
+        # No full programme fits: offer a genuinely short set, not a longer
+        # workout or a face exercise substituted for the body category.
+        sets = workout_picker.quick_five(energy=energy, recent=recent, category=category)
+        if sets:
+            return web.json_response({"quick": True, "sets": [item.to_dict() for item in sets]})
     return web.json_response({
         "quick": False,
         "energy": energy,
@@ -2096,7 +2112,27 @@ async def post_cycle(request: web.Request) -> web.Response:
                              **state.to_dict()})
 
 
+async def post_day_review(request: web.Request) -> web.Response:
+    """Explicit review, never an automatic reward for eating less."""
+    from sqlalchemy.dialects.postgresql import insert as pg_insert
+    from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+
+    day = today_in(request["timezone"])
+    async with get_session() as session:
+        meals = await list_today_meals(session, request["user_id"], timezone_name=request["timezone"])
+        if not meals:
+            return web.json_response({"error": "Пока нет записей о еде за сегодня"}, status=400)
+        insert = sqlite_insert if session.bind.dialect.name == "sqlite" else pg_insert
+        await session.execute(insert(MarketingEvent).values(
+            user_id=request["user_id"], event="day_reviewed", kind=day.isoformat(),
+            day=day, count=1,
+        ).on_conflict_do_nothing(index_elements=["user_id", "event", "kind", "day"]))
+        await session.commit()
+    return web.json_response({"reviewed": True})
+
+
 def add_routes(app: web.Application) -> None:
+    app.router.add_post("/api/day-review", post_day_review)
     app.router.add_get("/api/today", get_today)
     app.router.add_post("/api/water", post_water)
     app.router.add_post("/api/water/undo", undo_water)

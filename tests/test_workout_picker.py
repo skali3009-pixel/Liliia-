@@ -87,3 +87,18 @@ def test_a_quick_set_points_at_the_programme_it_came_from():
 def test_quick_sets_cover_different_things():
     codes = {item.code for item in quick_five()}
     assert len(codes) >= 3, "быстрый режим предлагает одно и то же"
+
+
+def test_body_quick_set_does_not_offer_face_and_carries_actual_category():
+    sets = quick_five(category="body")
+    assert sets
+    for item in sets:
+        assert item.category in {"calm", "posture", "body"}
+        assert item.to_dict()["category"] == PROGRAMS[item.code]["category"]
+
+
+def test_quick_picker_respects_selected_direction():
+    for category in ("face", "posture", "calm"):
+        sets = quick_five(category=category)
+        assert sets
+        assert all(item.category == category for item in sets)

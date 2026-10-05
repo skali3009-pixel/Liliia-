@@ -120,24 +120,16 @@ def test_музыка_выключается_настройкой(monkeypatch):
     assert music.клавиатура() is None
 
 
-def test_карточка_приходит_последней():
-    """Всё, что придёт после неё, уведёт её выше экрана — как и было.
-
-    Проверяется порядок в самом коде: карточка обязана стоять ниже кружка,
-    слайда и предложения дозаполнить анкету.
-    """
+def test_first_food_action_is_last_in_onboarding():
+    """The agreed product flow ends with a first action, not a music card."""
     import inspect
-
     from handlers import onboarding
-
-    исходник = inspect.getsource(onboarding._finish_onboarding)
-    карточка = исходник.index("music.отправить")
-    for раньше in ("send_circle", "send_slide", "_thank_for_invite",
-                   "_offer_the_rest"):
-        assert исходник.index(раньше) < карточка, раньше
-    # И ничего после неё: хвост функции — только закрывающие строки.
-    хвост = исходник[карточка:]
-    assert "await " not in хвост.split("music.отправить(message)")[1]
+    source = inspect.getsource(onboarding._finish_onboarding)
+    last = source.index("await message.answer(first_step_text()")
+    for earlier in ("send_circle", "send_slide", "_thank_for_invite", "_offer_the_rest"):
+        assert source.index(earlier) < last
+    assert "music.отправить" not in source
+    assert "await " not in source[last:].split("reply_markup=first_step_keyboard())")[1]
 
 
 def test_сбой_карточки_не_ломает_конец_анкеты():
@@ -179,7 +171,7 @@ def test_музыка_стоит_ровно_в_одном_месте():
     for файл in (КОРЕНЬ / "services").rglob("*.py"):
         if "MUSIC_URL" in _только_код(файл.read_text(encoding="utf-8")):
             места.append(файл.name)
-    assert места == ["music.py"], места
+    assert sorted(места) == ["entry_points.py", "music.py"], места
 
     for файл in (КОРЕНЬ / "handlers").rglob("*.py"):
         код = _только_код(файл.read_text(encoding="utf-8"))
@@ -578,8 +570,8 @@ def test_пустой_подбор_еды_не_считается_пользой
 
 # --- 4. Карточка: где она показывается и где не должна ----------------------
 
-def test_карточку_отправляют_ровно_в_двух_местах():
-    """Конец анкеты и команда `/music` — всё.
+def test_music_card_only_arrives_when_requested():
+    """Карточка приходит по /music; профиль показывает обычную ссылку.
 
     Третье место означало бы, что человек получает её дважды за один
     приход, а это уже реклама, а не предложение. Сторож на это такой же,
@@ -592,7 +584,7 @@ def test_карточку_отправляют_ровно_в_двух_места
             if "music . отправить" in код:
                 места.append(файл.name)
 
-    assert sorted(места) == ["music.py", "onboarding.py"], места
+    assert sorted(места) == ["music.py"], места
 
 
 def test_повторный_старт_карточку_не_шлёт():
@@ -774,64 +766,22 @@ def test_отчёт_собирается_целиком_на_живых_данн
 # (список держится на десяти строках). Путь назад, который не найти, — это
 # не путь назад. Кнопка в меню и есть видимый вход.
 
-def test_кнопка_музыки_в_том_же_меню_что_ход_и_вода():
-    """Не в синем списке команд, а в клавиатуре под полем ввода."""
-    from keyboards.main_menu import (MENU_MUSIC, MENU_TURN, MENU_WATER,
-                                     main_menu_keyboard)
-
-    подписи = [к.text for ряд in main_menu_keyboard().keyboard for к in ряд]
-
-    assert MENU_MUSIC in подписи
-    assert MENU_TURN in подписи and MENU_WATER in подписи
-    assert MENU_MUSIC == "🎧 Музыка SCALIA"
+def test_music_moves_to_profile_but_old_menu_still_escapes_input_states():
+    from keyboards.main_menu import MENU_MUSIC, MENU_TEXTS, main_menu_keyboard
+    from services.entry_points import public_links
+    labels = [button.text for row in main_menu_keyboard().keyboard for button in row]
+    assert MENU_MUSIC not in labels and MENU_MUSIC in MENU_TEXTS
+    assert public_links()["music_url"] is not None
 
 
-def test_старые_кнопки_меню_никуда_не_делись():
-    """Новая кнопка добавлена, а не поставлена вместо чьего-то места."""
-    from keyboards.main_menu import main_menu_keyboard
-
-    подписи = [к.text for ряд in main_menu_keyboard().keyboard for к in ряд]
-
-    for прежняя in ("🐆 Мой ход", "📷 Добавить еду", "💧 Вода", "👟 Шаги",
-                    "🏋️ Тренировка", "📊 Прогресс", "🍽️ Что съесть",
-                    "⚙️ Профиль"):
-        assert прежняя in подписи, прежняя
-    # Девять прежних, музыка и документы.
-    assert len(подписи) == 10, подписи
-
-
-def test_прежние_кнопки_остались_на_своих_местах():
-    """Музыка своей строкой, а не в пару к «Профилю».
-
-    Пара сузила бы «Профиль» вдвое — кнопку, которую никто не просил
-    трогать. Лишняя строка стоит высоты клавиатуры, и это честная цена.
-    """
-    from keyboards.main_menu import main_menu_keyboard
-
-    ряды = [[к.text for к in ряд] for ряд in main_menu_keyboard().keyboard]
-
-    assert ряды[:5] == [
-        ["🐆 Мой ход"],
-        ["📷 Добавить еду", "💧 Вода"],
-        ["👟 Шаги", "🏋️ Тренировка"],
-        ["📊 Прогресс", "🍽️ Что съесть"],
-        ["⚙️ Профиль"],
-    ], ряды
-    # Документы встали в пару к музыке, а не новой строкой.
-    assert ряды[5] == ["🎧 Музыка SCALIA", "📄 Документы"]
-
-
-def test_кнопка_меню_записана_в_список_кнопок_меню():
-    """Забыть здесь новую кнопку — тихая ошибка.
-
-    По `MENU_TEXTS` сценарии понимают, что нажатие кнопки — это выход, а не
-    ответ. Разойдись множество с клавиатурой, и человек, начавший вводить
-    шаги, нажал бы «Музыку», а сценарий съел бы нажатие как число.
-    """
-    from keyboards.main_menu import MENU_TEXTS, main_menu_keyboard
-
-    подписи = {к.text for ряд in main_menu_keyboard().keyboard for к in ряд}
-    assert подписи == MENU_TEXTS
+def test_compact_chat_menu_keeps_documents_and_old_aliases():
+    from keyboards.main_menu import LEGACY_MENU, MENU_MUSIC, MENU_TEXTS, main_menu_keyboard
+    rows = [[b.text for b in row] for row in main_menu_keyboard().keyboard]
+    assert len(rows) == 5 and sum(map(len, rows)) == 9
+    assert rows[-1] == ["⚙️ Профиль и доступ", "📄 Документы"]
+    labels = {label for row in rows for label in row}
+    assert labels | set(LEGACY_MENU) | {MENU_MUSIC} == MENU_TEXTS
+    assert all(new in labels for new in LEGACY_MENU.values())
 
 
 def test_кнопка_шлёт_ту_же_карточку_что_и_команда():
@@ -940,4 +890,4 @@ def test_повторный_старт_карточку_не_дублирует_
             код = _только_код(файл.read_text(encoding="utf-8"))
             if "music . отправить" in код:
                 места.append(файл.name)
-    assert sorted(места) == ["music.py", "onboarding.py"], места
+    assert sorted(места) == ["music.py"], места

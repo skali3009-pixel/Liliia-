@@ -228,7 +228,7 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
 
         user.username = message.from_user.username
         user.full_name = message.from_user.full_name
-        if command.args and not user.referral:
+        if command.args and command.args != "add_food" and not user.referral:
             user.referral = command.args[:64]
         # Источник — только из закрытого списка меток. Неизвестный параметр
         # обрабатывается штатно и в отчёт не попадает: произвольной строке
@@ -286,6 +286,10 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         )
 
     if completed:
+        if command.args == "add_food":
+            from handlers.food import start_adding_food
+            await start_adding_food(message, state)
+            return
         greeting = "С возвращением! 👋 Чем займёмся сегодня?"
         if config.PAYWALL and access.allowed and access.is_trial:
             greeting += f"\n\nПробный период: осталось {access.days_left} дн."
@@ -564,17 +568,7 @@ async def first_move_without_app(callback: CallbackQuery) -> None:
 
 
 def open_app_keyboard() -> InlineKeyboardMarkup | None:
-    """Кнопка под итогом анкеты: приложение.
-
-    Музыки здесь больше нет, и это исправление, а не отказ от неё. Кнопка,
-    прицепленная к чужому сообщению, живёт ровно столько, сколько это
-    сообщение остаётся последним: следом уходят кружок, слайд, подарок за
-    приглашение и предложение дозаполнить анкету — и до кнопки человек уже
-    не дотягивается. Теперь у музыки своё сообщение, и приходит оно
-    последним (`services/music.py`).
-
-    Здесь остаётся одно дело: открыть приложение.
-    """
+    """Кнопка приложения под итогом анкеты; музыка доступна в профиле и /music."""
     builder = InlineKeyboardBuilder()
 
     # Пустая клавиатура — не то же самое, что её отсутствие: Telegram на неё
@@ -715,7 +709,6 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
     # Вторым сообщением — одно действие. Список возможностей в конце анкеты
     # человек не читает: он только что ответил на девять вопросов и ждёт,
     # что теперь. Ответ должен быть один и выполнимый прямо сейчас.
-    await message.answer(first_step_text(), reply_markup=first_step_keyboard())
     # И кружком — то же самое голосом. Последним, а не первым: кнопка
     # «Открыть приложение» должна остаться под большим пальцем.
     await send_circle(message, "ready")
@@ -738,4 +731,6 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
     # всё, что придёт после, уводит её выше экрана, а прошлый раз она
     # именно так и пропадала. Ничем не управляет и ничего не задерживает:
     # не отправилась — анкета всё равно закончена (`services/music.py`).
-    await music.отправить(message)
+    # The first useful action must remain the last message on the screen.
+    # Music stays available through /music and the Profile tab.
+    await message.answer(first_step_text(), reply_markup=first_step_keyboard())

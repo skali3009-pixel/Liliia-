@@ -111,8 +111,9 @@ def test_the_weight_before_the_period_is_explained():
     note = cycle.weight_note(state, latest_kg=62.4, usual_kg=61.0)
     assert note is not None
     assert "1,4 кг" in note        # по-русски запятая
-    assert note.endswith("уходит сама.")   # и точка на месте
-    assert "не жир" in note
+    assert note.endswith("изменений.")   # точка, без обещания причины или исхода
+    assert "не определяет причину" in note
+    assert "не жир" not in note
 
 
 def test_a_small_difference_is_not_worth_saying():

@@ -313,7 +313,7 @@ def test_the_food_tab_is_called_by_what_it_holds():
     assert ">Еда</button>" in tabs
     assert ">Кубик</button>" not in tabs
     # А сам Кубик никуда не делся — он первый режим на этом экране.
-    assert "'Кубик'" in APP_JS
+    assert "'Перекус без готовки'" in APP_JS
 
 
 def test_the_sport_screen_offers_before_it_lists():

@@ -21,6 +21,7 @@ from handlers import (access, diary, errors, fallback, feedback, food, legal,
                       music, notifications, onboarding, profile, progress,
                       steps, suggestions, supplements, turn, water, workouts)
 from middlewares.access import AccessMiddleware
+from middlewares.menu_aliases import MenuAliasesMiddleware
 from middlewares.minor import MinorMiddleware
 from middlewares.presence import PresenceMiddleware
 from scheduler import start_scheduler
@@ -37,6 +38,7 @@ dp = Dispatcher(storage=DatabaseStorage())
 
 # Проверка доступа стоит до всех обработчиков: без подписки бот отвечает
 # только про оплату.
+dp.message.outer_middleware(MenuAliasesMiddleware())
 dp.message.outer_middleware(AccessMiddleware())
 dp.callback_query.outer_middleware(AccessMiddleware())
 

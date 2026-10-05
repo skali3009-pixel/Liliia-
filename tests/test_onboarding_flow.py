@@ -324,3 +324,32 @@ def test_ответ_в_убранном_вопросе_принимается(mo
                 assert она.onboarding_completed is True
                 assert getattr(она, поле) == значение
     run(scenario)
+
+
+def test_existing_food_deep_link_preserves_profile_and_access(monkeypatch):
+    async def scenario():
+        from handlers import food
+        from services.subscriptions import check_access
+        async with стенд(monkeypatch) as maker:
+            async with maker() as session:
+                user = await session.get(User, ОНА)
+                user.onboarding_completed = True
+                user.current_weight_kg = 63
+                user.legal_version = L.LEGAL_VERSION
+                user.legal_accepted_at = дата.datetime.now(дата.timezone.utc)
+                await session.commit()
+                await O.ensure_trial(session, ОНА)
+                before = await check_access(session, ОНА)
+            seen = []
+            async def start_food(message, state): seen.append(message.from_user.id)
+            monkeypatch.setattr(food, "start_adding_food", start_food)
+            msg = ФейковоеСообщение([], "/start add_food", Человек())
+            await O.cmd_start(msg, контекст(), type("C", (), {"args": "add_food"})())
+            assert seen == [ОНА]
+            async with maker() as session:
+                user = await session.get(User, ОНА)
+                assert user.current_weight_kg == 63 and user.onboarding_completed
+                assert user.referral is None
+                after = await check_access(session, ОНА)
+                assert after.to_dict() == before.to_dict()
+    run(scenario)

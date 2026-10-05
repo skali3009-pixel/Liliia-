@@ -22,6 +22,15 @@ from services.subscriptions import activate
 from services.food_vision import FoodAnalysis
 from services.meals import save_meal
 
+@pytest.fixture(autouse=True)
+def predictable_test_disk(monkeypatch):
+    # API scenarios use synthetic data, independent of the developer's disk.
+    # A specific full-disk test overrides this and still requires HTTP 507.
+    from utils.disk import DiskUsage
+    import webapp.api as api_module
+    monkeypatch.setattr(api_module, "disk_usage", lambda: DiskUsage(50, 10, 40, 20))
+
+
 USER_ID = 4242
 OTHER_ID = 777
 TOKEN = config.BOT_TOKEN
@@ -1611,8 +1620,9 @@ def test_workout_pick_fits_the_time():
             for minutes in (15, 30, 45):
                 body = await (await call(client, "POST", "/api/workouts/pick",
                                          json_body={"minutes": minutes})).json()
-                assert body["picks"], f"под {minutes} мин ничего"
-                for item in body["picks"]:
+                items = body["sets"] if body["quick"] else body["picks"]
+                assert items, f"под {minutes} мин ничего"
+                for item in items:
                     assert item["minutes"] <= minutes * 1.15
                     assert item["why"] and item["title"]
     run(scenario)
@@ -1816,4 +1826,40 @@ def test_the_personal_topic_sends_its_warning():
             body = await (await call(
                 client, "GET", "/api/workouts?category=body")).json()
             assert not body["warning"]
+    run(scenario)
+
+
+def test_day_review_is_explicit_idempotent_and_local_to_user():
+    async def scenario():
+        from sqlalchemy import select
+        from models import MarketingEvent
+        async with webapp_client() as (client, _):
+            before = await (await call(client, "GET", "/api/today")).json()
+            assert not next(q for q in before["game"]["quests"] if q["code"] == "calories")["done"]
+            for _ in range(2):
+                result = await call(client, "POST", "/api/day-review")
+                assert result.status == 200
+            async with maker_holder["maker"]() as session:
+                rows = (await session.execute(select(MarketingEvent).where(
+                    MarketingEvent.event == "day_reviewed"))).scalars().all()
+                assert len(rows) == 1 and rows[0].count == 1 and rows[0].user_id == USER_ID
+            after = await (await call(client, "GET", "/api/today")).json()
+            assert next(q for q in after["game"]["quests"] if q["code"] == "calories")["done"]
+            empty = await call(client, "POST", "/api/day-review", user_id=OTHER_ID)
+            assert empty.status == 400
+            unsigned = await call(client, "POST", "/api/day-review", signed=False)
+            assert unsigned.status == 401
+    run(scenario)
+
+
+def test_profile_contains_public_documents_and_food_deep_link(monkeypatch):
+    monkeypatch.setattr(config, "WEBAPP_URL", "https://example.test")
+    monkeypatch.setattr(config, "BOT_USERNAME", "Scalia_fit_food_bot")
+    async def scenario():
+        async with webapp_client() as (client, _):
+            data = await (await call(client, "GET", "/api/profile")).json()
+            links = data["entry_points"]
+            assert links["chat_food_url"] == "https://t.me/Scalia_fit_food_bot?start=add_food"
+            assert len(links["documents"]) == 4
+            assert all(d["url"].startswith("https://example.test/legal/") for d in links["documents"])
     run(scenario)

@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy.exc import IntegrityError
 
-from models import Achievement, BodyMeasurement, DayStat, Meal, User, WorkoutLog
+from models import Achievement, BodyMeasurement, DayStat, Meal, User, WorkoutLog, MarketingEvent
 from services import goal as goal_service
 from services import steps as step_service
 from utils.game import (
@@ -204,6 +204,10 @@ async def sync_today(
     # Шаги вносит сам человек: телефон приложению их не отдаёт. Поэтому
     # задание про них считается ровно по тому, что он записал.
     walk = await step_service.state(session, user, timezone_name=timezone_name)
+    day_reviewed = (await session.execute(select(MarketingEvent.id).where(
+        MarketingEvent.user_id == user.id, MarketingEvent.event == "day_reviewed",
+        MarketingEvent.kind == today.isoformat(),
+    ).limit(1))).first() is not None
 
     quests = build_quests(
         meals_count=meals_count,
@@ -218,6 +222,7 @@ async def sync_today(
         stress_marked=stress_marked,
         steps=walk.today,
         steps_goal=walk.goal,
+        day_reviewed=day_reviewed,
     )
 
     done_codes = [quest.code for quest in quests if quest.done]

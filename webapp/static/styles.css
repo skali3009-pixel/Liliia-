@@ -68,6 +68,27 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* Daily actions precede decorative details; profile is a regular tab. */
+#screen-today > .hero { min-height: 0; margin-bottom: 10px; }
+#screen-today .hero-body { padding-top: 20px; padding-bottom: 12px; }
+#screen-today .hero-title { font-size: 34px; margin-bottom: 0; }
+#screen-today .hero-body > .eyebrow,
+#screen-today .hero-state { display: none; }
+#screen-today .hero-greeting { margin: 4px 0; }
+#screen-today .hud { display: none; }
+#screen-today .crystal { width: 22px; height: 30px; }
+#screen-today .quick { margin: 10px 0; }
+#screen-today .quick-act { min-height: 64px; }
+#screen-today .turn { margin-bottom: 10px; padding: 12px 16px; }
+.profile-panel > .sheet-card { max-height: none; overflow: visible; padding: 18px 0; border: 0; background: transparent; }
+.profile-group { border: 1px solid var(--stroke); border-radius: 16px; margin: 12px 0; padding: 14px; }
+.profile-group > summary, .body-card > summary { cursor: pointer; font-weight: 700; }
+.profile-group[open] > summary { margin-bottom: 16px; }
+#prof-documents .btn { display: block; text-align: left; white-space: normal; }
+.tabs .tab { min-width: 0; font-size: 10px; }
+.tabs .tab > span { font-size: 20px; line-height: 24px; }
+#record-food-main { width: 100%; }
+
 /* Сериф — только для крупных заголовков-обращений: он задаёт тон, но
    в данных мешает, поэтому числа остаются гротеском. */
 .hero-title, .world-title, .pop-title, .quote {
@@ -2121,3 +2142,12 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
   .media-wait { animation: media-wait-pulse 1.6s ease-in-out infinite; }
   @keyframes media-wait-pulse { 50% { opacity: .45; } }
 }
+
+/* Confirmation must receive input above the workout player. */
+#confirm-sheet { z-index: 70; }
+
+.q-hint { white-space: normal; overflow-wrap: anywhere; }
+.quest > div { min-width: 0; }
+
+.workout-catalog, .shop-tools { margin: 18px 0; }
+.workout-catalog > summary, .shop-tools > summary { cursor: pointer; padding: 14px 0; font-weight: 600; }

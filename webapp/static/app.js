@@ -710,6 +710,7 @@ function renderTurn(action) {
   const cta = document.getElementById('turn-cta');
   cta.textContent = action.cta;
   cta.disabled = false;
+  cta.hidden = action.target === 'meal';
   cta.onclick = () => doTurn(action, cta);
   card.hidden = false;
 }
@@ -744,7 +745,7 @@ async function doTurn(action, button) {
     return;
   }
   if (action.target === 'meal') {
-    document.getElementById('moment-open').click();
+    openRecordEntry();
     return;
   }
   if (action.target === 'checkin') {
@@ -919,7 +920,7 @@ function wireRipple() {
 // это короткая дорога к тому, что и так есть ниже на экране.
 
 function wireQuick() {
-  document.getElementById('quick-food').onclick = () => switchScreen('cube');
+  document.getElementById('quick-food').onclick = openRecordEntry;
   document.getElementById('quick-move').onclick = askSteps;
   document.getElementById('quick-water').onclick = async (event) => {
     const button = event.currentTarget;
@@ -2165,6 +2166,7 @@ function renderWorkouts(data) {
 
   renderChips('category-switch', data.categories, category, (code) => {
     category = code;
+    document.getElementById('pick-result').replaceChildren();
     style = null;
     programCode = null;
     refreshWorkouts().catch((e) => toast(e.message));
@@ -2243,6 +2245,13 @@ function rememberAgreement(code) {
   }
 }
 
+async function confirmWorkoutWarning(data) {
+  if (!data.warning || agreedPrograms().has(data.selected)) return true;
+  const accepted = await askYes({title: 'Перед тренировкой', text: data.warning, action: 'Понятно, начать'});
+  if (accepted) { rememberAgreement(data.selected); renderGymWarning(data); }
+  return accepted;
+}
+
 function renderGymWarning(data) {
   const box = document.getElementById('gym-warning');
   const list = document.getElementById('exercises');
@@ -2302,11 +2311,9 @@ function fillWithMore(name, items, shown, make, label, headId = name) {
   };
 }
 
-// «Начать тренировку»: пока это разворачивает все упражнения и подводит к
-// первому. Проводник по подходам с таймером — следующий шаг; кнопка
-// останется той же, изменится только то, что она открывает.
-function startWorkout() {
-  if (!gym || !gym.exercises.length) return;
+// Запускаем проводник по выбранной программе.
+async function startWorkout() {
+  if (!gym || !gym.exercises.length || !await confirmWorkoutWarning(gym)) return;
   haptic('medium');
   openPlayer(gym.exercises);
 }
@@ -3557,6 +3564,8 @@ async function leavePlayer() {
     playerForget();
     return closePlayer();
   }
+  const wasPaused = player.paused;
+  player.paused = true; clearInterval(playerTimer); playerSave(); renderPlayer();
   const sure = await askYes({
     title: 'Завершить тренировку?',
     text: `Сделанное запишется: ${player.done.length} `
@@ -3564,6 +3573,7 @@ async function leavePlayer() {
     action: 'Завершить',
   });
   if (sure) await finishPlayer();
+  else if (player) { player.paused = wasPaused; playerSave(); renderPlayer(); runPlayerTimer(); }
 }
 
 function playerMute() {
@@ -4025,7 +4035,7 @@ function renderFrequent(items, hiddenCount = 0) {
 // что-то стоит.
 
 const FOOD_MODES = [
-  ['cube', 'Кубик', 'Съесть прямо сейчас, ничего не готовя'],
+  ['cube', 'Перекус без готовки', 'Съесть прямо сейчас, ничего не готовя'],
   ['quick', 'Быстро', 'Рецепты не дольше 15 минут'],
   ['book', 'Рецепты', 'Меню нутрициолога и блюда по её принципам'],
   ['preps', 'Заготовки', 'Собрать из того, что приготовлено заранее'],
@@ -4555,7 +4565,7 @@ function closeMoment() {
 }
 
 const TRUST_NOTES = {
-  high: 'Эти данные точно отражают твоё сообщение.',
+  high: 'Оценка по описанию: проверь состав и порцию перед сохранением.',
   medium: 'Порция оценена приблизительно — поправь, если знаешь точнее.',
   low: 'Оценка грубая: скажи подробнее или поправь цифры.',
 };
@@ -4756,6 +4766,7 @@ function optionButtons(boxId, options, current, onPick) {
 }
 
 function renderProfile(data) {
+  renderEntryPoints(data.entry_points || {});
   const p = data.profile;
   const n = data.norms;
   document.getElementById('prof-norms').textContent = `${n.calories} ккал`;
@@ -4896,8 +4907,9 @@ async function requestExport() {
   }
 }
 
-async function openProfile() {
-  document.getElementById('profile-sheet').hidden = false;
+function openProfile() { switchScreen('profile'); }
+
+async function loadProfile() {
   wireProblem();
   try {
     profileData = await api('/api/profile');
@@ -4908,7 +4920,7 @@ async function openProfile() {
 }
 
 async function closeProfile() {
-  document.getElementById('profile-sheet').hidden = true;
+  switchScreen('today');
   // Норма могла измениться — кольцо на «Сегодня» должно это показать.
   if (profileChanged) {
     profileChanged = false;
@@ -5473,7 +5485,7 @@ async function pickWorkout(minutes) {
       method: 'POST',
       // Пять минут — особый случай: целой программы такой длины нет, и
       // сервер собирает короткий набор из тех же упражнений.
-      body: JSON.stringify({ minutes, quick: minutes <= 5 }),
+      body: JSON.stringify({ minutes, quick: minutes <= 5, category }),
     });
     renderPicks(data);
   } catch (error) {
@@ -5482,7 +5494,7 @@ async function pickWorkout(minutes) {
   }
 }
 
-function renderPicks(data) {
+function renderPicks(data, cursor = 0) {
   const out = document.getElementById('pick-result');
   out.innerHTML = '';
   const items = data.quick ? data.sets : data.picks;
@@ -5495,8 +5507,9 @@ function renderPicks(data) {
 
   // Первое — это и есть ответ: у него своя кнопка «Начать». Остальные
   // лежат под ним строчками, на случай «не хочу это».
-  items.forEach((item, index) => {
-    const first = index === 0;
+  const item = items[cursor % items.length];
+  {
+    const first = true;
     const row = document.createElement('div');
     row.className = first ? 'pick now' : 'pick';
     const list = data.quick
@@ -5514,24 +5527,39 @@ function renderPicks(data) {
     row.querySelector('.pick-why').textContent = item.why;
     // Нажатие открывает ту же программу в каталоге ниже — второго списка
     // упражнений заводить незачем.
-    const open = () => openProgram(item.code, item.category);
+    const open = () => startPickedWorkout(item, data.quick);
     if (first) row.querySelector('.pick-start').onclick = open;
     else row.onclick = open;
     out.appendChild(row);
-  });
+  }
+  if (items.length > 1) {
+    const other = document.createElement('button'); other.className = 'btn ghost';
+    other.textContent = 'Другой вариант'; other.onclick = () => renderPicks(data, cursor + 1);
+    out.appendChild(other);
+  }
 }
 
-function openProgram(code, itemCategory) {
-  // Программа может быть из другого направления — переключаем и его, иначе
-  // каталог покажет пустоту.
-  if (itemCategory && itemCategory !== category) {
-    category = itemCategory;
-    style = null;
-  }
-  programCode = code;
-  refreshWorkouts()
-    .then(() => document.getElementById('exercises').scrollIntoView({ behavior: 'smooth' }))
-    .catch((e) => toast(e.message));
+async function startPickedWorkout(item, quick) {
+  const button = document.querySelector('.pick-start');
+  if (button) button.disabled = true;
+  try {
+    if (item.category && item.category !== category) { category = item.category; style = null; }
+    programCode = item.code;
+    await refreshWorkouts();
+    if (!await confirmWorkoutWarning(gym)) return;
+    let exercises = gym.exercises;
+    if (quick) {
+      // A short card promises only this prefix, never the full programme.
+      const prefix = exercises.slice(0, item.exercises.length);
+      if (prefix.length !== item.exercises.length || prefix.some((e, i) => e.name !== item.exercises[i])) {
+        throw new Error('Программа обновилась. Подбери тренировку заново.');
+      }
+      exercises = prefix;
+    }
+    if (!exercises.length) throw new Error('Упражнения не загрузились. Попробуй другой вариант.');
+    openPlayer(exercises);
+  } catch (error) { toast(error.message); }
+  finally { if (button) button.disabled = false; }
 }
 
 /* --- Мой мир: места, которые растут ---------------------------------------- */
@@ -5970,7 +5998,7 @@ function endTour(screen) {
 // Приложение, открытое из подсказки бота, должно открыться там, где
 // действие делается, а не на «Сегодня». Иначе человек, нажавший «подобрать
 // еду», попадает на главный экран и ищет нужную вкладку сам.
-const SCREENS = ['today', 'world', 'gym', 'cube', 'progress'];
+const SCREENS = ['today', 'world', 'gym', 'cube', 'progress', 'profile'];
 
 function openRequestedScreen() {
   let asked = null;
@@ -6082,11 +6110,13 @@ async function markCycle(day) {
 
 function switchScreen(name) {
   for (const tab of document.querySelectorAll('.tab')) {
-    tab.classList.toggle('active', tab.dataset.screen === name);
+    tab.classList.toggle('active', tab.dataset.screen === (name === 'world' ? 'progress' : name));
   }
-  for (const screen of ['today', 'world', 'gym', 'cube', 'progress']) {
+  for (const screen of ['today', 'world', 'gym', 'cube', 'progress', 'profile']) {
     document.getElementById(`screen-${screen}`).hidden = screen !== name;
   }
+  document.getElementById('profile-sheet').hidden = name !== 'profile';
+  if (name === 'profile') loadProfile().catch((e) => toast(e.message));
   window.scrollTo(0, 0);
   moveArt();
   playEntrance(name);
@@ -6171,6 +6201,23 @@ async function init() {
   };
 
   document.getElementById('profile-open').onclick = openProfile;
+  document.getElementById('record-food-main').onclick = openRecordEntry;
+  document.getElementById('review-day').onclick = async () => { try { await api('/api/day-review', {method:'POST'}); await refresh(); toast('Записи проверены. Ориентир калорий — не команда прекращать питание.'); } catch(e) { toast(e.message); } };
+  document.getElementById('food-record').onclick = openRecordEntry;
+  document.getElementById('record-close').onclick = closeRecordEntry;
+  document.getElementById('record-words').onclick = () => { closeRecordEntry(); openMoment(); };
+  document.getElementById('record-chat').onclick = openFoodChat;
+  document.getElementById('record-repeat').onclick = () => {
+    closeRecordEntry(); switchScreen('today');
+    const frequent = document.getElementById('frequent');
+    if (frequent && !frequent.hidden && frequent.offsetHeight) frequent.scrollIntoView({block: 'center'});
+    else { toast('Сначала запиши блюдо. Частые записи появятся здесь для повтора.'); openMoment(); }
+  };
+  document.getElementById('record-catalog').onclick = () => { closeRecordEntry(); switchScreen('cube'); };
+  document.getElementById('progress-world').onclick = () => switchScreen('world');
+  document.getElementById('world-back').onclick = () => switchScreen('progress');
+  document.getElementById('prof-sync').onclick = () => document.getElementById('steps-sync').click();
+
   document.getElementById('suggest-btn').onclick = () => loadMenu(mealType);
   document.getElementById('recipe-close').onclick = () => {
     document.getElementById('recipe-sheet').hidden = true;
@@ -6343,3 +6390,33 @@ async function init() {
 }
 
 init();
+
+
+function closeRecordEntry() { document.getElementById('record-sheet').hidden = true; }
+function openRecordEntry() { document.getElementById('record-sheet').hidden = false; }
+function safePublicLink(value) {
+  try { const u = new URL(value, location.origin); return u.protocol === 'https:' || u.origin === location.origin ? u.href : ''; }
+  catch (_) { return ''; }
+}
+function renderEntryPoints(links) {
+  document.getElementById('prof-access').textContent = links.access_label || 'Действуют текущие условия доступа.';
+  const docs = document.getElementById('prof-documents'); docs.replaceChildren();
+  for (const doc of links.documents || []) {
+    const url = safePublicLink(doc.url); if (!url) continue;
+    const link = document.createElement('a'); link.className = 'btn ghost'; link.textContent = doc.title;
+    link.href = url; link.target = '_blank'; link.rel = 'noopener noreferrer'; docs.appendChild(link);
+  }
+  const music = document.getElementById('prof-music');
+  const url = safePublicLink(links.music_url); music.hidden = !url;
+  if (url) music.href = url; else music.removeAttribute('href');
+}
+async function openFoodChat() {
+  try {
+    const data = profileData || await api('/api/profile');
+    const link = safePublicLink(data.entry_points?.chat_food_url);
+    if (!link || new URL(link).hostname !== 't.me') { toast('Открой чат AURA и нажми «Записать еду», затем пришли фото или голос.'); return; }
+    if (tg?.openTelegramLink) tg.openTelegramLink(link);
+    else window.open(link, '_blank', 'noopener');
+    closeRecordEntry();
+  } catch (e) { toast(e.message); }
+}

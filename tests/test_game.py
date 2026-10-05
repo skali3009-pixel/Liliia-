@@ -12,6 +12,7 @@ from utils.game import (
 )
 
 FULL_DAY = dict(
+    day_reviewed=True,
     meals_count=3,
     calories=1600,
     calories_norm=1662,
@@ -66,15 +67,15 @@ def test_stress_quest_closes_once_marked_and_adds_its_xp():
     assert day_xp(with_stress) == day_xp(without) + 10
 
 
-def test_undereating_does_not_close_the_calorie_quest():
-    """Недобор — такой же промах, как перебор: 500 из 1662 не считается."""
-    quests = build_quests(**{**FULL_DAY, "calories": 500})
+@pytest.mark.parametrize("calories", [500, 1330, 1600, 2400])
+def test_calories_alone_never_close_review(calories):
+    quests = build_quests(**{**FULL_DAY, "calories": calories, "day_reviewed": False})
     assert "calories" not in codes(quests)
 
 
-def test_overeating_does_not_close_the_calorie_quest():
-    quests = build_quests(**{**FULL_DAY, "calories": 2400})
-    assert "calories" not in codes(quests)
+@pytest.mark.parametrize("calories", [500, 2400])
+def test_explicit_review_is_independent_of_calorie_share(calories):
+    assert "calories" in codes(build_quests(**{**FULL_DAY, "calories": calories}))
 
 
 def test_measure_quest_appears_only_when_it_is_time():

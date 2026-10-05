@@ -1,7 +1,7 @@
 """Игровой слой: задания дня, опыт, уровни и награды — чистые функции.
 
 Смысл в том, чтобы вся арифметика игры считалась по данным, которые уже есть
-(еда, вода, тренировки, замеры), и ничего не приходилось отмечать руками.
+(еда, вода, тренировки, замеры) и явному просмотру записей дня.
 Здесь только вычисления; запись в базу — в services/gamification.py.
 """
 
@@ -14,11 +14,6 @@ from typing import Any
 # дороже уровень, иначе к третьему месяцу цифры перестают что-то значить.
 BASE_LEVEL_XP = 100
 LEVEL_XP_STEP = 50
-
-# Норма калорий считается выполненной, если день закрыт в этом коридоре:
-# недоедание — такой же промах, как перебор.
-CALORIES_MIN_SHARE = 0.80
-CALORIES_MAX_SHARE = 1.05
 
 # Замер напоминаем раз в неделю — чаще нет смысла, вес скачет от воды.
 MEASURE_EVERY_DAYS = 7
@@ -78,6 +73,7 @@ def build_quests(
     stress_marked: bool = False,
     steps: int = 0,
     steps_goal: int = 0,
+    day_reviewed: bool = False,
 ) -> list[Quest]:
     """Задания на сегодня, посчитанные по данным дня.
 
@@ -107,14 +103,13 @@ def build_quests(
         ),
         Quest(
             code="calories",
-            title="Уложиться в норму калорий",
+            title="Посмотреть записи за день",
             icon="🎯",
             xp=20,
-            progress=calories,
-            target=calories_norm,
-            done=bool(calories_norm)
-            and CALORIES_MIN_SHARE * calories_norm <= calories <= CALORIES_MAX_SHARE * calories_norm,
-            hint=f"{round(calories)} из {round(calories_norm)} ккал",
+            progress=int(day_reviewed),
+            target=1,
+            done=bool(calories_norm) and meals_count > 0 and day_reviewed,
+            hint="Записи проверены" if day_reviewed else "Сравни записи с ориентиром; это не команда прекращать питание",
         ),
         Quest(
             code="fiber",

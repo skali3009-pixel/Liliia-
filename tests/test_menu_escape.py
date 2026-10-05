@@ -170,4 +170,5 @@ def test_список_сценариев_не_отстал_от_кода():
 def test_отказ_смотрит_на_тот_же_список_что_и_клавиатура():
     """Список отказа и клавиатура обязаны описывать одни и те же кнопки."""
     подписи = {к.text for ряд in main_menu_keyboard().keyboard for к in ряд}
-    assert подписи == MENU_TEXTS
+    from keyboards.main_menu import LEGACY_MENU, MENU_MUSIC
+    assert подписи | set(LEGACY_MENU) | {MENU_MUSIC} == MENU_TEXTS
