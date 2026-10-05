@@ -10,6 +10,9 @@
 # достаётся с любого устройства.
 #
 set -uo pipefail
+umask 077
+LOCAL_ONLY=0
+[ "${1:-}" = "--local" ] && LOCAL_ONLY=1
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_DIR="${BACKUP_DIR:-/root/nutrition-backups}"
@@ -26,6 +29,7 @@ log() { printf '%s %s\n' "$(date '+%d.%m %H:%M:%S')" "$*"; }
 # расписанию ночью, и молча провалившийся бэкап обнаруживается ровно тогда,
 # когда он был нужен, — то есть слишком поздно.
 tell_owner() {
+  [ "$LOCAL_ONLY" -eq 1 ] && return 0
   local who
   who="$(printf '%s' "${ADMIN_IDS:-}" | cut -d, -f1 | tr -d ' ')"
   [ -n "$who" ] && [ -n "${BOT_TOKEN:-}" ] || return 0
@@ -60,6 +64,8 @@ if ! pg_dump --format=custom --no-owner --no-privileges --file="$WORK/db.dump" "
   fail "pg_dump не отработал — база не скопирована"
 fi
 
+pg_restore --list "$WORK/db.dump" >/dev/null || fail "архив базы не читается"
+
 # --- Фотографии ------------------------------------------------------------
 PHOTOS="${PHOTOS_DIR:-$APP_DIR/data/photos}"
 if [ -d "$PHOTOS" ] && [ -n "$(ls -A "$PHOTOS" 2>/dev/null)" ]; then
@@ -87,7 +93,7 @@ log "Копия готова: $ARCHIVE ($((SIZE / 1024 / 1024)) МБ)"
 
 # --- Отправка владельцу ----------------------------------------------------
 OWNER="$(printf '%s' "${ADMIN_IDS:-}" | cut -d, -f1 | tr -d ' ')"
-if [ -n "$OWNER" ] && [ -n "${BOT_TOKEN:-}" ]; then
+if [ "$LOCAL_ONLY" -eq 0 ] && [ -n "$OWNER" ] && [ -n "${BOT_TOKEN:-}" ]; then
   if [ "$SIZE" -gt "$TG_LIMIT" ]; then
     log "Копия больше 45 МБ — в Телеграм не отправляю, она осталась на диске"
     curl -sS -m 30 -X POST "https://api.telegram.org/bot$BOT_TOKEN/sendMessage" \
@@ -107,8 +113,11 @@ if [ -n "$OWNER" ] && [ -n "${BOT_TOKEN:-}" ]; then
     fi
   fi
 else
-  log "ADMIN_IDS не задан — копия только на диске"
+  log "Копия сохранена только на диске"
 fi
+
+# Local pre-release copies never send messages or rotate older backups.
+[ "$LOCAL_ONLY" -eq 1 ] && exit 0
 
 # --- Ротация ---------------------------------------------------------------
 # Оставляем последние копии за неделю и по одной в неделю за два месяца.
