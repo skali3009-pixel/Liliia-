@@ -12,6 +12,9 @@
 """
 
 import asyncio
+import os
+import shutil
+import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -242,3 +245,24 @@ def test_the_console_summary_tells_the_same_size():
     текст = исходник.read_text(encoding="utf-8")
     assert "КБ" in текст, "консольная сводка по-прежнему округляет до нуля"
     assert "/ 1024 / 1024 )) МБ" not in текст
+
+
+@pytest.mark.parametrize("size, expected", [(82423, "80 КБ"), (2097152, "2 МБ")])
+def test_console_backup_size_runs_in_bash(size, expected):
+    """Exercise the real shell block: Bash rejects Cyrillic variable names."""
+    git_bash = Path(r"C:\Program Files\Git\bin\bash.exe")
+    bash = str(git_bash) if os.name == "nt" and git_bash.exists() else shutil.which("bash")
+    if not bash:
+        pytest.skip("Bash is not installed")
+    source = (Path(backups.__file__).parent.parent / "status.sh").read_text(encoding="utf-8")
+    block = source.split('if [ -n "$LAST" ]; then', 1)[1].split("if systemctl is-enabled", 1)[0]
+    script = (
+        'set -euo pipefail\nLAST=backup\nBACKUP_DIR=backups\n'
+        f'stat() {{ echo {size}; }}\n'
+        'date() { echo 07.10.2026; }\nls() { echo backup; }\n'
+        'if [ -n "$LAST" ]; then' + block
+    )
+    result = subprocess.run([bash, "-s"], input=script, text=True, encoding="utf-8", capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert not result.stderr, result.stderr
+    assert expected in result.stdout
