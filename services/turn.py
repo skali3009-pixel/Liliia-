@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import User
+from keyboards.main_menu import (MENU_ADD_MEAL, MENU_PROGRESS, MENU_STEPS,
+                                 MENU_WATER, MENU_WHAT_TO_EAT, MENU_WORKOUT)
 from services import context
 from services.checkins import today_state
 from services.gamification import (days_away, remember_suggestion, suggestions_today,
@@ -198,12 +200,12 @@ def game_lines(game: dict) -> list[str]:
 # экранов нет — зато есть кнопки нижнего меню, и человеку понятнее, когда
 # ему называют ту самую кнопку, которую он видит.
 CHAT_BUTTON = {
-    "water": "💧 Вода",
-    "steps": "👟 Шаги",
-    "meal": "📷 Добавить еду",
-    "cube": "🍽️ Что съесть",
-    "workout": "🏋️ Тренировка",
-    "progress": "📊 Прогресс",
+    "water": MENU_WATER,
+    "steps": MENU_STEPS,
+    "meal": MENU_ADD_MEAL,
+    "cube": MENU_WHAT_TO_EAT,
+    "workout": MENU_WORKOUT,
+    "progress": MENU_PROGRESS,
 }
 
 

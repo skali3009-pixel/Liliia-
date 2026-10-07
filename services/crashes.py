@@ -68,7 +68,7 @@ def where_in_code(error: BaseException) -> str:
             continue
         if relative.parts and relative.parts[0] in {"venv", ".venv", "site-packages"}:
             continue
-        own = f"{relative}:{frame.lineno} в {frame.name}"
+        own = f"{relative.as_posix()}:{frame.lineno} в {frame.name}"
     return own
 
 

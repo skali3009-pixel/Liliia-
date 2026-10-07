@@ -777,8 +777,9 @@ def test_music_moves_to_profile_but_old_menu_still_escapes_input_states():
 def test_compact_chat_menu_keeps_documents_and_old_aliases():
     from keyboards.main_menu import LEGACY_MENU, MENU_MUSIC, MENU_TEXTS, main_menu_keyboard
     rows = [[b.text for b in row] for row in main_menu_keyboard().keyboard]
-    assert len(rows) == 5 and sum(map(len, rows)) == 9
-    assert rows[-1] == ["⚙️ Профиль и доступ", "📄 Документы"]
+    assert len(rows) == 6 and sum(map(len, rows)) == 10
+    assert rows[-2] == ["⚙️ Профиль и доступ"]
+    assert rows[-1] == ["📄 Документы", "💳 Тарифы"]
     labels = {label for row in rows for label in row}
     assert labels | set(LEGACY_MENU) | {MENU_MUSIC} == MENU_TEXTS
     assert all(new in labels for new in LEGACY_MENU.values())

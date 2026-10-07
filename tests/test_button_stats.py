@@ -48,7 +48,7 @@ def run(scenario):
 
 def test_the_label_loses_the_emoji():
     """В отчёте нужна подпись, а не картинка."""
-    assert buttons.label(MENU_ADD_MEAL) == "Добавить еду"
+    assert buttons.label(MENU_ADD_MEAL) == "Записать еду"
     assert buttons.label(MENU_WATER) == "Вода"
 
 
@@ -70,8 +70,8 @@ def test_presses_and_people_are_counted_separately():
 
             rows = {row.button: row for row in await buttons.usage(session, now_utc=NOW)}
             assert rows["Вода"].presses == 20 and rows["Вода"].people == 1
-            assert rows["Добавить еду"].presses == 3
-            assert rows["Добавить еду"].people == 3
+            assert rows["Записать еду"].presses == 3
+            assert rows["Записать еду"].people == 3
     run(scenario)
 
 
@@ -84,7 +84,7 @@ def test_the_report_ranks_by_people_not_by_presses():
                 await buttons.note(session, uid, MENU_ADD_MEAL, now_utc=NOW)
 
             order = [row.button for row in await buttons.usage(session, now_utc=NOW)]
-            assert order[0] == "Добавить еду"
+            assert order[0] == "Записать еду"
     run(scenario)
 
 
@@ -124,7 +124,7 @@ def test_the_report_says_who_is_almost_unused():
                 await buttons.usage(session, now_utc=NOW),
                 await buttons.counting_since(session)))
             assert "Почти никому не нужны: Вода" in text
-            assert "Добавить еду" in text
+            assert "Записать еду" in text
     run(scenario)
 
 

@@ -17,6 +17,14 @@ from utils import images
 from utils.disk import DiskUsage, render_warning
 
 
+@pytest.fixture(autouse=True)
+def predictable_disk_for_usage_checks(monkeypatch):
+    # Budget/allowance scenarios should not depend on the developer's drive.
+    # Explicit disk-warning tests below still use real supplied DiskUsage data.
+    import handlers.food as food
+    monkeypatch.setattr(food, "disk_usage", lambda: DiskUsage(50, 10, 40, 20))
+
+
 @contextlib.asynccontextmanager
 async def db():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")

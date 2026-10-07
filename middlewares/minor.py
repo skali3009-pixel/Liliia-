@@ -14,13 +14,13 @@ from aiogram import BaseMiddleware
 from aiogram.types import CallbackQuery, Message, TelegramObject
 
 from db import get_session
-from keyboards.main_menu import MENU_DOCS, MENU_PROFILE
+from keyboards.main_menu import MENU_DOCS, MENU_PROFILE, MENU_TARIFFS
 from models import User
 from services import age as age_rules
 
-OPEN_COMMANDS = {"/legal", "/delete", "/stop_ads", "/export", "/problem", "/help"}
+OPEN_COMMANDS = {"/legal", "/delete", "/stop_ads", "/export", "/problem", "/help", "/tariffs", "/subscription"}
 # Кнопки под сообщениями: документы и удаление, профиль, выгрузка, жалоба.
-OPEN_CALLBACKS = ("legal:", "prof_", "feedback", "fb_")
+OPEN_CALLBACKS = ("legal:", "prof_", "feedback", "fb_", "tariff:", "sub:buy")
 # Сценарии, внутри которых человек отвечает текстом: правка профиля и жалоба.
 OPEN_STATES = ("ProfileStates:", "FeedbackStates:")
 
@@ -30,7 +30,7 @@ def _is_open(event: TelegramObject, raw_state: str | None) -> bool:
         return True
     if isinstance(event, Message):
         text = (event.text or "").strip()
-        if text in (MENU_PROFILE, MENU_DOCS):
+        if text in (MENU_PROFILE, MENU_DOCS, MENU_TARIFFS):
             return True
         return bool(text.startswith("/") and
                     text.split()[0].split("@")[0] in OPEN_COMMANDS)

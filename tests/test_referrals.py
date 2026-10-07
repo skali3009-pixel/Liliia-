@@ -423,8 +423,8 @@ def test_награды_вызываются_из_бота():
 
     # И нигде больше: третье место начисления — это второй счёт тех же дней.
     все = [ф for ф in корень.rglob("*.py")
-           if not str(ф.relative_to(корень)).startswith(("tests/", "promo/"))]
-    зовут = [str(ф.relative_to(корень)) for ф in все
+           if ф.relative_to(корень).parts[0] not in {"tests", "promo"}]
+    зовут = [ф.relative_to(корень).as_posix() for ф in все
              if "reward_signup(" in ф.read_text(encoding="utf-8")
              or "reward_payment(" in ф.read_text(encoding="utf-8")]
     assert sorted(зовут) == ["handlers/access.py", "handlers/onboarding.py",

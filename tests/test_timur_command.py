@@ -106,9 +106,21 @@ def test_it_runs_the_very_same_script_as_the_console(monkeypatch, tmp_path):
     assert server_access.СКРИПТ.exists()
 
     подмена = tmp_path / "grant-timur.sh"
-    подмена.write_text('echo "args:$*"; read x && echo "stdin:$x"; exit 0\n')
+    подмена.write_text('echo "args:$*"; read x && echo "stdin:$x"; exit 0\n',
+                       encoding="utf-8", newline="\n")
     подмена.chmod(подмена.stat().st_mode | stat.S_IXUSR)
     monkeypatch.setattr(server_access, "СКРИПТ", подмена)
+    from tests.bash_runtime import native_bash
+    import pytest
+    runtime = native_bash()
+    if runtime is None:
+        pytest.skip("нет bash")
+    # Windows CreateProcess searches System32 before PATH for a bare 'bash'.
+    # Resolve the test shell explicitly; the production Linux command stays
+    # the same and this test still executes the real temporary script.
+    original_run = server_access.subprocess.run
+    monkeypatch.setattr(server_access.subprocess, "run",
+        lambda args, **kwargs: original_run([runtime, *args[1:]], **kwargs))
 
     получилось, вывод = server_access.выполнить(["--check"])
     assert получилось

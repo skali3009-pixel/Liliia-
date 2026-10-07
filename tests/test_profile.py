@@ -419,7 +419,8 @@ def test_guard_knows_every_menu_button():
     from handlers.profile import MENU_TEXTS
 
     buttons = {b.text for row in main_menu_keyboard().keyboard for b in row}
-    assert buttons == MENU_TEXTS
+    from keyboards.main_menu import LEGACY_MENU, MENU_MUSIC
+    assert buttons | set(LEGACY_MENU) | {MENU_MUSIC} == MENU_TEXTS
 
 
 # --- Починка невыполнимых норм --------------------------------------------

@@ -26,6 +26,8 @@ from models import SubscriptionSource
 from services import analytics, friends, referrals, sources
 from services.step_sync import plural
 from services.subscriptions import Access, activate, check_access, grant_lifetime, stats
+from handlers.tariffs import send_tariffs, tariff_keyboard
+from services.tariffs import overview_text
 
 logger = logging.getLogger(__name__)
 router = Router(name="access")
@@ -42,6 +44,8 @@ FOREVER_WORDS = {"навсегда", "вечно", "forever"}
 
 def paywall_text(access: Access) -> str:
     """Что показать человеку без доступа."""
+    if not config.STARS_PAYMENTS_ENABLED:
+        return overview_text()
     if access.status.value == "trial":
         return (
             "🔒 Пробный период закончился\n\n"
@@ -59,6 +63,8 @@ def paywall_text(access: Access) -> str:
 
 
 def buy_keyboard() -> InlineKeyboardMarkup:
+    if not config.STARS_PAYMENTS_ENABLED:
+        return tariff_keyboard()
     builder = InlineKeyboardBuilder()
     builder.button(text=f"⭐ Оформить за {config.SUB_PRICE_STARS} в месяц", callback_data=CB_BUY)
     return builder.as_markup()
@@ -71,6 +77,9 @@ async def send_paywall(message: Message, access: Access) -> None:
 @router.message(Command("subscription"))
 async def show_subscription(message: Message) -> None:
     """Состояние подписки: сколько осталось и как продлить."""
+    if not config.STARS_PAYMENTS_ENABLED:
+        await send_tariffs(message)
+        return
     async with get_session() as session:
         access = await check_access(session, message.from_user.id)
 
@@ -110,6 +119,10 @@ async def show_subscription(message: Message) -> None:
 @router.callback_query(F.data == CB_BUY)
 async def start_payment(callback: CallbackQuery) -> None:
     """Счёт на подписку. Звёзды не требуют платёжного провайдера."""
+    if not config.STARS_PAYMENTS_ENABLED or not config.PAYWALL:
+        await callback.answer("Оплата пока не подключена")
+        await send_tariffs(callback.message)
+        return
     try:
         link = await callback.bot.create_invoice_link(
             title="Доступ к приложению",
@@ -139,6 +152,9 @@ async def start_payment(callback: CallbackQuery) -> None:
 @router.pre_checkout_query()
 async def approve_payment(query: PreCheckoutQuery) -> None:
     """Telegram спрашивает подтверждение перед списанием."""
+    if not config.STARS_PAYMENTS_ENABLED or not config.PAYWALL:
+        await query.answer(ok=False, error_message="Оплата AURA пока не подключена. Деньги не будут списаны.")
+        return
     await query.answer(ok=True)
 
 

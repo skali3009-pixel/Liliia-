@@ -259,13 +259,14 @@ def test_the_food_choice_opens_the_same_food_input_as_the_menu_button():
     run(scenario)
 
 
-def test_the_questionnaire_ends_with_the_choice_before_the_music_card():
+def test_the_questionnaire_ends_with_the_first_action_and_keeps_music_optional():
     import inspect
     import handlers.onboarding as onboarding
 
     body = inspect.getsource(onboarding._finish_onboarding)
     assert "first_step_keyboard()" in body
-    assert body.index("first_step_keyboard()") < body.index("music.отправить")
+    assert "music.отправить" not in body
+    assert body.strip().endswith("await message.answer(first_step_text(), reply_markup=first_step_keyboard())")
 
 
 def test_the_first_meal_gets_one_calm_line_and_the_second_does_not():

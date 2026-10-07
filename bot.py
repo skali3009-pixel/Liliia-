@@ -19,7 +19,7 @@ from services import commands as bot_commands
 from services import identity
 from handlers import (access, diary, errors, fallback, feedback, food, legal,
                       music, notifications, onboarding, profile, progress,
-                      steps, suggestions, supplements, turn, water, workouts)
+                      steps, suggestions, supplements, tariffs, turn, water, workouts)
 from middlewares.access import AccessMiddleware
 from middlewares.menu_aliases import MenuAliasesMiddleware
 from middlewares.minor import MinorMiddleware
@@ -54,6 +54,7 @@ dp.callback_query.outer_middleware(PresenceMiddleware())
 
 dp.include_router(legal.router)
 dp.include_router(access.router)
+dp.include_router(tariffs.router)
 dp.include_router(onboarding.router)
 # Профиль раньше еды: он снимает состояние правки, когда человек уходит из
 # незаконченного ответа в другую кнопку меню.

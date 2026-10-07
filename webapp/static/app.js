@@ -6222,6 +6222,11 @@ async function init() {
   document.getElementById('progress-world').onclick = () => openWorld('progress');
   document.getElementById('world-back').onclick = () => switchScreen(worldReturnScreen);
   document.getElementById('prof-sync').onclick = () => document.getElementById('steps-sync').click();
+  document.getElementById('prof-tariffs').onclick = openTariffs;
+  document.getElementById('tariffs-close').onclick = closeTariffs;
+  document.getElementById('tariffs-sheet').onclick = (e) => {
+    if (e.target.id === 'tariffs-sheet') closeTariffs();
+  };
 
   document.getElementById('suggest-btn').onclick = () => loadMenu(mealType);
   document.getElementById('recipe-close').onclick = () => {
@@ -6398,6 +6403,78 @@ init();
 
 
 function closeRecordEntry() { document.getElementById('record-sheet').hidden = true; }
+
+let tariffCatalogue = null;
+let tariffReturnFocus = null;
+function closeTariffs() {
+  document.getElementById('tariffs-sheet').hidden = true;
+  tariffReturnFocus?.focus();
+}
+async function openTariffs() {
+  tariffReturnFocus = document.activeElement;
+  const sheet = document.getElementById('tariffs-sheet');
+  sheet.hidden = false;
+  document.getElementById('tariffs-close').focus();
+  try {
+    if (!tariffCatalogue) tariffCatalogue = await api('/tariffs.json');
+    renderTariffs(tariffCatalogue);
+  } catch (error) {
+    document.getElementById('tariffs-status').textContent = 'Не удалось загрузить тарифы. Закрой окно и попробуй ещё раз.';
+  }
+}
+function renderTariffs(catalogue) {
+  document.getElementById('tariffs-lead').textContent = catalogue.title;
+  document.getElementById('tariffs-status').textContent = catalogue.status;
+  const plans = document.getElementById('tariffs-plans');
+  plans.replaceChildren();
+  const detail = document.getElementById('tariffs-description');
+  detail.hidden = true;
+  for (const plan of catalogue.plans) {
+    const button = document.createElement('button');
+    button.type = 'button'; button.className = 'tariff-choice';
+    button.setAttribute('aria-expanded', 'false');
+    button.setAttribute('aria-controls', 'tariffs-description');
+    const name = document.createElement('span'); name.textContent = plan.name;
+    const price = document.createElement('strong'); price.textContent = `${plan.price_rub.toLocaleString('ru-RU')} ₽`;
+    const caption = document.createElement('small');
+    caption.textContent = plan.saving_rub ? '430 ₽ / 30 дней · открыть описание' : 'за весь срок · открыть описание';
+    button.append(name, price, caption);
+    button.onclick = () => {
+      for (const item of plans.children) item.setAttribute('aria-expanded', String(item === button));
+      detail.replaceChildren(); detail.hidden = false;
+      const title = document.createElement('h3'); title.textContent = `${plan.name} · ${plan.price_rub.toLocaleString('ru-RU')} ₽ за весь срок`;
+      const purpose = document.createElement('p'); purpose.textContent = plan.purpose;
+      detail.append(title, purpose);
+      if (plan.saving_rub) {
+        const saving = document.createElement('p'); saving.className = 'tariff-saving';
+        saving.textContent = `Экономия ${plan.saving_rub} ₽ по сравнению с тремя периодами по 490 ₽.`;
+        detail.append(saving);
+      }
+      const list = document.createElement('ul');
+      for (const benefit of catalogue.benefits) {
+        const item = document.createElement('li'); item.textContent = benefit; list.append(item);
+      }
+      const limits = document.createElement('p');
+      limits.textContent = `После запуска: ${plan.recognitions} распознаваний еды и подборов с полки, ${plan.dish_builds} созданий блюда с ИИ за ${plan.days} дней.`;
+      const note = document.createElement('p'); note.className = 'hint'; note.textContent = catalogue.allowance_note;
+      const status = document.createElement('p'); status.className = 'hint'; status.textContent = 'Просмотр тарифа ничего не списывает и не оформляет подписку.';
+      detail.append(list, limits, note, status);
+      detail.scrollIntoView({block: 'nearest', behavior: 'smooth'});
+    };
+    plans.append(button);
+  }
+}
+document.addEventListener('keydown', (event) => {
+  const sheet = document.getElementById('tariffs-sheet');
+  if (sheet.hidden) return;
+  if (event.key === 'Escape') closeTariffs();
+  if (event.key === 'Tab') {
+    const buttons = [...sheet.querySelectorAll('button')];
+    const first = buttons[0], last = buttons[buttons.length - 1];
+    if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  }
+});
 function openRecordEntry() { document.getElementById('record-sheet').hidden = false; }
 function safePublicLink(value) {
   try { const u = new URL(value, location.origin); return u.protocol === 'https:' || u.origin === location.origin ? u.href : ''; }

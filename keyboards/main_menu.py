@@ -21,6 +21,7 @@ MENU_MUSIC = "🎧 Музыка SCALIA"
 # командой `/legal` в синем списке — туда не смотрит никто. Лилия так и
 # сказала: «появляются один раз в начале, и всё, потом их не посмотреть».
 MENU_DOCS = "📄 Документы"
+MENU_TARIFFS = "💳 Тарифы"
 
 # Old reply keyboards stay on devices until Telegram receives a new one.
 LEGACY_MENU = {
@@ -37,7 +38,7 @@ LEGACY_MENU = {
 # или правку роста, нажмёт её, и сценарий съест нажатие как ответ. Стоит
 # тест, что множество и клавиатура описывают одни и те же кнопки.
 MENU_TEXTS = {MENU_TURN, MENU_ADD_MEAL, MENU_WATER, MENU_STEPS, MENU_WORKOUT,
-              MENU_PROGRESS, MENU_WHAT_TO_EAT, MENU_PROFILE, MENU_MUSIC, MENU_DOCS,
+              MENU_PROGRESS, MENU_WHAT_TO_EAT, MENU_PROFILE, MENU_MUSIC, MENU_DOCS, MENU_TARIFFS,
               *LEGACY_MENU}
 
 
@@ -52,9 +53,11 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
     builder.button(text=MENU_WHAT_TO_EAT)
     builder.button(text=MENU_PROFILE)
     builder.button(text=MENU_DOCS)
+    builder.button(text=MENU_TARIFFS)
     # «Мой ход» во всю ширину сверху, дальше парами. Шаги вносят
     # каждый день, поэтому кнопка нужна на виду, а не в приложении.
     #
-    # Документы и профиль в последней паре; старые подписи принимает middleware.
-    builder.adjust(1, 2, 2, 2, 2)
+    # Профиль во всю ширину, документы и тарифы в последней паре.
+    # Старые подписи принимает middleware.
+    builder.adjust(1, 2, 2, 2, 1, 2)
     return builder.as_markup(resize_keyboard=True)

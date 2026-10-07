@@ -72,6 +72,19 @@ async def legal_page(request: web.Request) -> web.Response:
     return web.Response(text=page, content_type="text/html", charset="utf-8")
 
 
+async def tariffs_page(request: web.Request) -> web.Response:
+    from services.entry_points import public_links
+    from services.tariffs import render_page
+    return web.Response(text=render_page(public_links()["documents"]),
+                        content_type="text/html", charset="utf-8",
+                        headers={"Cache-Control": "no-store"})
+
+
+async def tariffs_catalogue(request: web.Request) -> web.Response:
+    from services.tariffs import catalogue
+    return web.json_response(catalogue(), headers={"Cache-Control": "no-store"})
+
+
 def create_app(bot=None) -> web.Application:
     # Порядок важен: ошибки ловим снаружи, авторизацию проверяем внутри.
     app = web.Application(middlewares=[error_middleware, auth_middleware])
@@ -81,6 +94,8 @@ def create_app(bot=None) -> web.Application:
     add_routes(app)
     app.router.add_get("/", index)
     app.router.add_get("/health", healthcheck)
+    app.router.add_get("/tariffs", tariffs_page)
+    app.router.add_get("/tariffs.json", tariffs_catalogue)
     app.router.add_get("/legal/{slug}", legal_page)
     app.router.add_static("/static/", STATIC_DIR, name="static")
     return app

@@ -107,12 +107,12 @@ def test_nobody_builds_an_invite_link_by_hand():
 
     виноватые = []
     for файл in корень.rglob("*.py"):
-        if файл in свои or "/tests/" in str(файл) or "/promo/" in str(файл):
+        if файл in свои or файл.relative_to(корень).parts[0] in {"tests", "promo"}:
             continue
         # Ищем именно сборку адреса, а не слова о ней: объяснять в
         # комментарии, как выглядит ссылка, никому не запрещено.
         if "https://t.me/" in файл.read_text(encoding="utf-8"):
-            виноватые.append(str(файл.relative_to(корень)))
+            виноватые.append(файл.relative_to(корень).as_posix())
 
     assert not виноватые, f"ссылка собирается мимо identity.start_link: {виноватые}"
 
@@ -125,7 +125,7 @@ def test_the_invite_prefix_is_written_once():
     хозяева = {"services/friends.py": '"friend_"', "services/teams.py": '"team_"'}
 
     for файл in корень.rglob("*.py"):
-        имя = str(файл.relative_to(корень))
+        имя = файл.relative_to(корень).as_posix()
         if имя.startswith(("tests/", "promo/")):
             continue
         текст = файл.read_text(encoding="utf-8")

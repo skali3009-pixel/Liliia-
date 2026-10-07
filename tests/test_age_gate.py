@@ -83,7 +83,7 @@ def test_the_app_shows_nothing_personal_to_a_minor_but_keeps_their_data():
 @pytest.mark.parametrize("text,passes", [
     ("🍽 Что съесть", False), ("/start", False), ("огурец", False),
     ("/export", True), ("/delete", True), ("/problem", True), ("/legal", True),
-    ("⚙️ Профиль", True),
+    ("⚙️ Профиль и доступ", True),
 ])
 def test_the_chat_lets_a_minor_reach_only_their_data_and_support(text, passes):
     async def scenario():
@@ -101,6 +101,7 @@ def test_the_chat_lets_a_minor_reach_only_their_data_and_support(text, passes):
 
             async def answer(self, text, **kwargs):
                 answered.append(text)
+            original_answer = TgMessage.answer
             try:
                 TgMessage.answer = answer
                 event = TgMessage(message_id=1, date=datetime.now(),
@@ -115,7 +116,7 @@ def test_the_chat_lets_a_minor_reach_only_their_data_and_support(text, passes):
                                         {"event_from_user": SimpleNamespace(id=USER_ID)})
             finally:
                 minor_module.get_session = original
-                del TgMessage.answer
+                TgMessage.answer = original_answer
             assert bool(called) is passes
             if not passes:
                 assert answered == [age_rules.NOTICE]

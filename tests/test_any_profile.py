@@ -261,6 +261,6 @@ def test_the_whole_calendar_block_hides_for_men():
     пояснение про месячные оставались в профиле мужчины (запись 26.09)."""
     page = pathlib.Path("webapp/static/index.html").read_text(encoding="utf-8")
     block = page.split('id="prof-cycle-block"', 1)[1].split("</div>\n\n", 1)[0]
-    assert "Женский календарь" in block and "месячными" in block
+    assert "Женский календарь" in block and "Сам по себе календарь" in block
     app = pathlib.Path("webapp/static/app.js").read_text(encoding="utf-8")
     assert "getElementById('prof-cycle-block').hidden = p.gender !== 'female'" in app

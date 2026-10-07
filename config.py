@@ -5,6 +5,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+# Price viewing is enabled; Stars sales are explicitly postponed. PAYWALL is
+# a separate legacy access switch and must never accidentally open checkout.
+STARS_PAYMENTS_ENABLED = False
+
 load_dotenv()
 
 

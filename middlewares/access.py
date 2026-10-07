@@ -16,14 +16,14 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 import config
 from db import get_session
 from handlers.access import CB_BUY, buy_keyboard, paywall_text
-from keyboards.main_menu import MENU_DOCS
+from keyboards.main_menu import MENU_DOCS, MENU_TARIFFS
 from services.subscriptions import check_access
 
 logger = logging.getLogger(__name__)
 
 # Команды, которые работают всегда — иначе из закрытого бота не выбраться.
 OPEN_COMMANDS = {
-    "/start", "/subscription", "/admin", "/grant", "/help",
+    "/start", "/subscription", "/tariffs", "/admin", "/grant", "/help",
     # Документы, отзыв согласия и отказ от рекламы должны работать всегда:
     # закон не спрашивает, оплачена ли подписка.
     "/legal", "/delete", "/stop_ads",
@@ -43,13 +43,13 @@ def _is_open(event: TelegramObject) -> bool:
         text = (event.text or "").strip()
         # Кнопка «Документы» — то же, что `/legal`, и закон про неё
         # спрашивает так же: оплачена подписка или нет.
-        if text == MENU_DOCS:
+        if text in (MENU_DOCS, MENU_TARIFFS):
             return True
         return text.split()[0].split("@")[0] in OPEN_COMMANDS if text.startswith("/") else False
 
     if isinstance(event, CallbackQuery):
         data = event.data or ""
-        return data.startswith(CB_BUY) or data.startswith("legal:")
+        return data.startswith(CB_BUY) or data.startswith(("legal:", "tariff:"))
 
     return False
 

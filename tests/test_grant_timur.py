@@ -12,6 +12,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from tests.bash_runtime import native_bash
 
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "grant-timur.sh"
@@ -25,9 +26,9 @@ def code() -> str:
     return "\n".join(line for line in lines if not line.lstrip().startswith("#"))
 
 
-@pytest.mark.skipif(shutil.which("bash") is None, reason="нет bash")
+@pytest.mark.skipif(native_bash() is None, reason="нет bash")
 def test_the_script_is_valid_bash():
-    subprocess.run(["bash", "-n", str(SCRIPT)], check=True)
+    subprocess.run([native_bash(), "-n", str(SCRIPT)], check=True)
 
 
 def test_the_key_is_timurs_and_written_once():

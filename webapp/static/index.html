@@ -879,6 +879,7 @@
 
     <section class="card">
       <h3>Доступ</h3><p id="prof-access" class="hint"></p>
+      <button class="btn tariff-entry" id="prof-tariffs">Тарифы и цены</button>
       <button class="btn ghost" id="prof-sync">Шаги с телефона</button>
     </section>
     <details class="profile-group"><summary>Цель и параметры</summary>
@@ -1005,6 +1006,16 @@
   </nav>
 </div>
 
+
+<div id="tariffs-sheet" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="tariffs-title">
+  <div class="sheet-card tariffs-panel">
+    <div class="sheet-head"><h2 id="tariffs-title">Тарифы AURA</h2><button class="icon-btn" id="tariffs-close" aria-label="Закрыть тарифы">✕</button></div>
+    <p class="tariffs-lead" id="tariffs-lead"></p>
+    <p class="hint" id="tariffs-status" role="status">Загружаю тарифы…</p>
+    <div id="tariffs-plans"></div>
+    <div id="tariffs-description" hidden></div>
+  </div>
+</div>
 
 <div id="record-sheet" class="sheet" hidden><div class="sheet-card">
   <div class="sheet-head"><h2>Записать еду</h2><button id="record-close" class="icon-btn" aria-label="Закрыть">✕</button></div>
