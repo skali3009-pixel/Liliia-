@@ -5995,6 +5995,14 @@ function endTour(screen) {
 // действие делается, а не на «Сегодня». Иначе человек, нажавший «подобрать
 // еду», попадает на главный экран и ищет нужную вкладку сам.
 const SCREENS = ['today', 'world', 'gym', 'cube', 'progress', 'profile'];
+let worldReturnScreen = 'progress';
+
+function openWorld(from) {
+  worldReturnScreen = from === 'today' ? 'today' : 'progress';
+  document.getElementById('world-back').textContent =
+    worldReturnScreen === 'today' ? '← На сегодня' : '← К прогрессу';
+  switchScreen('world');
+}
 
 function openRequestedScreen() {
   let asked = null;
@@ -6106,7 +6114,7 @@ async function markCycle(day) {
 
 function switchScreen(name) {
   for (const tab of document.querySelectorAll('.tab')) {
-    tab.classList.toggle('active', tab.dataset.screen === (name === 'world' ? 'progress' : name));
+    tab.classList.toggle('active', tab.dataset.screen === (name === 'world' ? worldReturnScreen : name));
   }
   for (const screen of ['today', 'world', 'gym', 'cube', 'progress', 'profile']) {
     document.getElementById(`screen-${screen}`).hidden = screen !== name;
@@ -6210,8 +6218,9 @@ async function init() {
     else { toast('Сначала запиши блюдо. Частые записи появятся здесь для повтора.'); openMoment(); }
   };
   document.getElementById('record-catalog').onclick = () => { closeRecordEntry(); switchScreen('cube'); };
-  document.getElementById('progress-world').onclick = () => switchScreen('world');
-  document.getElementById('world-back').onclick = () => switchScreen('progress');
+  document.getElementById('today-world').onclick = () => openWorld('today');
+  document.getElementById('progress-world').onclick = () => openWorld('progress');
+  document.getElementById('world-back').onclick = () => switchScreen(worldReturnScreen);
   document.getElementById('prof-sync').onclick = () => document.getElementById('steps-sync').click();
 
   document.getElementById('suggest-btn').onclick = () => loadMenu(mealType);

@@ -83,6 +83,7 @@
           <div class="hud-main">
             <div class="hud-top">
               <span class="hud-level" id="hud-level">Уровень 1</span>
+              <button class="link-btn" id="today-world">Мой мир →</button>
               <span class="hud-streak" id="hud-streak"></span>
             </div>
             <div class="xp-track"><i id="xp-fill"></i></div>
@@ -457,6 +458,7 @@
         <div class="eyebrow">Вес, объёмы и фото по неделям</div>
       </div>
     </section>
+    <button class="btn ghost" id="progress-world">Мой мир и награды →</button>
 
     <section class="stats">
       <div class="stat"><div id="stat-weight" class="stat-value">—</div>
@@ -558,7 +560,6 @@
       <div id="photo-compare"></div>
       <p class="hint" id="photo-hint">Снимай в одинаковой позе и при одном свете — так разница видна честнее.</p>
     </section>
-    <button class="btn ghost" id="progress-world">Мир и награды</button>
     <details class="card body-card"><summary>Фигура и детали</summary>
       <div class="card-head">
         <h2>Твоё тело</h2>
@@ -762,11 +763,13 @@
       <div class="hero-art" data-art="food"></div>
       <div class="hero-body">
         <div class="eyebrow">Еда</div>
-        <h1 class="hero-title">Еда</h1>
-        <button class="btn primary" id="food-record">Записать еду</button>
-        <p class="hint">Подобрать, что съесть, можно ниже. Выбор блюда ещё не запись в дневник.</p>
+        <h1 class="hero-title">Что съесть?</h1>
         <p class="hero-sub" id="food-hint"></p>
       </div>
+    </section>
+    <section class="food-entry">
+      <button class="btn primary" id="food-record">Записать еду</button>
+      <p class="hint">Для того, что уже съедено. Подбор блюда ниже ещё не запись в дневник.</p>
     </section>
 
     <!-- Четыре ответа на один вопрос. Кубик — про «не готовить вовсе»,
