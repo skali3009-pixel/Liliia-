@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from html import escape
 from dataclasses import dataclass
 from typing import Callable
 
@@ -17,7 +18,7 @@ from aiogram.types import (CallbackQuery, InlineKeyboardMarkup, Message,
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from db import get_session
-from keyboards.main_menu import main_menu_keyboard
+from keyboards.main_menu import MENU_TEXTS, main_menu_keyboard
 from keyboards.onboarding import (
     activity_keyboard,
     diet_type_keyboard,
@@ -48,6 +49,28 @@ logger = logging.getLogger(__name__)
 router = Router(name="onboarding")
 
 GENDER_RU = {GenderEnum.MALE.value: "мужской", GenderEnum.FEMALE.value: "женский"}
+
+INTERESTS = {"food": "Питание", "move": "Тренировки", "both": "Питание и тренировки"}
+
+
+def interest_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    for value, label in INTERESTS.items():
+        builder.button(text=label, callback_data=f"onb_interest:{value}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def name_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Оставить это имя", callback_data="onb_name:confirm")
+    return builder.as_markup()
+
+
+def allergies_keyboard() -> InlineKeyboardMarkup:
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Нет аллергий и непереносимостей", callback_data="onb_allergies:none")
+    return builder.as_markup()
 
 
 
@@ -132,24 +155,13 @@ class Шаг:
     клавиатура: Callable[[], InlineKeyboardMarkup] | None = None
 
 
-# Девять вопросов одним списком — и это единственное место, где они написаны.
-# Раньше каждый вопрос жил внутри своего обработчика, и посчитать их было
-# неоткуда: ни сказать человеку «третий из девяти», ни вернуть его туда, где
-# он остановился. А главное — вторая копия вопроса рано или поздно разъехалась
-# бы с первой, и человек, вернувшийся в анкету, увидел бы не тот вопрос, на
-# котором стоит.
-# Анкета кончается ровно там, где норму уже можно посчитать. Всё остальное
-# спрашивается после — когда человек уже получил, ради чего отвечал.
-#
-# Что осталось: пол, возраст, рост и вес — из них считается основной обмен;
-# активность и цель — из них суточная норма; тип питания — он один тап и
-# решает, что человеку вообще предлагать (вегану мясо в первый же день —
-# это видимая ошибка, которая дороже одного нажатия).
-#
-# Что ушло: целевой вес и аллергии. Ни то ни другое в норму не входит, зато
-# оба спрашиваются текстом — а набирать труднее, чем нажимать. Из пяти
-# печатаемых ответов осталось три.
+# Один список для счётчика, продолжения анкеты и напоминания.
+# Имя и интерес нужны для первого действия; диета и аллергии — до подбора еды.
+# Целевой вес остаётся необязательной настройкой после сохранения профиля.
 ШАГИ: tuple[Шаг, ...] = (
+    Шаг(OnboardingStates.interest, "Что тебе сейчас полезнее?", interest_keyboard),
+    Шаг(OnboardingStates.name, "Как к тебе обращаться? Напиши имя или оставь предложенное.",
+        name_keyboard),
     Шаг(OnboardingStates.gender, "Укажи свой пол:", gender_keyboard),
     Шаг(OnboardingStates.age, "Сколько тебе полных лет?"),
     Шаг(OnboardingStates.height, "Какой у тебя рост, см? Например: 172"),
@@ -158,6 +170,9 @@ class Шаг:
         activity_keyboard),
     Шаг(OnboardingStates.goal, "Какая у тебя цель?", goal_keyboard),
     Шаг(OnboardingStates.diet_type, "Тип питания:", diet_type_keyboard),
+    Шаг(OnboardingStates.allergies,
+        "Есть аллергии или непереносимости? Напиши продукты через запятую. "
+        "Если их нет, нажми кнопку ниже.", allergies_keyboard),
 )
 
 ВСЕГО_ШАГОВ = len(ШАГИ)
@@ -181,7 +196,7 @@ async def спросить(message: Message, шаг: Шаг, *, вступлен
     шапка = f"Вопрос {номер_шага(шаг)} из {ВСЕГО_ШАГОВ}"
     текст = f"{вступление}{шапка}\n{шаг.текст}"
     клавиатура = шаг.клавиатура() if шаг.клавиатура else None
-    await message.answer(текст, reply_markup=клавиатура)
+    await message.answer(текст, reply_markup=клавиатура, parse_mode="HTML")
 
 
 def trial_line() -> str:
@@ -227,7 +242,9 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
             await session.flush()
 
         user.username = message.from_user.username
-        user.full_name = message.from_user.full_name
+        # После подтверждения анкеты имя принадлежит профилю пользователя.
+        if not user.onboarding_completed:
+            user.full_name = message.from_user.full_name
         if command.args and command.args != "add_food" and not user.referral:
             user.referral = command.args[:64]
         # Источник — только из закрытого списка меток. Неизвестный параметр
@@ -300,7 +317,11 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
     # анкета начиналась с первого вопроса: пять честных ответов стирались
     # молча, а Telegram именно /start и подсовывает кнопкой. Второй раз
     # проходить то же самое не станет никто.
-    шаг = ПО_СОСТОЯНИЮ.get(await state.get_state())
+    current = await state.get_state()
+    if current == OnboardingStates.summary.state:
+        await show_summary(message, state, message.from_user.id)
+        return
+    шаг = ПО_СОСТОЯНИЮ.get(current)
     if шаг is not None:
         await предложить_продолжить(message, шаг)
         return
@@ -332,12 +353,15 @@ async def resume_onboarding(callback: CallbackQuery, state: FSMContext) -> None:
     """Продолжить с того вопроса, на котором стоим."""
     шаг = ПО_СОСТОЯНИЮ.get(await state.get_state())
     await callback.answer()
+    if await state.get_state() == OnboardingStates.summary.state:
+        await show_summary(callback.message, state, callback.from_user.id)
+        return
     if шаг is None:
         # Состояние успело протухнуть (через две недели строку убирают) —
         # продолжать нечего, но и молчать нельзя.
         await begin_onboarding(callback.message, state, callback.from_user.id)
         return
-    await спросить(callback.message, шаг)
+    await ask_current(callback.message, state)
 
 
 @router.callback_query(F.data == CB_RESTART)
@@ -358,7 +382,9 @@ async def begin_onboarding(message: Message, state: FSMContext, user_id: int) ->
                              reply_markup=main_menu_keyboard())
         return
 
-    await state.set_state(OnboardingStates.gender)
+    await state.update_data(interest="both", profile_name=(user.full_name or "").strip()[:80]
+                            if user else "")
+    await state.set_state(OnboardingStates.interest)
     # Начало анкеты — для воронки «начали / закончили» по людям.
     async with get_session() as session:
         if await session.get(User, user_id) is not None:
@@ -380,17 +406,68 @@ async def begin_onboarding(message: Message, state: FSMContext, user_id: int) ->
     await спросить(message, ШАГИ[0], вступление=вступление)
 
 
+async def ask_current(message: Message, state: FSMContext) -> None:
+    current = await state.get_state()
+    if current == OnboardingStates.name.state:
+        data = await state.get_data()
+        await спросить(message, ПО_СОСТОЯНИЮ[current],
+                      вступление=f"Предложенное имя: {escape(data.get('profile_name') or 'не указано')}\n\n")
+    else:
+        await спросить(message, ПО_СОСТОЯНИЮ[current])
+
+
+async def advance(message: Message, state: FSMContext, next_state: State, user_id: int) -> None:
+    if (await state.get_data()).get("editing_summary"):
+        await state.update_data(editing_summary=False)
+        await show_summary(message, state, user_id)
+        return
+    await state.set_state(next_state)
+    await ask_current(message, state)
+
+
+@router.callback_query(OnboardingStates.interest, F.data.startswith("onb_interest:"))
+async def process_interest(callback: CallbackQuery, state: FSMContext) -> None:
+    value = callback.data.split(":", 1)[1]
+    if value not in INTERESTS:
+        await callback.answer("Выбери вариант на кнопке.")
+        return
+    await state.update_data(interest=value)
+    await callback.answer()
+    await advance(callback.message, state, OnboardingStates.name, callback.from_user.id)
+
+
+@router.callback_query(OnboardingStates.name, F.data == "onb_name:confirm")
+async def confirm_name(callback: CallbackQuery, state: FSMContext) -> None:
+    if not (await state.get_data()).get("profile_name"):
+        await callback.answer("Напиши имя сообщением.")
+        return
+    await callback.answer()
+    await advance(callback.message, state, OnboardingStates.gender, callback.from_user.id)
+
+
+@router.message(OnboardingStates.name, F.text, ~F.text.in_(MENU_TEXTS), ~F.text.startswith("/"))
+async def process_name(message: Message, state: FSMContext) -> None:
+    text = " ".join(message.text.split())
+    if not text or len(text) > 80 or any(ord(c) < 32 for c in message.text):
+        await message.answer("Напиши имя от 1 до 80 символов, без переноса строки.")
+        return
+    await state.update_data(profile_name=text)
+    await advance(message, state, OnboardingStates.gender, message.from_user.id)
+
+
 @router.callback_query(OnboardingStates.gender, F.data.startswith("onb_gender:"))
 async def process_gender(callback: CallbackQuery, state: FSMContext) -> None:
     gender_value = callback.data.split(":", 1)[1]
+    if gender_value not in GENDER_RU:
+        await callback.answer("Выбери вариант на кнопке.")
+        return
     await state.update_data(gender=gender_value)
-    await state.set_state(OnboardingStates.age)
     await callback.message.edit_text(f"Пол: {GENDER_RU[gender_value]} ✅")
-    await спросить(callback.message, ПО_СОСТОЯНИЮ[OnboardingStates.age.state])
+    await advance(callback.message, state, OnboardingStates.age, callback.from_user.id)
     await callback.answer()
 
 
-@router.message(OnboardingStates.age, F.text)
+@router.message(OnboardingStates.age, F.text, ~F.text.in_(MENU_TEXTS), ~F.text.startswith("/"))
 async def process_age(message: Message, state: FSMContext) -> None:
     age = parse_int(message.text)
     if age is not None and 0 < age < ADULT_AGE:
@@ -409,11 +486,10 @@ async def process_age(message: Message, state: FSMContext) -> None:
         await message.answer(f"Введи возраст числом от {MIN_AGE} до {MAX_AGE}, например: 28")
         return
     await state.update_data(age=age)
-    await state.set_state(OnboardingStates.height)
-    await спросить(message, ПО_СОСТОЯНИЮ[OnboardingStates.height.state])
+    await advance(message, state, OnboardingStates.height, message.from_user.id)
 
 
-@router.message(OnboardingStates.height, F.text)
+@router.message(OnboardingStates.height, F.text, ~F.text.in_(MENU_TEXTS), ~F.text.startswith("/"))
 async def process_height(message: Message, state: FSMContext) -> None:
     height = parse_float(message.text)
     if height is None or not (MIN_HEIGHT_CM <= height <= MAX_HEIGHT_CM):
@@ -422,11 +498,10 @@ async def process_height(message: Message, state: FSMContext) -> None:
         )
         return
     await state.update_data(height_cm=height)
-    await state.set_state(OnboardingStates.current_weight)
-    await спросить(message, ПО_СОСТОЯНИЮ[OnboardingStates.current_weight.state])
+    await advance(message, state, OnboardingStates.current_weight, message.from_user.id)
 
 
-@router.message(OnboardingStates.current_weight, F.text)
+@router.message(OnboardingStates.current_weight, F.text, ~F.text.in_(MENU_TEXTS), ~F.text.startswith("/"))
 async def process_current_weight(message: Message, state: FSMContext) -> None:
     weight = parse_float(message.text)
     if weight is None or not (MIN_WEIGHT_KG <= weight <= MAX_WEIGHT_KG):
@@ -435,14 +510,14 @@ async def process_current_weight(message: Message, state: FSMContext) -> None:
         )
         return
     await state.update_data(current_weight_kg=weight)
-    await state.set_state(OnboardingStates.activity_level)
     # Середина анкеты и конец печатания: дальше только кнопки. Слайд стоит
     # ровно здесь, на том же месте по счёту, что и раньше.
-    await send_slide(message, "why_questions")
-    await спросить(message, ПО_СОСТОЯНИЮ[OnboardingStates.activity_level.state])
+    if not (await state.get_data()).get("editing_summary"):
+        await send_slide(message, "why_questions")
+    await advance(message, state, OnboardingStates.activity_level, message.from_user.id)
 
 
-@router.message(OnboardingStates.target_weight, F.text)
+@router.message(OnboardingStates.target_weight, F.text, ~F.text.in_(MENU_TEXTS), ~F.text.startswith("/"))
 async def process_target_weight(message: Message, state: FSMContext) -> None:
     """Прежний шаг. Из анкеты он убран, но обработчик остаётся — и надолго.
 
@@ -466,46 +541,147 @@ async def process_target_weight(message: Message, state: FSMContext) -> None:
 @router.callback_query(OnboardingStates.activity_level, F.data.startswith("onb_activity:"))
 async def process_activity(callback: CallbackQuery, state: FSMContext) -> None:
     activity_value = callback.data.split(":", 1)[1]
+    if activity_value not in {v.value for v in ActivityLevelEnum}:
+        await callback.answer("Выбери вариант на кнопке.")
+        return
     await state.update_data(activity_level=activity_value)
-    await state.set_state(OnboardingStates.goal)
     await callback.message.edit_text("Уровень активности сохранён ✅")
-    await спросить(callback.message, ПО_СОСТОЯНИЮ[OnboardingStates.goal.state])
+    await advance(callback.message, state, OnboardingStates.goal, callback.from_user.id)
     await callback.answer()
 
 
 @router.callback_query(OnboardingStates.goal, F.data.startswith("onb_goal:"))
 async def process_goal(callback: CallbackQuery, state: FSMContext) -> None:
     goal_value = callback.data.split(":", 1)[1]
+    if goal_value not in {v.value for v in GoalEnum}:
+        await callback.answer("Выбери вариант на кнопке.")
+        return
     await state.update_data(goal=goal_value)
-    await state.set_state(OnboardingStates.diet_type)
     await callback.message.edit_text("Цель сохранена ✅")
-    await спросить(callback.message, ПО_СОСТОЯНИЮ[OnboardingStates.diet_type.state])
+    await advance(callback.message, state, OnboardingStates.diet_type, callback.from_user.id)
     await callback.answer()
 
 
 @router.callback_query(OnboardingStates.diet_type, F.data.startswith("onb_diet:"))
 async def process_diet_type(callback: CallbackQuery, state: FSMContext) -> None:
     diet_value = callback.data.split(":", 1)[1]
+    if diet_value not in {v.value for v in DietTypeEnum}:
+        await callback.answer("Выбери вариант на кнопке.")
+        return
     await state.update_data(diet_type=diet_value)
     await callback.message.edit_text("Тип питания сохранён ✅")
     await callback.answer()
-    # Последний вопрос: дальше сразу норма. Человека сюда передаём его
-    # самого, а не автора сообщения: у сообщения с кнопкой автор — бот, и
-    # профиль записался бы боту.
+    await advance(callback.message, state, OnboardingStates.allergies, callback.from_user.id)
+
+
+@router.message(OnboardingStates.allergies, F.text, ~F.text.in_(MENU_TEXTS), ~F.text.startswith("/"))
+async def process_allergies(message: Message, state: FSMContext) -> None:
+    text = message.text.strip()
+    if not text or len(text) > 200:
+        await message.answer("Напиши продукты в пределах 200 символов или нажми «Нет аллергий и непереносимостей».")
+        return
+    allergies = None if text.lower() in {"нет", "-", "none", "no"} else text
+    await state.update_data(allergies=allergies, editing_summary=False)
+    await show_summary(message, state, message.from_user.id)
+
+
+@router.callback_query(OnboardingStates.allergies, F.data == "onb_allergies:none")
+async def no_allergies(callback: CallbackQuery, state: FSMContext) -> None:
+    await state.update_data(allergies=None, editing_summary=False)
+    await callback.answer()
+    await show_summary(callback.message, state, callback.from_user.id)
+
+
+SUMMARY_FIELDS = (
+    ("interest", "Интерес", OnboardingStates.interest),
+    ("profile_name", "Имя", OnboardingStates.name),
+    ("gender", "Пол", OnboardingStates.gender),
+    ("age", "Возраст", OnboardingStates.age),
+    ("height_cm", "Рост", OnboardingStates.height),
+    ("current_weight_kg", "Вес", OnboardingStates.current_weight),
+    ("activity_level", "Активность", OnboardingStates.activity_level),
+    ("goal", "Цель", OnboardingStates.goal),
+    ("diet_type", "Питание", OnboardingStates.diet_type),
+    ("allergies", "Аллергии", OnboardingStates.allergies),
+)
+
+
+async def show_summary(message: Message, state: FSMContext, user_id: int) -> None:
+    from keyboards.onboarding import ACTIVITY_LABELS, DIET_LABELS, GOAL_LABELS
+
+    data = await state.get_data()
+    # Совместимость с анкетами, начатыми до добавления имени и интереса.
+    if not data.get("profile_name"):
+        async with get_session() as session:
+            user = await session.get(User, user_id)
+            name = (user.full_name or "") if user else ""
+        await state.update_data(profile_name=name[:80], interest=data.get("interest", "both"))
+        data = await state.get_data()
+    for field, _, field_state in SUMMARY_FIELDS:
+        if field not in data or field == "profile_name" and not data[field]:
+            await state.update_data(editing_summary=False)
+            await state.set_state(field_state)
+            await ask_current(message, state)
+            return
+    values = {
+        "interest": INTERESTS[data["interest"]], "profile_name": data["profile_name"],
+        "gender": GENDER_RU[data["gender"]], "age": f"{data['age']} лет",
+        "height_cm": f"{data['height_cm']:g} см", "current_weight_kg": f"{data['current_weight_kg']:g} кг",
+        "activity_level": ACTIVITY_LABELS[ActivityLevel(data["activity_level"])],
+        "goal": GOAL_LABELS[Goal(data["goal"])], "diet_type": DIET_LABELS[DietTypeEnum(data["diet_type"])],
+        "allergies": data["allergies"] or "нет — по твоему ответу",
+    }
+    lines = ["Проверь ответы перед сохранением:\n"]
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Всё верно — сохранить", callback_data="onb:confirm")
+    for field, label, _ in SUMMARY_FIELDS:
+        lines.append(f"{label}: {escape(str(values[field]))}")
+    builder.button(text="Изменить ответы", callback_data="onb:edit_fields")
+    builder.adjust(1)
+    lines.append("\nДо подтверждения ответы остаются черновиком.")
+    await state.set_state(OnboardingStates.summary)
+    await message.answer("\n".join(lines), reply_markup=builder.as_markup(), parse_mode="HTML")
+
+
+@router.callback_query(OnboardingStates.summary, F.data == "onb:edit_fields")
+async def choose_edit_field(callback: CallbackQuery) -> None:
+    builder = InlineKeyboardBuilder()
+    for field, label, _ in SUMMARY_FIELDS:
+        builder.button(text=label, callback_data=f"onb_edit:{field}")
+    builder.adjust(2)
+    builder.button(text="Назад к сводке", callback_data="onb:review")
+    await callback.answer()
+    await callback.message.answer("Что исправить?", reply_markup=builder.as_markup())
+
+
+@router.callback_query(OnboardingStates.summary, F.data == "onb:review")
+async def review_again(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
+    await show_summary(callback.message, state, callback.from_user.id)
+
+
+@router.callback_query(OnboardingStates.summary, F.data.startswith("onb_edit:"))
+async def edit_summary(callback: CallbackQuery, state: FSMContext) -> None:
+    field = callback.data.split(":", 1)[1]
+    target = next((s for f, _, s in SUMMARY_FIELDS if f == field), None)
+    if target is None:
+        await callback.answer("Поле не найдено.")
+        return
+    await state.update_data(editing_summary=True)
+    await state.set_state(target)
+    await callback.answer()
+    await ask_current(callback.message, state)
+
+
+@router.callback_query(OnboardingStates.summary, F.data == "onb:confirm")
+async def confirm_summary(callback: CallbackQuery, state: FSMContext) -> None:
+    await callback.answer()
     await _finish_onboarding(callback.message, state, callback.from_user)
 
 
-@router.message(OnboardingStates.allergies, F.text)
-async def process_allergies(message: Message, state: FSMContext) -> None:
-    """Прежний последний шаг. Из анкеты убран, обработчик оставлен.
-
-    По той же причине, что и целевой вес: в момент обновления кто-то стоит
-    ровно здесь, и без обработчика его ответ утонул бы вместе с анкетой.
-    """
-    text = message.text.strip()
-    allergies = None if text.lower() in {"нет", "-", "none", "no"} else text
-    await state.update_data(allergies=allergies)
-    await _finish_onboarding(message, state, message.from_user)
+@router.callback_query(F.data == "onb:confirm")
+async def stale_confirmation(callback: CallbackQuery) -> None:
+    await callback.answer("Эта сводка уже закрыта. Для продолжения отправь /start.", show_alert=True)
 
 
 def norms_text(macros, water_ml: int) -> str:
@@ -519,17 +695,25 @@ def norms_text(macros, water_ml: int) -> str:
         f"🍚 Углеводы: {macros.carbs_g} г\n"
         f"🥦 Клетчатка: {macros.fiber_g} г\n"
         f"💧 Вода: {water_ml} мл\n\n"
-        "Считать и взвешивать ничего не надо — это моя работа."
+        "Это ориентир, а не точное назначение. Калории по фото — оценка; "
+        "порцию и состав можно поправить перед записью."
     )
 
 
-def first_step_text() -> str:
+def first_step_text(interest: str = "both") -> str:
     """Один следующий шаг — на выбор из двух, а не список возможностей.
 
     Решение 27.09: не доказано, что всем нужна именно запись еды, поэтому
     первым делом можно выбрать и еду, и движение. Оба — одно нажатие и
     результат сразу; второе не обязательно.
     """
+    if interest == "move":
+        return ("Начни с короткой тренировки: 5–15 минут дома, каждое движение показано.\n\n"
+                "Нажми кнопку ниже. Питание, вода и прогресс останутся доступны в приложении.")
+    if interest == "food":
+        return ("Начни с одного приёма пищи: сфотографируй то, что ешь или пьёшь, "
+                "или напиши словами: «два бутерброда с сыром».\n\n"
+                "Калории — оценка. Проверь состав и порцию перед записью.")
     return (
         "С чего начать — выбери одно, второе подождёт:\n\n"
         "📷 Записать еду. Сфотографируй то, что ешь или пьёшь, или напиши "
@@ -544,10 +728,14 @@ CB_FIRST_MEAL = "first:meal"
 CB_FIRST_MOVE = "first:move"
 
 
-def first_step_keyboard() -> InlineKeyboardMarkup:
+def first_step_keyboard(interest: str = "both") -> InlineKeyboardMarkup:
     """Две кнопки выбора. Еда — прямо в чате; тренировка — на «Спорте»."""
     builder = InlineKeyboardBuilder()
-    builder.button(text="📷 Записать еду", callback_data=CB_FIRST_MEAL)
+    if interest != "move":
+        builder.button(text="📷 Записать еду", callback_data=CB_FIRST_MEAL)
+    if interest == "food":
+        builder.adjust(1)
+        return builder.as_markup()
     if config.WEBAPP_URL:
         base = config.WEBAPP_URL.rstrip("/")
         builder.button(text="🏃 Короткая тренировка",
@@ -640,6 +828,9 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
     анкеты навсегда — и молча.
     """
     data = await state.get_data()
+    if any(field not in data for field, _, _ in SUMMARY_FIELDS):
+        await show_summary(message, state, кто.id)
+        return
 
     macros = calculate_macros(
         gender=Gender(data["gender"]),
@@ -657,12 +848,17 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
 
     async with get_session() as session:
         user = await session.get(User, кто.id)
+        if user is not None and user.onboarding_completed:
+            await state.clear()
+            await message.answer("Профиль уже сохранён. Продолжим?", reply_markup=main_menu_keyboard())
+            return
         if user is None:
             user = User(id=кто.id)
             session.add(user)
 
         user.username = кто.username
-        user.full_name = кто.full_name
+        user.full_name = data.get("profile_name") or кто.full_name
+        user.onboarding_interest = data.get("interest", "both")
         user.gender = GenderEnum(data["gender"])
         user.age = data["age"]
         user.height_cm = data["height_cm"]
@@ -699,7 +895,7 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
         # только потому, что сессии заведены с expire_on_commit=False, а это
         # настройка в другом файле и не наше обещание.
         нужен_вес = not user.target_weight_kg and user.goal in ЦЕЛИ_С_ВЕСОМ
-        нужны_аллергии = not user.allergies
+        нужны_аллергии = "allergies" not in data
 
     await state.clear()
     await message.answer(
@@ -733,4 +929,5 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
     # не отправилась — анкета всё равно закончена (`services/music.py`).
     # The first useful action must remain the last message on the screen.
     # Music stays available through /music and the Profile tab.
-    await message.answer(first_step_text(), reply_markup=first_step_keyboard())
+    interest = data.get("interest", "both")
+    await message.answer(first_step_text(interest), reply_markup=first_step_keyboard(interest))

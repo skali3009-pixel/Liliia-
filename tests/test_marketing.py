@@ -125,11 +125,11 @@ def test_first_food_action_is_last_in_onboarding():
     import inspect
     from handlers import onboarding
     source = inspect.getsource(onboarding._finish_onboarding)
-    last = source.index("await message.answer(first_step_text()")
+    last = source.index("await message.answer(first_step_text(interest)")
     for earlier in ("send_circle", "send_slide", "_thank_for_invite", "_offer_the_rest"):
         assert source.index(earlier) < last
     assert "music.отправить" not in source
-    assert "await " not in source[last:].split("reply_markup=first_step_keyboard())")[1]
+    assert "await " not in source[last:].split("reply_markup=first_step_keyboard(interest))")[1]
 
 
 def test_сбой_карточки_не_ломает_конец_анкеты():
@@ -547,7 +547,8 @@ def test_анкета_и_приглашения_не_тронуты():
     """Учёт добавлен рядом, а не вместо: ни один шаг анкеты не убран."""
     from handlers import onboarding
 
-    assert onboarding.ВСЕГО_ШАГОВ == 7
+    assert {"gender", "age", "height", "current_weight", "activity_level", "goal", "diet_type"} <= {
+        step.состояние.state.split(":")[1] for step in onboarding.ШАГИ}
     исходник = (КОРЕНЬ / "handlers" / "onboarding.py").read_text(encoding="utf-8")
     # Приглашения и команды по-прежнему разбираются до всякого учёта.
     assert "_accept_invite(session, user.id, command.args)" in исходник

@@ -92,10 +92,10 @@ def test_the_consent_question_does_not_sell_a_subscription_that_is_not_there():
 
 # --- Последний экран -------------------------------------------------------
 
-def test_the_norms_come_with_a_promise_not_to_count_by_hand():
+def test_the_norms_explain_the_limits_of_the_estimate():
     text = norms_text(FakeMacros(), 2432)
     assert "1786" in text and "2432" in text
-    assert "взвешивать ничего не надо" in text
+    assert "ориентир" in text and "порцию" in text
 
 
 def test_the_last_message_names_one_action_not_a_list_of_features():

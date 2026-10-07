@@ -114,6 +114,8 @@ def контекст():
 async def пройти(чат, st, *, цель="lose_weight", застрять=None, ответ=""):
     """Пройти анкету целиком. `застрять` подсаживает в убранный вопрос."""
     await O.begin_onboarding(ФейковоеСообщение(чат), st, ОНА)
+    await O.process_interest(ФейковаяКнопка(чат, "onb_interest:both"), st)
+    await O.confirm_name(ФейковаяКнопка(чат, "onb_name:confirm"), st)
     await O.process_gender(ФейковаяКнопка(чат, "onb_gender:female"), st)
     await O.process_age(ФейковоеСообщение(чат, "31", Человек()), st)
     await O.process_height(ФейковоеСообщение(чат, "168", Человек()), st)
@@ -130,8 +132,11 @@ async def пройти(чат, st, *, цель="lose_weight", застрять=N
         await st.update_data(diet_type="regular")
         await st.set_state(OnboardingStates.allergies)
         await O.process_allergies(ФейковоеСообщение(чат, ответ, Человек()), st)
+        await O.confirm_summary(ФейковаяКнопка(чат, "onb:confirm"), st)
         return
     await O.process_diet_type(ФейковаяКнопка(чат, "onb_diet:regular"), st)
+    await O.no_allergies(ФейковаяКнопка(чат, "onb_allergies:none"), st)
+    await O.confirm_summary(ФейковаяКнопка(чат, "onb:confirm"), st)
 
 
 # --- Профиль достаётся человеку, а не боту --------------------------------
@@ -218,14 +223,14 @@ def test_каждый_убранный_шаг_остался_подключён�
 
 # --- Что спрашиваем до нормы ----------------------------------------------
 
-def test_целевой_вес_и_аллергии_до_нормы_не_спрашивают(monkeypatch):
+def test_allergies_are_asked_before_the_first_food_action(monkeypatch):
     async def scenario():
         async with стенд(monkeypatch) as maker:
             чат = []
             await пройти(чат, контекст())
             до_нормы = "\n".join(т for т, _ in чат).split("Профиль настроен")[0]
             assert "вес хочешь в итоге" not in до_нормы
-            assert "аллерги" not in до_нормы.lower()
+            assert "аллерги" in до_нормы.lower()
 
             async with maker() as s:
                 она = await s.get(User, ОНА)
@@ -246,8 +251,7 @@ def test_после_нормы_предлагают_то_что_убрали(mon
             await пройти(чат, контекст(), цель="lose_weight")
 
             текст, кнопки = _предложение(чат)
-            assert [д for _, д in кнопки] == [f"{CB_EDIT}target_weight",
-                                              f"{CB_EDIT}allergies"]
+            assert [д for _, д in кнопки] == [f"{CB_EDIT}target_weight"]
             # Предложение стоит после нормы, а не до неё.
             весь = [т for т, _ in чат]
             assert весь.index(текст) > next(
@@ -261,8 +265,7 @@ def test_бесполезного_не_спрашивают(monkeypatch):
         async with стенд(monkeypatch) as maker:
             чат = []
             await пройти(чат, контекст(), цель="maintain")
-            _, кнопки = _предложение(чат)
-            assert [д for _, д in кнопки] == [f"{CB_EDIT}allergies"]
+            assert _предложение(чат) is None
     run(scenario)
 
 
@@ -272,8 +275,7 @@ def test_уже_известного_не_переспрашивают(monkeypat
         async with стенд(monkeypatch) as maker:
             чат = []
             await пройти(чат, контекст(), застрять="target_weight", ответ="58")
-            _, кнопки = _предложение(чат)
-            assert [д for _, д in кнопки] == [f"{CB_EDIT}allergies"]
+            assert _предложение(чат) is None
 
             async with maker() as s:
                 assert (await s.get(User, ОНА)).target_weight_kg == 58.0

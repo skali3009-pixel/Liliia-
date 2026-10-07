@@ -156,6 +156,8 @@ def profile_rows(user: User) -> list[list]:
     """Профиль — двумя столбцами: в одну строку он не читается."""
     return [
         ["Имя", user.full_name or ""],
+        ["Интерес", {"food": "Питание", "move": "Тренировки", "both": "Питание и тренировки"}.get(
+            user.onboarding_interest, "")],
         ["Пол", _ru(user.gender, GENDER_RU)],
         ["Возраст", user.age],
         ["Рост, см", user.height_cm],

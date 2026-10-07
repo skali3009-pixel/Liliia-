@@ -15,6 +15,7 @@ from db import init_models
 from services.artwork import ensure_artwork
 from services.video_notes import ensure_circles
 from services.fsm_storage import DatabaseStorage
+from aiogram.fsm.storage.memory import SimpleEventIsolation
 from services import commands as bot_commands
 from services import identity
 from handlers import (access, diary, errors, fallback, feedback, food, legal,
@@ -34,7 +35,7 @@ bot = Bot(token=config.BOT_TOKEN)
 # Состояние разговоров хранится в базе, а не в памяти: бот обновляется
 # сам раз в полчаса, и с памятью каждый такой перезапуск стирал
 # незаконченные карточки еды и недописанные анкеты.
-dp = Dispatcher(storage=DatabaseStorage())
+dp = Dispatcher(storage=DatabaseStorage(), events_isolation=SimpleEventIsolation())
 
 # Проверка доступа стоит до всех обработчиков: без подписки бот отвечает
 # только про оплату.
@@ -104,10 +105,13 @@ def warn_about_setup() -> None:
     """Сказать вслух то, что владелец иначе заметит только от юриста."""
     # Первой строкой в журнале — главный вопрос: бот открыт или закрыт.
     if config.PAYWALL:
-        logger.info(
-            "Доступ платный: пробный период %d дн., далее %d ⭐ в месяц",
-            config.TRIAL_DAYS, config.SUB_PRICE_STARS,
-        )
+        if config.STARS_PAYMENTS_ENABLED:
+            logger.info(
+                "Доступ платный: пробный период %d дн., далее %d ⭐ в месяц",
+                config.TRIAL_DAYS, config.SUB_PRICE_STARS,
+            )
+        else:
+            logger.warning("Проверка срока доступа включена, но новые продажи отключены. Тарифы: /tariffs")
     elif not config.ADMIN_IDS:
         logger.warning(
             "Бот бесплатен для всех, и ADMIN_IDS не задан: отчёты о расходах "
@@ -116,8 +120,8 @@ def warn_about_setup() -> None:
         )
     else:
         logger.info(
-            "Бот бесплатен для всех (PAYWALL=0). Включить оплату — "
-            "bash set-paywall.sh on. Состояние целиком — bash status.sh"
+            "Бот открыт для всех (PAYWALL=0). Тарифы: /tariffs. "
+            "Продажи этим выпуском не подключены. Состояние — bash status.sh"
         )
 
     if config.PAYWALL and not config.LEGAL_OWNER:

@@ -62,7 +62,9 @@ class Letter:
 
 def render(step: int, total: int) -> str:
     """Текст письма. Про остаток пути, а не про недоделанное."""
-    if step:
+    if step == -1:
+        хвост = "Ты уже ответил на вопросы. Проверь сводку и подтверди сохранение профиля."
+    elif step:
         осталось = total - step + 1
         хвост = (f"Анкета ждёт тебя на вопросе {step} из {total}. "
                  f"Осталось {осталось} — это меньше минуты.")
@@ -88,6 +90,7 @@ async def _stopped_at(session: AsyncSession, user_ids: list[int]) -> dict[int, i
     разошлась бы с анкетой в первый же день, когда вопрос добавят.
     """
     from handlers.onboarding import ПО_СОСТОЯНИЮ, номер_шага
+    from states.onboarding import OnboardingStates
     from models import FsmState
 
     rows = (await session.execute(
@@ -98,7 +101,7 @@ async def _stopped_at(session: AsyncSession, user_ids: list[int]) -> dict[int, i
     где: dict[int, int] = {}
     for key, state in rows:
         шаг = ПО_СОСТОЯНИЮ.get(state)
-        if шаг is None:
+        if шаг is None and state != OnboardingStates.summary.state:
             continue
         части = key.split(":")
         if len(части) < 3:
@@ -108,7 +111,7 @@ async def _stopped_at(session: AsyncSession, user_ids: list[int]) -> dict[int, i
         except ValueError:
             continue
         if uid in нужны:
-            где[uid] = номер_шага(шаг)
+            где[uid] = номер_шага(шаг) if шаг is not None else -1
     return где
 
 

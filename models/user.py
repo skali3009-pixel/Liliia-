@@ -76,6 +76,7 @@ class User(Base):
     # Реклама — отдельное добровольное согласие, на доступ не влияет.
     marketing_consent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    onboarding_interest: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
     # --- Анкета онбординга ---
     gender: Mapped[GenderEnum | None] = mapped_column(

@@ -44,7 +44,9 @@ def _access_mode() -> list[str]:
     if config.PAYWALL:
         return [
             "🔒 Платный доступ: ВКЛЮЧЁН",
-            f"   Пробный период: {config.TRIAL_DAYS} дн., дальше {config.SUB_PRICE_STARS} ⭐ в месяц",
+            (f"   Пробный период: {config.TRIAL_DAYS} дн., дальше {config.SUB_PRICE_STARS} ⭐ в месяц"
+             if config.STARS_PAYMENTS_ENABLED else
+             "   Проверка срока включена, но новые продажи отключены. Тарифы: /tariffs"),
             f"   Владельцы: {', '.join(str(i) for i in sorted(config.ADMIN_IDS))}",
         ]
 
@@ -58,7 +60,9 @@ def _access_mode() -> list[str]:
         "🔓 Платный доступ: ВЫКЛЮЧЕН — ботом может пользоваться любой",
         f"   Причина: {reason}",
         f"   Пробный период людям выдаётся ({config.TRIAL_DAYS} дн.), но пока ни на что не влияет",
-        "   Включить оплату, когда решишь: bash set-paywall.sh on",
+        ("   Включить оплату, когда решишь: bash set-paywall.sh on"
+         if config.STARS_PAYMENTS_ENABLED else
+         "   Цены и состав: /tariffs. Продажи отключены; платные ограничения пока не включать."),
     ]
 
 
