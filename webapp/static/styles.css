@@ -8,6 +8,9 @@
 [hidden] { display: none !important; }
 
 :root {
+  --aura-viewport-height: 100vh;
+  --aura-nav-height: 86px;
+  --aura-safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tg-safe-area-inset-bottom, 0px), var(--tg-content-safe-area-inset-bottom, 0px));
   --void: #0A0912;
   --surface: #151327;
   --surface-2: #1E1B33;
@@ -61,7 +64,7 @@ body {
   margin: 0;
   /* Снизу — место под вкладки и запас под безопасную зону. Было 148px:
      столько занимала плавающая кнопка «Расскажи», которой больше нет. */
-  padding: 0 16px calc(96px + env(safe-area-inset-bottom)) 16px;
+  padding: 0 16px calc(var(--aura-nav-height) + 20px) 16px;
   background: var(--bg);
   color: var(--fg);
   font: 500 15px/1.45 var(--body);
@@ -268,13 +271,16 @@ button:focus-visible, .tab:focus-visible {
 
 /* Вкладки */
 .tabs {
-  position: fixed; left: 0; right: 0; bottom: 0; display: flex;
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  position: fixed; left: 0; right: 0;
+  top: calc(var(--aura-viewport-height) - var(--aura-nav-height));
+  z-index: 10; display: flex;
+  padding: 8px 12px calc(8px + var(--aura-safe-bottom));
   background: rgba(10, 9, 18, .92); backdrop-filter: blur(12px);
   border-top: 1px solid var(--stroke); gap: 6px;
 }
 /* Иконка над подписью — так подписи помещаются целиком и ряд не пестрит. */
 .tab {
+  min-width: 0;
   flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
   padding: 7px 4px; border: none; border-radius: 14px;
   background: none; color: var(--muted); font-family: inherit;
@@ -2179,3 +2185,14 @@ label.btn { display: block; box-sizing: border-box; text-align: center; }
 
 .workout-catalog, .shop-tools { margin: 18px 0; }
 .workout-catalog > summary, .shop-tools > summary { cursor: pointer; padding: 14px 0; font-weight: 600; }
+.clear-disclosure > summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 48px; cursor: pointer; list-style: none; font-weight: 600;
+}
+.clear-disclosure > summary::-webkit-details-marker { display: none; }
+.clear-disclosure > summary:focus-visible { outline: 2px solid var(--lilac); outline-offset: 4px; }
+.disclosure-action { color: var(--lilac); font-size: 12px; flex-shrink: 0; }
+.clear-disclosure .when-open { display: none; }
+.clear-disclosure[open] > summary .when-open { display: inline; }
+.clear-disclosure[open] > summary .when-closed { display: none; }
+.clear-disclosure[open] > summary { margin-bottom: 12px; }

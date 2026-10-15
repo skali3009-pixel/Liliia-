@@ -12,6 +12,11 @@ PYTHON="$DIR/.venv/bin/python"
 cd "$DIR"
 set -a; [ -f .env ] && . ./.env; set +a
 
+# Explicit read-only diagnostic; no Telegram delivery or personal content.
+if [ "${1:-}" = "--activity-json" ]; then
+  exec "$PYTHON" -m services.activity_audit
+fi
+
 # No inference, Telegram messages, DB writes, or secret output.
 if [ "${1:-}" = "--check-ai" ]; then
   exec "$PYTHON" -m services.provider_check

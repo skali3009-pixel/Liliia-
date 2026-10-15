@@ -2,6 +2,34 @@
    база одна, так что съеденное появляется здесь сразу после фото в чате. */
 
 const tg = window.Telegram?.WebApp;
+
+// Telegram may expose a layout viewport taller than the visible sheet on iOS.
+// Anchor the menu to its stable height, not the animated viewportHeight.
+function setupViewport() {
+  const root = document.documentElement;
+  const nav = document.querySelector('.tabs');
+  function sync() {
+    const visual = window.visualViewport;
+    const editing = document.activeElement?.matches('input, textarea, [contenteditable="true"]');
+    const stable = Number(tg?.viewportStableHeight);
+    let height = stable > 0 ? stable : window.innerHeight;
+    if (visual && editing) height = Math.min(height, visual.height + visual.offsetTop);
+    root.style.setProperty('--aura-viewport-height', `${height}px`);
+    if (nav) root.style.setProperty('--aura-nav-height', `${nav.getBoundingClientRect().height}px`);
+  }
+  tg?.onEvent?.('viewportChanged', (event) => {
+    if (event?.isStateStable !== false) sync();
+  });
+  tg?.onEvent?.('safeAreaChanged', sync);
+  tg?.onEvent?.('contentSafeAreaChanged', sync);
+  window.addEventListener('resize', sync);
+  window.visualViewport?.addEventListener('resize', sync);
+  window.visualViewport?.addEventListener('scroll', sync);
+  document.addEventListener('focusin', sync);
+  document.addEventListener('focusout', () => requestAnimationFrame(sync));
+  if (nav && window.ResizeObserver) new ResizeObserver(sync).observe(nav, { box: 'border-box' });
+  sync();
+}
 const RING_LENGTH = 327; // длина окружности радиуса 52
 const DIAL_LENGTH = 113; // длина окружности радиуса 18
 const RING_LENGTH_SMALL = RING_LENGTH; // кольцо шагов того же радиуса, меньше размером
@@ -6161,6 +6189,7 @@ function buildWeekdayPicker() {
 async function init() {
   tg?.ready();
   tg?.expand();
+  setupViewport();
 
   buildWeekdayPicker();
 
