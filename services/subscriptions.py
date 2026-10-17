@@ -271,7 +271,7 @@ async def stats(session: AsyncSession) -> dict:
     revenue = int(
         (await session.execute(
             select(func.coalesce(func.sum(Payment.amount), 0)).where(
-                Payment.paid_at >= month_ago, Payment.refunded.is_(False)
+                Payment.paid_at >= month_ago, Payment.refunded.is_(False), Payment.currency == "XTR"
             )
         )).scalar_one()
     )
@@ -300,4 +300,9 @@ async def stats(session: AsyncSession) -> dict:
         "recurring": await count(Subscription.is_recurring.is_(True)),
         "payers": payers,
         "stars_30d": revenue,
+        "rub_30d": int((await session.execute(
+            select(func.coalesce(func.sum(Payment.amount), 0)).where(
+                Payment.paid_at >= month_ago, Payment.refunded.is_(False), Payment.currency == "RUB"
+            )
+        )).scalar_one()),
     }

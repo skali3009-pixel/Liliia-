@@ -28,6 +28,7 @@ from services.step_sync import plural
 from services.subscriptions import Access, activate, check_access, grant_lifetime, stats
 from handlers.tariffs import send_tariffs, tariff_keyboard
 from services.tariffs import overview_text
+from services.platega import enabled as platega_enabled
 
 logger = logging.getLogger(__name__)
 router = Router(name="access")
@@ -77,7 +78,7 @@ async def send_paywall(message: Message, access: Access) -> None:
 @router.message(Command("subscription"))
 async def show_subscription(message: Message) -> None:
     """Состояние подписки: сколько осталось и как продлить."""
-    if not config.STARS_PAYMENTS_ENABLED:
+    if not config.STARS_PAYMENTS_ENABLED and not platega_enabled():
         await send_tariffs(message)
         return
     async with get_session() as session:
@@ -370,7 +371,7 @@ async def admin_stats(message: Message) -> None:
         f"С автопродлением: {data['recurring']}\n"
         f"Закончилась: {data['expired']}\n\n"
         f"Платили хоть раз: {data['payers']}\n"
-        f"Звёзд за 30 дней: {data['stars_30d']} ⭐\n\n"
+        f"Оплаты Platega за 30 дней: {data['rub_30d']} ₽\n\n"
         "Сводка сейчас: /report (или /report неделя)\n"
         "Выдать доступ вручную: /grant ID ДНЕЙ\n"
         "Открыть навсегда: /grant ID навсегда"

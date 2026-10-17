@@ -25,6 +25,7 @@ class SubscriptionStatus(str, enum.Enum):
 class SubscriptionSource(str, enum.Enum):
     TRIAL = "trial"
     STARS = "stars"        # оплата звёздами Telegram
+    PLATEGA = "platega"
     MANUAL = "manual"      # выдана владельцем вручную
 
 

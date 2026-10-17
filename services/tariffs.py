@@ -6,6 +6,7 @@ continues under its current access rules until the commercial module is ready.
 
 from dataclasses import asdict, dataclass
 from html import escape
+from services.platega import enabled
 
 
 TITLE = "Питание, движение и прогресс в одном месте"
@@ -38,7 +39,6 @@ class Tariff:
 
 PLANS = (
     Tariff("30", "На 30 дней", 30, 490, "Познакомиться с AURA и найти удобный ритм.", 120, 10),
-    Tariff("90", "На 90 дней", 90, 1290, "Для регулярного использования без продления каждый месяц.", 360, 30, 180),
 )
 
 
@@ -46,17 +46,20 @@ def find_plan(plan_id: str) -> Tariff | None:
     return next((plan for plan in PLANS if plan.id == plan_id), None)
 
 
+def status_text():
+    return "490 ₽ за 30 дней. Разовая оплата через Platega, без автосписаний." if enabled() else STATUS
+
+
 def catalogue() -> dict:
-    return {"title": TITLE, "status": STATUS, "sales_enabled": False,
+    return {"title": TITLE, "status": status_text(), "sales_enabled": enabled(),
             "benefits": list(BENEFITS), "allowance_note": ALLOWANCE_NOTE,
             "plans": [asdict(plan) for plan in PLANS]}
 
 
 def overview_text() -> str:
     return (f"AURA · Тарифы\n\n{TITLE}\n\n"
-            "Один состав функций — выбирай удобный срок.\n"
-            "30 дней — 490 ₽\n90 дней — 1 290 ₽\n\n"
-            f"{STATUS}\n\nНажми на срок, чтобы посмотреть состав и лимиты.")
+            "30 дней — 490 ₽\n\n"
+            f"{status_text()}\n\nНажми на срок, чтобы посмотреть описание.")
 
 
 def plan_text(plan: Tariff) -> str:
@@ -67,7 +70,7 @@ def plan_text(plan: Tariff) -> str:
             + "\n".join(f"• {benefit}" for benefit in BENEFITS)
             + f"\n\nПосле запуска: {plan.recognitions} распознаваний еды и подборов с полки, "
               f"{plan.dish_builds} созданий блюда с ИИ за {plan.days} дней.\n\n"
-            + f"{ALLOWANCE_NOTE}\n\n{STATUS}\n"
+            + f"{ALLOWANCE_NOTE}\n\n{status_text()}\n"
               "Просмотр тарифа ничего не списывает и не оформляет подписку.")
 
 
@@ -101,8 +104,8 @@ summary span{{font-weight:650}}summary strong{{font-size:32px;color:#f4d5ad}}sum
 li{{margin-bottom:10px}}ul{{padding-left:20px}}.saving{{color:#e1b9fc}}nav{{display:grid;gap:10px}}
 a{{color:#dcc2ff;min-height:44px;display:flex;align-items:center}}footer{{margin-top:28px}}
 </style></head><body><main><p class="eyebrow">AURA · Тарифы и цены</p>
-<h1>{escape(TITLE)}</h1><p>Один состав функций — выбирай удобный срок.</p>
-<p class="notice">{escape(STATUS)} Просмотр цены ничего не списывает.</p>
+<h1>{escape(TITLE)}</h1><p>Доступ на 30 дней.</p>
+<p class="notice">{escape(status_text())} Просмотр цены ничего не списывает.</p>
 {''.join(cards)}<p class="muted">AURA предназначена для взрослых. Расчёты КБЖУ приблизительные;
 сервис не заменяет консультацию врача.</p><footer><h2>Документы</h2><nav>{links}</nav></footer>
 </main></body></html>"""

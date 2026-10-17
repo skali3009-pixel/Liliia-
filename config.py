@@ -11,6 +11,11 @@ STARS_PAYMENTS_ENABLED = False
 
 load_dotenv()
 
+# Separate switch: configuring credentials does not start sales or close beta access.
+PLATEGA_ENABLED = os.getenv("PLATEGA_ENABLED", "0") == "1"
+PLATEGA_MERCHANT_ID = os.getenv("PLATEGA_MERCHANT_ID", "")
+PLATEGA_SECRET = os.getenv("PLATEGA_SECRET", "")
+
 
 def _get_required(name: str) -> str:
     value = os.getenv(name)

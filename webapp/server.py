@@ -96,6 +96,8 @@ def create_app(bot=None) -> web.Application:
     app.router.add_get("/health", healthcheck)
     app.router.add_get("/tariffs", tariffs_page)
     app.router.add_get("/tariffs.json", tariffs_catalogue)
+    from webapp.platega import callback as platega_callback
+    app.router.add_post("/payments/platega/callback", platega_callback)
     app.router.add_get("/legal/{slug}", legal_page)
     app.router.add_static("/static/", STATIC_DIR, name="static")
     return app

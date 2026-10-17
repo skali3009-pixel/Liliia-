@@ -111,6 +111,8 @@ async def apply_column_additions(connection: AsyncConnection) -> list[str]:
         applied.append(f"{table}.{column}")
         logger.info("Добавлена колонка %s.%s", table, column)
 
+    if connection.dialect.name == "postgresql":
+        await connection.execute(text("ALTER TYPE subscription_source_enum ADD VALUE IF NOT EXISTS 'PLATEGA'"))
     applied += await _widen_columns(connection)
     applied += await _create_indexes(connection)
     applied += await _run_cleanups(connection)

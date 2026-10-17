@@ -22,10 +22,8 @@ from webapp.server import create_app
 
 
 def test_price_and_allowances_match_the_period():
-    short, long = PLANS
+    short, = PLANS
     assert (short.days, short.price_rub, short.recognitions, short.dish_builds) == (30, 490, 120, 10)
-    assert (long.days, long.price_rub, long.recognitions, long.dish_builds) == (90, 1290, 360, 30)
-    assert long.saving_rub == short.price_rub * 3 - long.price_rub == 180
     assert catalogue()["sales_enabled"] is False
     for plan in PLANS:
         text = plan_text(plan)
@@ -45,8 +43,8 @@ def test_public_price_page_and_json_open_without_telegram_or_paid_access(monkeyp
             page = await client.get("/tariffs")
             assert page.status == 200
             body = await page.text()
-            assert body.count("<summary>") == 2
-            assert "490 ₽" in body and "1 290 ₽" in body
+            assert body.count("<summary>") == 1
+            assert "490 ₽" in body and "1 290 ₽" not in body
             for slug in ("offer", "privacy", "consent", "marketing"):
                 assert f"/legal/{slug}" in body
             # Publishing prices must not bypass authentication for private data.
@@ -66,12 +64,12 @@ def test_menu_press_routes_and_preserves_only_the_questionnaire(previous, expect
         assert await state.get_state() == expected
         message.answer.assert_awaited_once()
         markup = message.answer.call_args.kwargs["reply_markup"]
-        assert {b.callback_data for row in markup.inline_keyboard for b in row} == {"tariff:30", "tariff:90"}
+        assert {b.callback_data for row in markup.inline_keyboard for b in row} == {"tariff:30"}
         assert all(b.url is None for row in markup.inline_keyboard for b in row)
     asyncio.run(run())
 
 
-@pytest.mark.parametrize("plan_id", ["30", "90"])
+@pytest.mark.parametrize("plan_id", ["30"])
 def test_description_click_uses_the_same_catalogue_and_never_creates_an_invoice(plan_id):
     async def run():
         invoice = AsyncMock()

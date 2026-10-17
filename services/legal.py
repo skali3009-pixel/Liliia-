@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 LEGAL_DIR = Path(__file__).resolve().parent.parent / "legal"
 
 # Меняется вместе с текстами документов — тогда бот переспросит согласие.
-LEGAL_VERSION = "05.09.2026"
+LEGAL_VERSION = "17.10.2026"
 
 
 @dataclass(frozen=True)

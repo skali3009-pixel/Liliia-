@@ -26,7 +26,7 @@ OPEN_COMMANDS = {
     "/start", "/subscription", "/tariffs", "/admin", "/grant", "/help",
     # Документы, отзыв согласия и отказ от рекламы должны работать всегда:
     # закон не спрашивает, оплачена ли подписка.
-    "/legal", "/delete", "/stop_ads",
+    "/legal", "/delete", "/stop_ads", "/problem",
     # Приглашение — единственный способ вернуть доступ, не заплатив. Закрыть
     # его от того, у кого срок вышел, значит оставить человеку ровно одну
     # дверь и запереть вторую, которую сами же и нарисовали.
@@ -49,7 +49,7 @@ def _is_open(event: TelegramObject) -> bool:
 
     if isinstance(event, CallbackQuery):
         data = event.data or ""
-        return data.startswith(CB_BUY) or data.startswith(("legal:", "tariff:"))
+        return data.startswith(CB_BUY) or data.startswith(("legal:", "tariff:", "platega:"))
 
     return False
 

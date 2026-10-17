@@ -1,4 +1,5 @@
 .env
+.env.platega.local
 __pycache__/
 *.pyc
 .venv/
