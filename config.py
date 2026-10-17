@@ -15,6 +15,7 @@ load_dotenv()
 PLATEGA_ENABLED = os.getenv("PLATEGA_ENABLED", "0") == "1"
 PLATEGA_MERCHANT_ID = os.getenv("PLATEGA_MERCHANT_ID", "")
 PLATEGA_SECRET = os.getenv("PLATEGA_SECRET", "")
+PLATEGA_TEST_USER_IDS = {int(value) for value in os.getenv("PLATEGA_TEST_USER_IDS", "").split(",") if value.strip().isdigit()}
 
 
 def _get_required(name: str) -> str:

@@ -13,6 +13,9 @@ cd "$DIR"
 set -a; [ -f .env ] && . ./.env; set +a
 
 # Explicit read-only diagnostic; no Telegram delivery or personal content.
+if [ "${1:-}" = "--platega" ]; then
+  exec "$PYTHON" -m services.platega_ops "${2:-}" "${3:-}"
+fi
 if [ "${1:-}" = "--survey-preview" ]; then
   exec "$PYTHON" -m services.survey preview
 fi

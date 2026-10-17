@@ -17,6 +17,16 @@ from services.subscriptions import stats
 from webapp.server import create_app
 
 
+def test_pilot_does_not_enable_public_checkout(monkeypatch):
+    monkeypatch.setattr(config, "PLATEGA_ENABLED", False)
+    monkeypatch.setattr(config, "PLATEGA_TEST_USER_IDS", {501})
+    monkeypatch.setattr(config, "PLATEGA_MERCHANT_ID", "merchant")
+    monkeypatch.setattr(config, "PLATEGA_SECRET", "secret")
+    assert platega.enabled(501)
+    assert not platega.enabled(502)
+    assert not platega.enabled()
+
+
 @asynccontextmanager
 async def database(monkeypatch):
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")
@@ -82,7 +92,7 @@ def test_settlement_replay_amount_owner_and_refund(monkeypatch):
 
 @pytest.mark.parametrize("field,value", [("age", 16), ("legal_version", "old"), ("onboarding_completed", False)])
 def test_ineligible_profile_cannot_create_payment(monkeypatch, field, value):
-    monkeypatch.setattr(platega, "enabled", lambda: True)
+    monkeypatch.setattr(platega, "enabled", lambda *args: True)
     request = AsyncMock()
     monkeypatch.setattr(platega, "api", request)
     async def run():
@@ -98,7 +108,7 @@ def test_ineligible_profile_cannot_create_payment(monkeypatch, field, value):
 
 
 def test_order_reuses_link_and_never_retries_uncertain_post(monkeypatch):
-    monkeypatch.setattr(platega, "enabled", lambda: True)
+    monkeypatch.setattr(platega, "enabled", lambda *args: True)
     async def run():
         async with database(monkeypatch):
             request = AsyncMock(return_value={"transactionId": str(uuid4()), "url": "https://pay.platega.io/?id=test"})

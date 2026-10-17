@@ -29,8 +29,8 @@ def configured():
     return bool(config.PLATEGA_MERCHANT_ID and config.PLATEGA_SECRET)
 
 
-def enabled():
-    return config.PLATEGA_ENABLED and configured()
+def enabled(user_id=None):
+    return configured() and (config.PLATEGA_ENABLED or user_id in config.PLATEGA_TEST_USER_IDS)
 
 
 async def api(method, path, body=None):
@@ -53,7 +53,7 @@ async def api(method, path, body=None):
 
 
 async def create_order(user_id):
-    if not enabled():
+    if not enabled(user_id):
         raise PaymentError("Оплата пока не подключена.")
     async with get_session() as session:
         user = (await session.execute(select(User).where(User.id == user_id).with_for_update())).scalar_one_or_none()

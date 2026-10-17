@@ -1,6 +1,16 @@
 # Platega: 490 RUB / 30 days
 
-Prepared locally on 2026-10-17. Not deployed or live-tested yet.
+Deployed 2026-10-17 at 20:18 server time, commit 510a037. Sales remain disabled.
+Credentials installed through the existing set-key wrapper without printing values.
+Read-only Platega /balance/all auth: HTTP 200. Public /health: HTTP 200.
+Catalogue: sales_enabled=false, one plan (30 days / 490 RUB).
+Callback: missing credentials -> 401; correct credentials with empty JSON -> 400.
+This confirms route/authentication, not a real payment or successful settlement.
+No new error-priority service logs after restart. Merchant callback registration,
+controlled payment and concurrent PostgreSQL settlement verification remain open.
+Pre-release backup: /root/nutrition-backups/aura-20261017-2017.tar.gz;
+backup script also sent its normal owner notification/archive and reported an
+unbound WEEKS variable in retention cleanup. Archive creation succeeded.
 Stars stay disabled. No recurring mandates. PAYWALL remains a separate switch;
 enabling checkout must not silently remove existing beta or lifetime access.
 
