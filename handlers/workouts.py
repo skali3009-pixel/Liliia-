@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 
 from aiogram import F, Router
 from aiogram.types import InlineKeyboardMarkup, Message, WebAppInfo
@@ -21,8 +22,12 @@ router = Router(name="workouts")
 def _open_app_keyboard() -> InlineKeyboardMarkup | None:
     if not config.WEBAPP_URL:
         return None
+    parts = urlsplit(config.WEBAPP_URL)
+    query = dict(parse_qsl(parts.query))
+    query["screen"] = "gym"
+    url = urlunsplit(parts._replace(query=urlencode(query)))
     builder = InlineKeyboardBuilder()
-    builder.button(text="🏋️ Открыть тренировки", web_app=WebAppInfo(url=config.WEBAPP_URL))
+    builder.button(text="🏋️ Открыть тренировки", web_app=WebAppInfo(url=url))
     return builder.as_markup()
 
 

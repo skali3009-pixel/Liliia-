@@ -211,6 +211,8 @@ async def send_weekly_summaries(bot: Bot) -> None:
 
 async def check_subscriptions(bot: Bot) -> None:
     """Предупредить, у кого подписка на исходе, и закрыть истёкшие."""
+    if not config.PAYWALL:
+        return
     try:
         async with get_session() as session:
             soon = await expiring_soon(session, days=3)

@@ -15,6 +15,7 @@ import logging
 
 from aiogram import F, Router
 from aiogram.fsm.context import FSMContext
+from aiogram.filters import StateFilter
 from aiogram.types import Message
 
 from keyboards.main_menu import main_menu_keyboard
@@ -43,6 +44,12 @@ async def not_a_photo(message: Message, state: FSMContext) -> None:
         "словами: «тарелка борща и два куска хлеба».",
         reply_markup=main_menu_keyboard(),
     )
+
+
+@router.message(StateFilter(None), F.text, ~F.text.startswith("/"))
+async def free_food_text(message: Message, state: FSMContext) -> None:
+    from handlers.food import handle_food_text
+    await handle_food_text(message, state)
 
 
 @router.message()

@@ -548,7 +548,7 @@ def _rescaled(analysis: FoodAnalysis, new_weight_g: float) -> FoodAnalysis:
         carbs_g=scaled["carbs_g"],
         fiber_g=scaled["fiber_g"],
         confidence=analysis.confidence,
-        comment=analysis.comment,
+        comment=f"Порция изменена на {_num(new_weight_g)} г. КБЖУ пересчитаны пропорционально весу.",
     )
 
 
