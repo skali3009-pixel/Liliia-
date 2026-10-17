@@ -13,6 +13,15 @@ cd "$DIR"
 set -a; [ -f .env ] && . ./.env; set +a
 
 # Explicit read-only diagnostic; no Telegram delivery or personal content.
+if [ "${1:-}" = "--survey-preview" ]; then
+  exec "$PYTHON" -m services.survey preview
+fi
+if [ "${1:-}" = "--survey-report" ]; then
+  exec "$PYTHON" -m services.survey report
+fi
+if [ "${1:-}" = "--survey-send" ]; then
+  exec "$PYTHON" -m services.survey send "${2:-}"
+fi
 if [ "${1:-}" = "--activity-json" ]; then
   exec "$PYTHON" -m services.activity_audit
 fi

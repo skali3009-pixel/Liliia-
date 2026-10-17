@@ -21,6 +21,7 @@ from models.friendship import Friendship, Invite
 from models.fsm import FsmState
 from models.referral import Referral
 from models.steps import StepLog
+from models.survey import SurveyResponse
 from models.team import Team, TeamMember
 from models.user_prep import UserPrep
 from models.user import (

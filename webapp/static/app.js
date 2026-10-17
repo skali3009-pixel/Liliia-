@@ -90,32 +90,44 @@ window.addEventListener('unhandledrejection', (event) => {
 
 
 async function api(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Telegram-Init-Data': tg?.initData || '',
-      // Часовой пояс знает браузер — спрашивать его у человека незачем.
-      'X-Timezone': deviceZone(),
-      ...(options.headers || {}),
-    },
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    // Подписка кончилась — показываем экран оплаты вместо любого другого ответа.
-    if (response.status === 402 && body.need_subscription) {
-      showPaywall(body);
-      throw new Error('Подписка закончилась');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), (options.method || 'GET') === 'GET' ? 20000 : 120000);
+  try {
+    const response = await fetch(path, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Telegram-Init-Data': tg?.initData || '',
+        // Часовой пояс знает браузер — спрашивать его у человека незачем.
+        'X-Timezone': deviceZone(),
+        ...(options.headers || {}),
+      },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({}));
+      // Подписка кончилась — показываем экран оплаты вместо любого другого ответа.
+      if (response.status === 402 && body.need_subscription) {
+        showPaywall(body);
+        throw new Error('Подписка закончилась');
+      }
+      // Профиль младше 18: нормы и подбор выключены, объясняем один раз
+      // тем же окном, что и доступ, — вместо россыпи ошибок по экранам.
+      if (response.status === 403 && body.minor) {
+        showMinor(body.error);
+        throw new Error('Только для взрослых');
+      }
+      throw new Error(body.error || `Ошибка ${response.status}`);
     }
-    // Профиль младше 18: нормы и подбор выключены, объясняем один раз
-    // тем же окном, что и доступ, — вместо россыпи ошибок по экранам.
-    if (response.status === 403 && body.minor) {
-      showMinor(body.error);
-      throw new Error('Только для взрослых');
+    return await response.json();
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error((options.method || 'GET') === 'GET'
+        ? 'Сервер долго отвечает. Проверьте связь и попробуйте открыть раздел ещё раз.'
+        : 'Ответ задержался. Сначала проверьте дневник: запись могла сохраниться.');
     }
-    throw new Error(body.error || `Ошибка ${response.status}`);
-  }
-  return response.json();
+    throw error;
+  } finally { clearTimeout(timeout); }
 }
 
 function showMinor(text) {
@@ -6190,6 +6202,7 @@ async function init() {
   tg?.ready();
   tg?.expand();
   setupViewport();
+  document.getElementById('reload-app').onclick = () => location.reload();
 
   buildWeekdayPicker();
 
@@ -6425,6 +6438,7 @@ async function init() {
       e.message.includes('Профиль')
         ? 'Сначала пройди анкету в чате: /start'
         : `Не удалось загрузить: ${e.message}`;
+    document.getElementById('reload-app').hidden = false;
   }
 }
 

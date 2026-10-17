@@ -12,6 +12,7 @@
 </head>
 <body>
 <div id="loading" class="center">Загружаю…</div>
+<button id="reload-app" class="btn" hidden>Попробовать снова</button>
 
 <div id="app" hidden>
   <main id="screen-today" class="screen">
@@ -560,7 +561,7 @@
       <div id="photo-compare"></div>
       <p class="hint" id="photo-hint">Снимай в одинаковой позе и при одном свете — так разница видна честнее.</p>
     </section>
-    <details class="card body-card"><summary>Фигура и детали</summary>
+    <details class="card body-card clear-disclosure" open><summary><span>Фигура и детали</span><span class="disclosure-action"><span class="when-closed">Показать</span><span class="when-open">Свернуть</span></span></summary>
       <div class="card-head">
         <h2>Твоё тело</h2>
         <span id="body-note" class="muted"></span>
@@ -882,7 +883,7 @@
       <button class="btn tariff-entry" id="prof-tariffs">Тарифы и цены</button>
       <button class="btn ghost" id="prof-sync">Шаги с телефона</button>
     </section>
-    <details class="profile-group"><summary>Цель и параметры</summary>
+    <details class="profile-group clear-disclosure" open><summary><span>Цель и параметры</span><span class="disclosure-action"><span class="when-closed">Показать</span><span class="when-open">Свернуть</span></span></summary>
     <div class="prof-norms">
       <div class="eyebrow">Твоя норма в день</div>
       <div class="prof-norms-value" id="prof-norms">—</div>
@@ -944,7 +945,7 @@
     <!-- Что подбор понял из написанного: ошибку разбора здесь видно сразу. -->
     <p class="hint" id="prof-allergies-understood" hidden></p>
 
-    </details><details class="profile-group"><summary>Напоминания</summary>
+    </details><details class="profile-group clear-disclosure" open><summary><span>Напоминания</span><span class="disclosure-action"><span class="when-closed">Показать</span><span class="when-open">Свернуть</span></span></summary>
     <div class="prof-row switch">
       <span id="prof-reminders-label">Мягкие напоминания</span>
       <button class="chip" id="prof-reminders">включены</button>
@@ -979,8 +980,8 @@
     </div>
 
     </details>
-    <details class="profile-group"><summary>Документы</summary><div id="prof-documents"></div></details>
-    <details class="profile-group"><summary>Музыка SCALIA</summary><a id="prof-music" class="btn ghost" target="_blank" rel="noopener noreferrer">Открыть музыку SCALIA</a></details>
+    <details class="profile-group clear-disclosure" open><summary><span>Документы</span><span class="disclosure-action"><span class="when-closed">Показать</span><span class="when-open">Свернуть</span></span></summary><div id="prof-documents"></div></details>
+    <details class="profile-group clear-disclosure" open><summary><span>Музыка SCALIA</span><span class="disclosure-action"><span class="when-closed">Показать</span><span class="when-open">Свернуть</span></span></summary><a id="prof-music" class="btn ghost" target="_blank" rel="noopener noreferrer">Открыть музыку SCALIA</a></details>
     <div class="eyebrow ruled">Мои данные</div>
     <button class="btn" id="prof-export">📦 Выгрузить всё одним файлом</button>
     <p class="hint">Придёт в чат: таблицы с едой, водой, весом, тренировками и
