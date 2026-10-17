@@ -27,6 +27,25 @@ def test_pilot_does_not_enable_public_checkout(monkeypatch):
     assert not platega.enabled()
 
 
+def test_ruble_is_isolated_from_normal_orders(monkeypatch):
+    monkeypatch.setattr(platega, "enabled", lambda *args: True)
+    monkeypatch.setattr(config, "PLATEGA_TEST_USER_IDS", {501})
+    async def run():
+        async with database(monkeypatch):
+            request = AsyncMock(side_effect=lambda *a: {"transactionId": str(uuid4()), "url": "https://pay.platega.io/p/test"})
+            monkeypatch.setattr(platega, "api", request)
+            standard = await platega.create_order(501)
+            pilot = await platega.create_order(501, one_ruble_test=True)
+            assert standard.amount == 490 and pilot.amount == 1 and pilot.days == 30
+            assert request.call_args.args[2]["paymentDetails"]["amount"] == 1
+            repeat = await platega.create_order(501, one_ruble_test=True)
+            assert repeat.id == pilot.id and request.await_count == 2
+            with pytest.raises(platega.PaymentError):
+                await platega.create_order(502, one_ruble_test=True)
+            assert request.await_count == 2
+    asyncio.run(run())
+
+
 @asynccontextmanager
 async def database(monkeypatch):
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")

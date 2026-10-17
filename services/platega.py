@@ -52,7 +52,10 @@ async def api(method, path, body=None):
         raise PaymentError("Не удалось получить ответ платёжного сервиса.") from None
 
 
-async def create_order(user_id):
+async def create_order(user_id, *, one_ruble_test=False):
+    if one_ruble_test and user_id not in config.PLATEGA_TEST_USER_IDS:
+        raise PaymentError("Тестовый платёж недоступен для этого аккаунта.")
+    amount = 1 if one_ruble_test else PRICE
     if not enabled(user_id):
         raise PaymentError("Оплата пока не подключена.")
     async with get_session() as session:
@@ -67,20 +70,21 @@ async def create_order(user_id):
             raise PaymentError("У тебя бессрочный доступ — платить не нужно.")
         order = (await session.execute(select(PlategaOrder).where(
             PlategaOrder.user_id == user_id,
+            PlategaOrder.amount == amount,
             PlategaOrder.status.in_(["CREATING", "PENDING"])
         ).order_by(PlategaOrder.created_at.desc()).limit(1))).scalar_one_or_none()
         if order:
             if order.url:
                 return order
             raise PaymentError("Предыдущий счёт ещё проверяется. Не оплачивай повторно; напиши /problem.")
-        order = PlategaOrder(id=uuid4().hex, user_id=user_id, amount=PRICE, days=DAYS, created_at=now())
+        order = PlategaOrder(id=uuid4().hex, user_id=user_id, amount=amount, days=DAYS, created_at=now())
         session.add(order)
         await session.commit()
         order_id = order.id
     # No retry on POST: an uncertain response can already mean a real order.
     data = await api("POST", "/v2/transaction/process", {
-        "paymentDetails": {"amount": PRICE, "currency": "RUB"},
-        "description": "AURA — доступ на 30 дней, без автопродления",
+        "paymentDetails": {"amount": amount, "currency": "RUB"},
+        "description": "AURA — тест оплаты 1 рубль, 30 дней" if one_ruble_test else "AURA — доступ на 30 дней, без автопродления",
         "return": RETURN_URL, "failedUrl": RETURN_URL,
         "payload": order_id, "metadata": {"userId": str(user_id)},
     })
