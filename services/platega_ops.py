@@ -22,13 +22,28 @@ async def main():
                     "consent_current": user.legal_version == LEGAL_VERSION and bool(user.legal_accepted_at),
                     "expires_at": sub.expires_at.isoformat() if sub else None,
                     "lifetime": sub.lifetime if sub else False}))
-        elif action in {"create", "send-test-ruble"}:
+        elif action in {"create", "send-test-ruble", "replace-test-ruble"}:
             user_id = int(value)
             import config
             if user_id not in config.PLATEGA_TEST_USER_IDS:
                 raise platega.PaymentError("Account is not enabled for payment testing")
-            order = await platega.create_order(user_id, one_ruble_test=action == "send-test-ruble")
-            if action == "send-test-ruble":
+            if action == "replace-test-ruble":
+                from models import PlategaOrder
+                async with get_session() as session:
+                    old = (await session.execute(select(PlategaOrder).where(
+                        PlategaOrder.user_id == user_id, PlategaOrder.amount == 1,
+                        PlategaOrder.status == "PENDING").with_for_update())).scalars().all()
+                    for item in old:
+                        data = await platega.api("GET", "/transaction/" + item.transaction_id)
+                        if (data.get("status") != "PENDING" or data.get("payload") != item.id
+                                or data.get("id") != item.transaction_id or data.get("paidAmount", 0) != 0):
+                            raise platega.PaymentError("Old payment needs review before replacement")
+                        # Local replacement is NOT provider cancellation. A late payment
+                        # still goes through normal verification and fulfillment.
+                        item.status = "SUPERSEDED"
+                    await session.commit()
+            order = await platega.create_order(user_id, one_ruble_test=action != "create")
+            if action != "create":
                 from aiogram import Bot
                 from aiogram.utils.keyboard import InlineKeyboardBuilder
                 keyboard = InlineKeyboardBuilder()
@@ -37,9 +52,11 @@ async def main():
                 keyboard.adjust(1)
                 async with Bot(config.BOT_TOKEN) as bot:
                     message = await bot.send_message(user_id,
-                        "Тест подключения Platega — 1 ₽. Это реальный разовый платёж, без автосписаний. "
+                        "Новый тест подключения Platega — 1 ₽ плюс комиссия выбранного способа оплаты. "
+                        "Итоговую сумму Platega показывает до подтверждения. Это реальный разовый платёж, без автосписаний. "
                         "После подтверждения начислим 30 дней доступа.\n\n"
-                        "Предыдущую ссылку на 490 ₽ не оплачивай. Обычный тариф остаётся 490 ₽ за 30 дней.",
+                        "Предыдущие ссылки не оплачивай: отменить неоплаченный счёт через API Platega не удалось. "
+                        "Обычный тариф остаётся 490 ₽ за 30 дней.",
                         reply_markup=keyboard.as_markup())
                     print(json.dumps({"telegram_message_id": message.message_id, "sent": True}))
             print(json.dumps({"order_id": order.id, "url": order.url, "amount": order.amount, "days": order.days}))

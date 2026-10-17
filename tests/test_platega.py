@@ -17,6 +17,14 @@ from services.subscriptions import stats
 from webapp.server import create_app
 
 
+@pytest.mark.parametrize("total,fee,expected,result", [
+    ("1.05", "0.05", 1, True), ("1", "0", 1, True),
+    ("0.95", "0.05", 1, False), ("1.05", "0", 1, False),
+    ("NaN", "0", 1, False), ("1.05", "-0.05", 1, False)])
+def test_provider_total_and_commission(total, fee, expected, result):
+    assert platega.amount_matches({"amount": total}, {"comission": fee}, expected) is result
+
+
 def test_pilot_does_not_enable_public_checkout(monkeypatch):
     monkeypatch.setattr(config, "PLATEGA_ENABLED", False)
     monkeypatch.setattr(config, "PLATEGA_TEST_USER_IDS", {501})

@@ -33,6 +33,15 @@ def enabled(user_id=None):
     return configured() and (config.PLATEGA_ENABLED or user_id in config.PLATEGA_TEST_USER_IDS)
 
 
+def amount_matches(details, data, expected):
+    """Only server-fetched totals: some methods add the payer's commission."""
+    total = Decimal(str(details["amount"]))
+    fee = Decimal(str(data.get("comission", 0)))
+    principal = Decimal(expected)
+    return (total.is_finite() and fee.is_finite() and fee >= 0
+            and (total == principal or total - fee == principal))
+
+
 async def api(method, path, body=None):
     if not configured():
         raise PaymentError("Оплата ещё не настроена.")
@@ -126,7 +135,7 @@ async def reconcile(transaction_id, *, user_id=None):
             valid = (str(UUID(data["id"])) == transaction_id
                      and (not order.transaction_id or order.transaction_id == transaction_id)
                      and details["currency"] == "RUB"
-                     and Decimal(str(details["amount"])) == Decimal(order.amount))
+                     and amount_matches(details, data, order.amount))
         except (KeyError, TypeError, ValueError, InvalidOperation):
             valid = False
         if not valid:
