@@ -51,6 +51,8 @@ INDEXES: list[tuple[str, str, str]] = [
 ]
 
 COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
+    ("platega_orders", "applied_via", "VARCHAR(24)"),
+    ("platega_orders", "callback_verified_at", "TIMESTAMP WITH TIME ZONE"),
     ("users", "onboarding_interest", "VARCHAR(20)"),
     ("nutrition_dishes", "prep_codes", "VARCHAR(200) NOT NULL DEFAULT ''"),
     ("nutrition_dishes", "estimated", "BOOLEAN NOT NULL DEFAULT FALSE"),

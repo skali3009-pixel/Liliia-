@@ -60,7 +60,7 @@ async def main():
                         reply_markup=keyboard.as_markup())
                     print(json.dumps({"telegram_message_id": message.message_id, "sent": True}))
             print(json.dumps({"order_id": order.id, "url": order.url, "amount": order.amount, "days": order.days}))
-        elif action == "check":
+        elif action in {"check", "audit"}:
             # Operator status is limited to configured test users.
             import config
             from models import PlategaOrder
@@ -69,6 +69,22 @@ async def main():
                 if not order or order.user_id not in config.PLATEGA_TEST_USER_IDS:
                     raise platega.PaymentError("Test order not found")
                 user_id = order.user_id
+                if action == "audit":
+                    from models import PlategaCallback, PlategaNotice, Payment
+                    callbacks = (await session.execute(select(PlategaCallback).where(
+                        PlategaCallback.transaction_id == order.transaction_id).order_by(PlategaCallback.received_at))).scalars().all()
+                    notice = await session.get(PlategaNotice, value)
+                    count = (await session.execute(select(func.count(Payment.id)).where(
+                        Payment.charge_id == "platega:" + (order.transaction_id or "")))).scalar_one()
+                    iso = lambda dt: dt.isoformat() if dt else None
+                    print(json.dumps({"order_id": value, "status": order.status,
+                        "applied_at": iso(order.applied_at), "applied_via": order.applied_via,
+                        "callback_verified_at": iso(order.callback_verified_at), "ledger_rows": count,
+                        "callbacks": [{"received_at": iso(c.received_at), "result": c.result, "origin": c.origin} for c in callbacks],
+                        "notification": {"sent_at": iso(notice.sent_at), "attempts": notice.attempts,
+                            "next_attempt_at": iso(notice.next_attempt_at), "last_error": notice.last_error} if notice else None,
+                        "public_sales": config.PLATEGA_ENABLED, "paywall": config.PAYWALL}))
+                    return
             print(json.dumps({"status": await platega.check_order(value, user_id)}))
         else:
             raise ValueError("Unknown operation")

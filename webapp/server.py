@@ -98,6 +98,10 @@ def create_app(bot=None) -> web.Application:
     app.router.add_get("/tariffs.json", tariffs_catalogue)
     from webapp.platega import callback as platega_callback
     app.router.add_post("/payments/platega/callback", platega_callback)
+    from webapp.platega import subscription, create_order, check_order
+    app.router.add_get("/api/subscription", subscription)
+    app.router.add_post("/api/platega/order", create_order)
+    app.router.add_post("/api/platega/check", check_order)
     app.router.add_get("/legal/{slug}", legal_page)
     app.router.add_static("/static/", STATIC_DIR, name="static")
     return app

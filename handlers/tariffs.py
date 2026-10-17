@@ -13,19 +13,19 @@ from services import platega
 router = Router(name="tariffs")
 
 
-def tariff_keyboard():
+def tariff_keyboard(user_id=None):
     builder = InlineKeyboardBuilder()
     for plan in PLANS:
         builder.button(text=f"{plan.days} дней · {plan.price_rub:,} ₽".replace(",", " "),
                        callback_data=f"tariff:{plan.id}")
-    if platega.enabled():
+    if platega.enabled(user_id):
         builder.button(text="Оплатить 490 ₽ · 30 дней", callback_data="platega:buy")
     builder.adjust(1)
     return builder.as_markup()
 
 
 async def send_tariffs(message: Message):
-    await message.answer(overview_text(), reply_markup=tariff_keyboard())
+    await message.answer(overview_text(), reply_markup=tariff_keyboard(getattr(getattr(message, "from_user", None), "id", None)))
 
 
 @router.message(Command("tariffs"))
@@ -46,7 +46,7 @@ async def show_plan(callback: CallbackQuery):
         await callback.answer("Тариф не найден. Открой /tariffs заново.", show_alert=True)
         return
     await callback.answer()
-    await callback.message.answer(plan_text(plan), reply_markup=tariff_keyboard())
+    await callback.message.answer(plan_text(plan), reply_markup=tariff_keyboard(getattr(getattr(callback, "from_user", None), "id", None)))
 
 
 @router.callback_query(F.data == "platega:buy")
@@ -63,7 +63,9 @@ async def buy_platega(callback: CallbackQuery):
     builder.adjust(1)
     await callback.message.answer(
         "AURA на 30 дней — 490 ₽. Автосписаний нет.\n"
-        "После оплаты нажми «Проверить оплату». Оставшиеся дни сохранятся.\n"
+        "После подтверждения платежа доступ продлится автоматически, бот пришлёт сообщение. "
+        "Если сообщение задержалось, нажми «Проверить оплату». Оставшиеся дни сохранятся.\n"
+        "Комиссия способа оплаты, если есть, показана на странице Platega до оплаты.\n"
         "Условия покупки и возврата: /legal. Помощь: /problem.",
         reply_markup=builder.as_markup(),
     )
@@ -73,11 +75,27 @@ async def buy_platega(callback: CallbackQuery):
 async def check_platega(callback: CallbackQuery):
     await callback.answer()
     try:
-        status = await platega.check_order(callback.data.rsplit(":", 1)[-1], callback.from_user.id)
-        text = {"CONFIRMED": "Оплата подтверждена, 30 дней доступа начислены. Срок: /subscription",
+        status = await platega.check_order(callback.data.rsplit(":", 1)[-1], callback.from_user.id, source="bot_check", bot=callback.bot)
+        view = await platega.subscription_view(callback.from_user.id)
+        text = {"CONFIRMED": "Оплата подтверждена. " + view["subscription_text"],
                 "PENDING": "Оплата ещё не подтверждена. Проверь через минуту; повторно платить не нужно.",
                 "CANCELED": "Счёт отменён. Новый можно открыть через /tariffs.",
                 "CHARGEBACKED": "По платежу оформлен возврат. Помощь: /problem."}[status]
     except platega.PaymentError as error:
         text = str(error)
     await callback.message.answer(text)
+
+
+@router.callback_query(F.data == "platega:subscription")
+async def subscription_status(callback: CallbackQuery):
+    await callback.answer()
+    await send_subscription(callback.message, callback.from_user.id)
+
+
+async def send_subscription(message, user_id):
+    view = await platega.subscription_view(user_id)
+    builder = InlineKeyboardBuilder()
+    if view["checkout_enabled"]:
+        builder.button(text="Продлить на 30 дней · 490 ₽", callback_data="platega:buy")
+    await message.answer(view["subscription_text"] + "\n" + view["checkout_note"],
+                         reply_markup=builder.as_markup() if view["checkout_enabled"] else None)

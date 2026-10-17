@@ -139,7 +139,8 @@ async def auth_middleware(request: web.Request, handler):
 
         # Приложение — часть подписки: без неё показываем экран оплаты, но
         # данные не трогаем, они дождутся возвращения.
-        if config.PAYWALL:
+        from webapp.platega import ACCESS_ROUTES
+        if config.PAYWALL and (request.method, request.path) not in ACCESS_ROUTES:
             access = await check_access(session, user.id)
             if not access.allowed:
                 return web.json_response(
@@ -147,7 +148,7 @@ async def auth_middleware(request: web.Request, handler):
                         "error": "Подписка закончилась",
                         "need_subscription": True,
                         "access": access.to_dict(),
-                        "price_stars": config.SUB_PRICE_STARS,
+                        "price_rub": 490,
                     },
                     status=402,
                 )

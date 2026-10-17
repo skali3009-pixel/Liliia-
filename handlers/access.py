@@ -78,6 +78,11 @@ async def send_paywall(message: Message, access: Access) -> None:
 @router.message(Command("subscription"))
 async def show_subscription(message: Message) -> None:
     """Состояние подписки: сколько осталось и как продлить."""
+    user_id = getattr(getattr(message, "from_user", None), "id", None)
+    if not config.STARS_PAYMENTS_ENABLED and user_id is not None:
+        from handlers.tariffs import send_subscription
+        await send_subscription(message, user_id)
+        return
     if not config.STARS_PAYMENTS_ENABLED and not platega_enabled():
         await send_tariffs(message)
         return

@@ -890,6 +890,7 @@ button:focus-visible, .tab:focus-visible {
   background: rgba(6, 5, 12, .72); backdrop-filter: blur(6px);
 }
 .tariff-entry { width: 100%; margin: 8px 0 14px; }
+#tariffs-billing .btn { display: block; width: 100%; text-align: center; text-decoration: none; margin: 10px 0; }
 .sheet-card.tariffs-panel { max-height: 88vh; overflow-y: auto; background: linear-gradient(180deg, #1B1734, var(--surface)); }
 .tariffs-panel > .sheet-head { position: sticky; top: -18px; z-index: 2; background: #1B1734; padding: 12px 0; }
 .tariffs-lead { font-size: 19px; font-weight: 650; line-height: 1.4; }

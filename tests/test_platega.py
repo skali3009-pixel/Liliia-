@@ -160,7 +160,7 @@ def test_callback_authentication_precedes_api_and_ignores_body_status(monkeypatc
     check = AsyncMock(return_value="PENDING")
     monkeypatch.setattr(platega, "reconcile", check)
     async def run():
-        async with TestClient(TestServer(create_app())) as client:
+        async with database(monkeypatch), TestClient(TestServer(create_app())) as client:
             body = {"id": str(uuid4()), "status": "CONFIRMED", "amount": 490}
             result = await client.post("/payments/platega/callback", json=body)
             assert result.status == 401
@@ -168,5 +168,5 @@ def test_callback_authentication_precedes_api_and_ignores_body_status(monkeypatc
             result = await client.post("/payments/platega/callback", json=body,
                                       headers={"X-MerchantId": "merchant", "X-Secret": "secret"})
             assert result.status == 200
-            check.assert_awaited_once_with(body["id"])
+            check.assert_awaited_once_with(body["id"], source="callback", bot=None)
     asyncio.run(run())

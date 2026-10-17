@@ -134,19 +134,26 @@ function showMinor(text) {
   document.getElementById('paywall-title').textContent = 'AURA — для взрослых';
   document.getElementById('paywall-text').textContent = text;
   document.getElementById('paywall-open').textContent = 'Вернуться в чат';
+  document.getElementById('paywall-open').onclick = () => tg?.close?.();
   document.getElementById('paywall').querySelector('.pop-icon').textContent = '🌙';
   document.getElementById('paywall').hidden = false;
   document.getElementById('loading').hidden = true;
 }
 
 function showPaywall(body) {
-  const price = body.price_stars ? `${body.price_stars} ⭐ в месяц` : 'подписка';
+  const price = body.price_rub ? `${body.price_rub} ₽ за 30 дней` : 'подписка';
   const trial = body.access?.is_trial;
   document.getElementById('paywall-title').textContent =
     trial ? 'Пробный период закончился' : 'Доступ закрыт';
   document.getElementById('paywall-text').textContent =
     `Всё записанное сохранено и ждёт тебя. Чтобы продолжить, оформи доступ — ` +
-    `${price}. Счёт выставляет бот в чате.`;
+    `${price}. Автосписаний нет.`;
+  document.getElementById('paywall-open').textContent = 'Тариф и оплата';
+  document.getElementById('paywall-open').onclick = () => {
+    billingFromPaywall = true;
+    document.getElementById('paywall').hidden = true;
+    openTariffs();
+  };
   document.getElementById('paywall').hidden = false;
   document.getElementById('loading').hidden = true;
 }
@@ -6449,8 +6456,16 @@ function closeRecordEntry() { document.getElementById('record-sheet').hidden = t
 
 let tariffCatalogue = null;
 let tariffReturnFocus = null;
+let billingOrderId = null;
+let billingTimer = null;
+let billingDeadline = 0;
+let billingBusy = false;
+let billingStatus = null;
+let billingFromPaywall = false;
 function closeTariffs() {
+  clearTimeout(billingTimer);
   document.getElementById('tariffs-sheet').hidden = true;
+  if (billingFromPaywall) document.getElementById('paywall').hidden = false;
   tariffReturnFocus?.focus();
 }
 async function openTariffs() {
@@ -6458,6 +6473,8 @@ async function openTariffs() {
   const sheet = document.getElementById('tariffs-sheet');
   sheet.hidden = false;
   document.getElementById('tariffs-close').focus();
+  billingDeadline = Date.now() + 5 * 60 * 1000;
+  refreshBilling();
   try {
     if (!tariffCatalogue) tariffCatalogue = await api('/tariffs.json');
     renderTariffs(tariffCatalogue);
@@ -6465,9 +6482,95 @@ async function openTariffs() {
     document.getElementById('tariffs-status').textContent = 'Не удалось загрузить тарифы. Закрой окно и попробуй ещё раз.';
   }
 }
+async function refreshBilling() {
+  clearTimeout(billingTimer);
+  if (billingBusy || document.getElementById('tariffs-sheet').hidden) return;
+  billingBusy = true;
+  try {
+    const suffix = billingOrderId ? `?order_id=${encodeURIComponent(billingOrderId)}` : '';
+    const data = await api('/api/subscription' + suffix);
+    renderBilling(data);
+    if (data.order?.status === 'PENDING' && Date.now() < billingDeadline && !document.hidden) {
+      billingTimer = setTimeout(refreshBilling, 5000);
+    }
+  } catch (error) {
+    const panel = document.getElementById('tariffs-billing'); panel.replaceChildren();
+    const text = document.createElement('p'); text.textContent = 'Не удалось проверить подписку. ' + error.message;
+    const retry = document.createElement('button'); retry.className = 'btn'; retry.textContent = 'Обновить статус';
+    retry.onclick = refreshBilling; panel.append(text, retry);
+  } finally { billingBusy = false; }
+}
+function renderBilling(data) {
+  billingStatus = data.checkout_enabled ? 'Разовая оплата на 30 дней. Подтверждение придёт в чат AURA.' : null;
+  if (billingStatus) document.getElementById('tariffs-status').textContent = billingStatus;
+  document.getElementById('prof-access').textContent = data.subscription_text;
+  const panel = document.getElementById('tariffs-billing'); panel.replaceChildren();
+  const expiry = document.createElement('p'); expiry.textContent = data.subscription_text;
+  const note = document.createElement('p'); note.className = 'hint'; note.textContent = data.checkout_note;
+  panel.append(expiry, note);
+  const order = data.order;
+  if (order?.status === 'PENDING' && order.url) {
+    const message = document.createElement('p'); message.textContent = 'Счёт ожидает оплаты. После подтверждения доступ продлится автоматически. Если уже оплатил, повторно платить не нужно.';
+    panel.append(message);
+    try {
+      const url = new URL(order.url);
+      if (url.protocol !== 'https:' || url.hostname !== 'pay.platega.io' || url.username || url.password) throw new Error();
+      const link = document.createElement('a'); link.className = 'btn'; link.href = url.href;
+      link.textContent = `Перейти к оплате · ${order.amount} ₽`; link.target = '_blank'; link.rel = 'noopener noreferrer';
+      if (tg?.openLink) link.onclick = (event) => { event.preventDefault(); tg.openLink(url.href); };
+      panel.append(link);
+    } catch (_) { /* Keep the check action; never open an unverified payment URL. */ }
+    const fee = document.createElement('p'); fee.className = 'hint';
+    fee.textContent = 'Комиссия выбранного способа, если есть, показана на странице Platega до оплаты.';
+    const check = document.createElement('button'); check.className = 'btn ghost'; check.textContent = 'Я оплатил — проверить';
+    check.onclick = async () => {
+      check.disabled = true; clearTimeout(billingTimer);
+      try {
+        const result = await api('/api/platega/check', {method: 'POST', body: JSON.stringify({order_id: order.id})});
+        billingOrderId = order.id; renderBilling(result);
+        if (result.checked_status === 'PENDING') {
+          toast('Платёж пока не подтверждён. Подожди минуту.');
+          if (!document.hidden && Date.now() < billingDeadline) billingTimer = setTimeout(refreshBilling, 5000);
+        }
+      } catch (error) { toast(error.message); }
+      finally { check.disabled = false; }
+    };
+    panel.append(fee, check);
+  } else if (order?.status === 'CONFIRMED') {
+    const done = document.createElement('p'); done.textContent = '✅ Оплата подтверждена. Срок подписки указан выше.'; panel.append(done);
+  } else if (order?.status === 'CREATING') {
+    const wait = document.createElement('p'); wait.textContent = 'Счёт ещё проверяется. Повторно не оплачивай; если ожидание затянулось, напиши /problem в чате.'; panel.append(wait);
+  } else if (order?.status === 'CHARGEBACKED' || order?.status === 'CANCELED') {
+    const ended = document.createElement('p'); ended.textContent = order.status === 'CHARGEBACKED' ? 'По последнему платежу оформлен возврат.' : 'Последний счёт отменён.'; panel.append(ended);
+  }
+  if (data.access.allowed && order?.status === 'CONFIRMED') {
+    const resume = document.createElement('button'); resume.className = 'btn'; resume.textContent = 'Продолжить в AURA';
+    resume.onclick = () => location.reload(); panel.append(resume);
+  }
+  if (data.checkout_enabled && !['PENDING', 'CREATING'].includes(order?.status)) {
+    const buy = document.createElement('button'); buy.className = 'btn';
+    buy.textContent = data.access.allowed ? 'Продлить ещё на 30 дней · 490 ₽' : 'Оформить 30 дней · 490 ₽';
+    if (data.access.allowed) buy.classList.add('ghost');
+    buy.onclick = async () => {
+      buy.disabled = true;
+      try {
+        const created = await api('/api/platega/order', {method: 'POST', body: '{}'});
+        billingOrderId = created.id; billingDeadline = Date.now() + 5 * 60 * 1000;
+        await refreshBilling();
+      } catch (error) { toast(error.message); }
+      finally { buy.disabled = false; }
+    };
+    panel.append(buy);
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && !document.getElementById('tariffs-sheet').hidden) {
+    billingDeadline = Date.now() + 5 * 60 * 1000; refreshBilling();
+  }
+});
 function renderTariffs(catalogue) {
   document.getElementById('tariffs-lead').textContent = catalogue.title;
-  document.getElementById('tariffs-status').textContent = catalogue.status;
+  document.getElementById('tariffs-status').textContent = billingStatus || catalogue.status;
   const plans = document.getElementById('tariffs-plans');
   plans.replaceChildren();
   const detail = document.getElementById('tariffs-description');
@@ -6512,7 +6615,7 @@ document.addEventListener('keydown', (event) => {
   if (sheet.hidden) return;
   if (event.key === 'Escape') closeTariffs();
   if (event.key === 'Tab') {
-    const buttons = [...sheet.querySelectorAll('button')];
+    const buttons = [...sheet.querySelectorAll('button:not(:disabled), a[href]')].filter(el => el.getClientRects().length);
     const first = buttons[0], last = buttons[buttons.length - 1];
     if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
     else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
@@ -6525,6 +6628,9 @@ function safePublicLink(value) {
 }
 function renderEntryPoints(links) {
   document.getElementById('prof-access').textContent = links.access_label || 'Действуют текущие условия доступа.';
+  api('/api/subscription').then(data => {
+    document.getElementById('prof-access').textContent = data.subscription_text;
+  }).catch(() => {});
   const docs = document.getElementById('prof-documents'); docs.replaceChildren();
   for (const doc of links.documents || []) {
     const url = safePublicLink(doc.url); if (!url) continue;

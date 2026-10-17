@@ -1,5 +1,47 @@
 # Platega: 490 RUB / 30 days
 
+## Payment journey update, 2026-10-18
+
+User authorized callback verification and completing checkout in the bot/Mini App.
+Commission settings are handled by the user. Public checkout and PAYWALL remain off;
+the existing configured pilot account can use the monthly checkout. No recurring charges.
+
+- Authenticated Mini App routes: GET `/api/subscription`, POST `/api/platega/order`,
+  POST `/api/platega/check`. Ownership is derived from signed Telegram initData.
+  Only these exact method/path pairs bypass an expired subscription; profile/adult checks remain.
+- The client cannot set the price, duration or recipient. Regular checkout is 490 RUB/30 days;
+  one-ruble testing remains an operator-only command restricted to pilot accounts.
+- Status reads never call the provider or grant access. The pending screen refreshes database
+  status while visible for up to five minutes, and refreshes again on returning to the app.
+  The explicit check button is a fallback and is attributed separately.
+- The profile, tariff screen and `/subscription` show the exact expiry in the user's timezone.
+- `platega_callbacks` records authenticated receipt time/result without headers or raw bodies.
+  `platega_orders.applied_via` records the FIRST grant source; later checks cannot rewrite it.
+  Historical grants have NULL source because the original trigger was not recorded.
+- A diagnostic signed replay is labelled `diagnostic_replay` with `X-Aura-Diagnostic: replay`.
+  It does not set `callback_verified_at`, and must never be cited as provider delivery proof.
+- Settlement and its notification outbox are committed together. Callback/check delivery
+  failures do not undo access. A scheduler retries pending messages; eight failed attempts
+  or TelegramForbidden stop retries. `status --platega audit ORDER_ID` exposes delivery status
+  for pilot orders. Ordinary repeated callbacks cannot grant twice or resend the notification.
+  Telegram has no delivery idempotency key: a process crash between send and commit can
+  cause a duplicate message, though access remains idempotent.
+- A verified pre-update paid order can get one missing confirmation message, with no extra
+  days. There is no historical-user notification sweep.
+
+Local validation: 53 targeted tests passed, then 19 payment tests passed after adding
+the legacy-order/replay case. Browser QA used a disposable local database and fake provider;
+verified creating a standard-price order, pending UI, callback settlement, expiry in profile
+and confirmed screen. No money was transferred by those local tests.
+Pre-release local-only backup: `/root/nutrition-backups/aura-20261018-0118.tar.gz`.
+Production release and verification outcomes are recorded separately after deployment.
+
+Remaining acceptance: a real provider-origin callback (dashboard retry of an already paid
+transaction if supported, otherwise a controlled one-ruble payment without pressing Check).
+Do not infer that the initial real payment used callback from its CONFIRMED status alone.
+
+## Initial deployment, 2026-10-17 (historical)
+
 Deployed 2026-10-17 at 20:18 server time, commit 510a037. Sales remain disabled.
 Credentials installed through the existing set-key wrapper without printing values.
 Read-only Platega /balance/all auth: HTTP 200. Public /health: HTTP 200.

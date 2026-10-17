@@ -303,6 +303,9 @@ async def watch_health(bot: Bot) -> None:
 
 def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone="UTC")
+    from services.platega import retry_notices
+    scheduler.add_job(retry_notices, "interval", minutes=1, args=[bot],
+                      id="payment_notices", max_instances=1, coalesce=True)
     scheduler.add_job(send_due_reminders, "cron", minute="*", args=[bot], id="supplements")
     # Умные подсказки: раз в час по местному времени человека. Проверяем
     # каждую минуту, но работа начинается только в тех поясах, где сейчас

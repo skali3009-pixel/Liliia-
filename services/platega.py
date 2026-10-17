@@ -4,6 +4,8 @@ The callback is authenticated, then transaction details are fetched from Platega
 Order state, ledger and access are committed together under the user row lock.
 """
 from datetime import timedelta
+import logging
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlsplit
 from uuid import UUID, uuid4
@@ -13,12 +15,13 @@ from sqlalchemy import select
 
 import config
 from db import get_session
-from models import Payment, PlategaOrder, Subscription, SubscriptionSource, SubscriptionStatus, User
+from models import Payment, PlategaOrder, PlategaNotice, Subscription, SubscriptionSource, SubscriptionStatus, User
 from services.subscriptions import _aware, now
 
 PRICE = 490
 DAYS = 30
 RETURN_URL = "https://t.me/Scalia_fit_food_bot"
+logger = logging.getLogger(__name__)
 
 
 class PaymentError(Exception):
@@ -117,7 +120,7 @@ async def create_order(user_id, *, one_ruble_test=False):
         return order
 
 
-async def reconcile(transaction_id, *, user_id=None):
+async def reconcile(transaction_id, *, user_id=None, source="operator", bot=None):
     try:
         transaction_id = str(UUID(transaction_id))
     except (ValueError, TypeError, AttributeError):
@@ -144,6 +147,8 @@ async def reconcile(transaction_id, *, user_id=None):
         if status not in {"PENDING", "CONFIRMED", "CANCELED", "CHARGEBACKED"}:
             raise PaymentError("Неизвестный статус платежа.")
         order.transaction_id = transaction_id
+        if source == "callback":
+            order.callback_verified_at = now()
         sub = (await session.execute(select(Subscription).where(Subscription.user_id == order.user_id).with_for_update())).scalar_one_or_none()
         if status == "CONFIRMED" and order.applied_at is None and order.status != "CHARGEBACKED":
             if sub is None:
@@ -158,6 +163,7 @@ async def reconcile(transaction_id, *, user_id=None):
             session.add(Payment(user_id=order.user_id, amount=order.amount, currency="RUB",
                                 days=order.days, charge_id="platega:" + transaction_id))
             order.applied_at = now()
+            order.applied_via = source
             order.status = status
         elif status == "CHARGEBACKED" and order.status != "CHARGEBACKED":
             if order.applied_at:
@@ -170,11 +176,19 @@ async def reconcile(transaction_id, *, user_id=None):
             order.status = status
         elif order.applied_at is None and order.status != "CHARGEBACKED":
             order.status = status
+        # Also cover verified payments made before the outbox was deployed.
+        # This does not scan or message historical users: only this verified order.
+        if order.status == "CONFIRMED" and sub and not await session.get(PlategaNotice, order.id):
+            session.add(PlategaNotice(order_id=order.id,
+                expires_at=None if sub.lifetime else sub.expires_at, next_attempt_at=now()))
         await session.commit()
-        return order.status
+        result, order_id = order.status, order.id
+    if bot is not None:
+        await notify_order(bot, order_id)
+    return result
 
 
-async def check_order(order_id, user_id):
+async def check_order(order_id, user_id, *, source="operator", bot=None):
     async with get_session() as session:
         order = await session.get(PlategaOrder, order_id)
         if not order or order.user_id != user_id:
@@ -182,4 +196,104 @@ async def check_order(order_id, user_id):
         transaction_id = order.transaction_id
     if not transaction_id:
         raise PaymentError("Счёт ещё проверяется. Напиши /problem, если ожидание затянулось.")
-    return await reconcile(transaction_id, user_id=user_id)
+    return await reconcile(transaction_id, user_id=user_id, source=source, bot=bot)
+
+
+def expiry_text(expires_at, zone="Europe/Moscow"):
+    if expires_at is None:
+        return "Доступ бессрочный."
+    try:
+        tz = ZoneInfo(zone)
+    except (ZoneInfoNotFoundError, ValueError, TypeError):
+        tz = ZoneInfo("Europe/Moscow")
+    local = _aware(expires_at).astimezone(tz)
+    return f"Доступ до {local:%d.%m.%Y, %H:%M} ({tz.key})."
+
+
+async def subscription_view(user_id, *, order_id=None):
+    """Read-only: viewing the page must not reconcile or grant payments."""
+    from services.legal import LEGAL_VERSION
+    from services.subscriptions import check_access
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        if not user:
+            raise PaymentError("Профиль не найден.")
+        access = await check_access(session, user_id)
+        eligible = (enabled(user_id) and bool(user.age and user.age >= 18)
+                    and user.onboarding_completed and not access.is_lifetime and not access.is_admin)
+        legal_ok = user.legal_version == LEGAL_VERSION and bool(user.legal_accepted_at)
+        query = select(PlategaOrder).where(PlategaOrder.user_id == user_id)
+        if order_id:
+            query = query.where(PlategaOrder.id == order_id)
+        order = (await session.execute(query.order_by(PlategaOrder.created_at.desc()).limit(1))).scalar_one_or_none()
+        text = ("Доступ владельца бессрочный." if access.is_admin else
+                expiry_text(access.expires_at, user.timezone) if access.is_lifetime or access.expires_at else
+                "Оплаченной подписки пока нет.")
+        if access.expires_at and not access.allowed:
+            text = text.replace("Доступ до", "Доступ закончился")
+        return {"access": access.to_dict(), "subscription_text": text,
+                "checkout_enabled": bool(eligible and legal_ok),
+                "checkout_note": "Прими актуальные условия через /start в чате AURA." if eligible and not legal_ok else
+                    "30 дней — 490 ₽. Без автосписаний. Оставшиеся дни сохранятся." if eligible else
+                    "Продажи для этого аккаунта пока не открыты." if not access.is_lifetime and not access.is_admin else "Платить не нужно.",
+                "order": order_view(order) if order else None}
+
+
+def order_view(order):
+    return {"id": order.id, "status": order.status, "amount": order.amount,
+            "days": order.days, "url": order.url if order.status == "PENDING" else None}
+
+
+async def notify_order(bot, order_id):
+    """Serialize delivery attempts; network failure never rolls back access.
+
+    Telegram has no idempotency key: a process crash after delivery but before
+    commit can cause one duplicate. Ordinary retries/callback replays do not.
+    """
+    from aiogram.exceptions import TelegramForbiddenError, TelegramRetryAfter
+    from aiogram.types import WebAppInfo
+    from aiogram.utils.keyboard import InlineKeyboardBuilder
+    try:
+        async with get_session() as session:
+            notice = (await session.execute(select(PlategaNotice).where(
+                PlategaNotice.order_id == order_id).with_for_update())).scalar_one_or_none()
+            if not notice or notice.sent_at or not notice.next_attempt_at or _aware(notice.next_attempt_at) > now():
+                return
+            order = await session.get(PlategaOrder, order_id)
+            if not order or order.status != "CONFIRMED":
+                notice.next_attempt_at = None
+                await session.commit()
+                return
+            user = await session.get(User, order.user_id)
+            keyboard = InlineKeyboardBuilder()
+            if config.WEBAPP_URL:
+                keyboard.button(text="Открыть AURA", web_app=WebAppInfo(url=config.WEBAPP_URL))
+            keyboard.button(text="Моя подписка", callback_data="platega:subscription")
+            keyboard.adjust(1)
+            notice.attempts += 1
+            try:
+                await bot.send_message(order.user_id,
+                    f"✅ Оплата подтверждена. За этот платёж начислено {order.days} дней доступа к AURA.\n"
+                    + expiry_text(notice.expires_at, user.timezone) + "\nАвтосписаний нет. Помощь: /problem.",
+                    reply_markup=keyboard.as_markup(), request_timeout=15)
+            except Exception as error:
+                notice.last_error = type(error).__name__
+                delay = max(60, error.retry_after) if isinstance(error, TelegramRetryAfter) else min(3600, 60 * 2 ** notice.attempts)
+                notice.next_attempt_at = None if isinstance(error, TelegramForbiddenError) or notice.attempts >= 8 else now() + timedelta(seconds=delay)
+                logger.warning("Platega notice %s attempt %s: %s", order_id, notice.attempts, notice.last_error)
+            else:
+                notice.sent_at, notice.next_attempt_at, notice.last_error = now(), None, None
+                logger.info("Platega notice sent: %s", order_id)
+            await session.commit()
+    except Exception as error:
+        # Scheduler can retry the durable outbox, including after a restart.
+        logger.error("Platega notice pending: %s (%s)", order_id, type(error).__name__)
+
+
+async def retry_notices(bot):
+    async with get_session() as session:
+        ids = (await session.execute(select(PlategaNotice.order_id).where(
+            PlategaNotice.sent_at.is_(None), PlategaNotice.next_attempt_at <= now()
+        ).order_by(PlategaNotice.next_attempt_at).limit(20))).scalars().all()
+    for order_id in ids:
+        await notify_order(bot, order_id)
