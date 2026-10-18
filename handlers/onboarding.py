@@ -404,8 +404,9 @@ async def begin_onboarding(message: Message, state: FSMContext, user_id: int) ->
     # единственное, что мы правда можем пообещать за анкету сегодня, пока
     # доступ бесплатен для всех и «подарить дни» нечего.
     вступление = (
-        "Настроим профиль — это 1-2 минуты.\n"
-        "В конце посчитаю твою норму: калории, белки, жиры, углеводы и воду — "
+        "Привет! Я AURA — помогу вести питание, движение и прогресс.\n"
+        f"Задам {ВСЕГО_ШАГОВ} коротких вопросов. Перед сохранением ты сможешь исправить ответы.\n"
+        "В конце покажу, с чего начать, и рассчитаю ориентиры: калории, белки, жиры, углеводы и воду — "
         "по твоему росту, весу и цели.\n"
         f"{trial_line()}\n"
     )
@@ -706,6 +707,42 @@ def norms_text(macros, water_ml: int) -> str:
     )
 
 
+def personal_preview(data: dict) -> str:
+    """Explain the saved answers using capabilities that exist today."""
+    from keyboards.onboarding import GOAL_LABELS
+
+    name = escape(data.get("profile_name") or "")
+    goal = GOAL_LABELS[Goal(data["goal"])]
+    interest = data.get("interest", "both")
+    lines = [f"{name}, вот как начнём в AURA.", f"Твоя цель: {goal}."]
+    if interest in ("food", "both"):
+        lines.append("Питание: начни с одного приёма пищи — фото, голосом или текстом. "
+                     "Проверь распознанный состав и порцию, затем сохрани запись в дневник.")
+        lines.append("Ориентиры выше рассчитаны по твоим параметрам, активности и цели. "
+                     "Тип питания и указанные аллергии сохранены в профиле для подбора еды.")
+    if interest in ("move", "both"):
+        lines.append("Движение: открой тренировки, выбери направление и доступное время. "
+                     "Выполненную активность можно записать и смотреть в прогрессе.")
+    lines.append("Дальше сравнивай записи и изменения в разделе «Прогресс». "
+                 "Питание и тренировки входят в одну подписку; выбранный интерес определяет первый шаг.")
+    return "\n\n".join(lines)
+
+
+@router.callback_query(F.data == "first:begin")
+async def begin_after_payment(callback: CallbackQuery, state: FSMContext) -> None:
+    """Access middleware protects this button, including old paid receipts."""
+    await callback.answer()
+    async with get_session() as session:
+        user = await session.get(User, callback.from_user.id)
+        completed = bool(user and user.onboarding_completed)
+        interest = user.onboarding_interest if user else "both"
+    if not completed:
+        await begin_onboarding(callback.message, state, callback.from_user.id)
+        return
+    await callback.message.answer(first_step_text(interest or "both"),
+                                  reply_markup=first_step_keyboard(interest or "both"))
+
+
 def first_step_text(interest: str = "both") -> str:
     """Один следующий шаг — на выбор из двух, а не список возможностей.
 
@@ -912,8 +949,9 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
         async with get_session() as session:
             access = await check_access(session, кто.id)
         if not access.allowed:
-            from handlers.access import send_paywall
-            await send_paywall(message, access)
+            from handlers.access import buy_keyboard, paywall_text
+            await message.answer(personal_preview(data) + "\n\n" + paywall_text(access),
+                                 reply_markup=buy_keyboard(), parse_mode="HTML")
             return
     # Вторым сообщением — одно действие. Список возможностей в конце анкеты
     # человек не читает: он только что ответил на девять вопросов и ждёт,

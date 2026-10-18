@@ -296,6 +296,7 @@ async def notify_order(bot, order_id):
                 return
             user = await session.get(User, order.user_id)
             keyboard = InlineKeyboardBuilder()
+            keyboard.button(text="С чего начать", callback_data="first:begin")
             if config.WEBAPP_URL:
                 keyboard.button(text="Открыть AURA", web_app=WebAppInfo(url=config.WEBAPP_URL))
             keyboard.button(text="Моя подписка", callback_data="platega:subscription")

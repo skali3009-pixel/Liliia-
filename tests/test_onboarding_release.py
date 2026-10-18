@@ -42,7 +42,8 @@ async def draft(chat, state, interest="food"):
     assert await state.get_state() == OnboardingStates.summary.state
 
 
-def test_no_trial_profile_finishes_with_purchase(monkeypatch):
+@pytest.mark.parametrize("interest", ["food", "move", "both"])
+def test_no_trial_profile_finishes_with_purchase(monkeypatch, interest):
     monkeypatch.setattr(config, "PAYWALL", True)
     monkeypatch.setattr(config, "TRIAL_DAYS", 0)
     monkeypatch.setattr(config, "PLATEGA_ENABLED", True)
@@ -51,10 +52,13 @@ def test_no_trial_profile_finishes_with_purchase(monkeypatch):
     async def scenario():
         async with database(monkeypatch) as maker:
             chat, state = [], context()
-            await draft(chat, state)
+            await draft(chat, state, interest)
             await O.confirm_summary(Button(chat, "onb:confirm"), state)
             async with maker() as session:
                 assert (await session.get(User, USER_ID)).onboarding_completed
+            assert "Тимур, вот как начнём" in chat[-1][0]
+            assert ("Питание: начни" in chat[-1][0]) == (interest in ("food", "both"))
+            assert ("Движение: открой" in chat[-1][0]) == (interest in ("move", "both"))
             assert "490 ₽" in chat[-1][0]
             assert "platega:buy" in [value for _, value in chat[-1][1]]
     asyncio.run(scenario())
@@ -324,3 +328,28 @@ def test_operations_report_does_not_suggest_enabling_disabled_sales(monkeypatch,
     monkeypatch.setattr(config, "ADMIN_IDS", {1})
     report = "\n".join(_access_mode())
     assert "/tariffs" in report and "set-paywall.sh on" not in report
+
+
+@pytest.mark.parametrize("interest", ["food", "move", "both"])
+def test_paid_receipt_first_step_uses_saved_interest(monkeypatch, interest):
+    async def scenario():
+        async with database(monkeypatch):
+            chat, state = [], context()
+            await draft(chat, state, interest)
+            await O.confirm_summary(Button(chat, "onb:confirm"), state)
+            chat.clear()
+            await O.begin_after_payment(Button(chat, "first:begin"), state)
+            assert chat[-1][0] == O.first_step_text(interest)
+    asyncio.run(scenario())
+
+
+def test_first_step_receipt_button_cannot_bypass_paywall():
+    from middlewares.access import _is_open
+    from aiogram.types import CallbackQuery
+    event = CallbackQuery(id="receipt", from_user=TelegramUser(id=USER_ID,
+        is_bot=False, first_name="Test"), chat_instance="test", data="first:begin")
+    assert not _is_open(event)
+
+
+def test_personal_preview_escapes_name():
+    assert "&lt;b&gt;" in O.personal_preview({"profile_name": "<b>", "goal": "maintain"})

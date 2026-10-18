@@ -34,6 +34,8 @@ def test_missing_callback_is_recovered_without_user_click(monkeypatch):
             await platega.reconcile_pending(bot)
             request.assert_awaited_once_with("GET", "/transaction/" + tx)
             bot.send_message.assert_awaited_once()
+            buttons = bot.send_message.call_args.kwargs["reply_markup"].inline_keyboard
+            assert any(b.callback_data == "first:begin" for row in buttons for b in row)
             async with maker() as s:
                 order = await s.get(PlategaOrder, "missed")
                 assert order.status == "CONFIRMED"
