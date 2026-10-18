@@ -155,7 +155,7 @@ async def collect() -> str:
                 Subscription.status == SubscriptionStatus.TRIAL,
                 Subscription.expires_at > now(),
             )
-        )).scalar_one())
+        )).scalar_one()) if config.TRIAL_DAYS > 0 else 0
 
     from services import usage as usage_service
     from utils.disk import usage as disk_usage
