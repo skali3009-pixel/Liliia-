@@ -18,6 +18,7 @@ class PlategaOrder(Base):
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     applied_via: Mapped[str | None] = mapped_column(String(24))
     callback_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PlategaCallback(Base):

@@ -11,7 +11,7 @@ from urllib.parse import urlsplit
 from uuid import UUID, uuid4
 
 import aiohttp
-from sqlalchemy import select
+from sqlalchemy import select, or_
 
 import config
 from db import get_session
@@ -197,6 +197,35 @@ async def check_order(order_id, user_id, *, source="operator", bot=None):
     if not transaction_id:
         raise PaymentError("Счёт ещё проверяется. Напиши /problem, если ожидание затянулось.")
     return await reconcile(transaction_id, user_id=user_id, source=source, bot=bot)
+
+
+async def reconcile_pending(bot):
+    """Recover missed callbacks without charging or requiring a user click.
+
+    A persisted lease rotates the bounded batch fairly, including after failures.
+    Do not expire orders locally: only the provider decides their final state.
+    """
+    if not configured():
+        return
+    stamp = now()
+    async with get_session() as session:
+        orders = (await session.execute(select(PlategaOrder).where(
+            PlategaOrder.status.in_(["CREATING", "PENDING"]),
+            PlategaOrder.transaction_id.is_not(None),
+            or_(PlategaOrder.checked_at.is_(None),
+                PlategaOrder.checked_at < stamp - timedelta(minutes=2))
+        ).order_by(PlategaOrder.checked_at.asc().nullsfirst(), PlategaOrder.created_at)
+          .limit(20).with_for_update(skip_locked=True))).scalars().all()
+        transactions = [order.transaction_id for order in orders]
+        for order in orders:
+            order.checked_at = stamp
+        await session.commit()
+    for transaction_id in transactions:
+        try:
+            result = await reconcile(transaction_id, source="scheduled_check", bot=bot)
+            logger.info("Platega scheduled check %s: %s", transaction_id, result)
+        except PaymentError:
+            logger.warning("Platega scheduled verification pending: %s", transaction_id)
 
 
 def expiry_text(expires_at, zone="Europe/Moscow"):

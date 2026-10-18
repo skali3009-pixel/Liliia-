@@ -1,5 +1,19 @@
 # Platega: 490 RUB / 30 days
 
+## Public checkout launch, 2026-10-18
+
+User explicitly authorized completing and enabling public payments. Set PLATEGA_ENABLED=1
+after deploying the reconciliation fallback. PAYWALL remains a separate user decision.
+The server checks up to 20 unresolved known transactions every minute, with a persisted
+two-minute per-order lease and oldest-checked-first ordering. Provider GET is authoritative;
+no charges or local expiry guesses. Source is scheduled_check, never callback.
+Failures are retried; a missing transaction ID after an uncertain creation still needs
+operator investigation and is never retried with another POST automatically.
+Real provider callback delivery remains unproven; scheduled recovery covers missed delivery
+for known pending transactions. Do not label a diagnostic replay as provider delivery.
+Targeted validation: 56 tests passed, including automatic recovery, retry delay and
+continued processing after a provider error. No new payment required for this release.
+
 ## Payment journey update, 2026-10-18
 
 User authorized callback verification and completing checkout in the bot/Mini App.

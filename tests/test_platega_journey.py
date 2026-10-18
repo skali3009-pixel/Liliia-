@@ -17,6 +17,55 @@ from tests.test_webapp_auth import make_init_data
 from webapp.server import create_app
 
 
+def test_missing_callback_is_recovered_without_user_click(monkeypatch):
+    monkeypatch.setattr(platega, "configured", lambda: True)
+    async def run():
+        async with database(monkeypatch) as maker:
+            tx = str(uuid4())
+            async with maker() as s:
+                s.add(PlategaOrder(id="missed", user_id=501, transaction_id=tx,
+                    status="PENDING", created_at=now()))
+                await s.commit()
+            request = AsyncMock(return_value={"id": tx, "payload": "missed", "status": "CONFIRMED",
+                "paymentDetails": {"amount": 490, "currency": "RUB"}})
+            monkeypatch.setattr(platega, "api", request)
+            bot = SimpleNamespace(send_message=AsyncMock())
+            await platega.reconcile_pending(bot)
+            await platega.reconcile_pending(bot)
+            request.assert_awaited_once_with("GET", "/transaction/" + tx)
+            bot.send_message.assert_awaited_once()
+            async with maker() as s:
+                order = await s.get(PlategaOrder, "missed")
+                assert order.status == "CONFIRMED"
+                assert order.applied_via == "scheduled_check"
+                assert order.callback_verified_at is None
+                assert len((await s.execute(select(Payment))).scalars().all()) == 1
+    asyncio.run(run())
+
+
+def test_pending_recovery_continues_after_failure_and_backs_off(monkeypatch):
+    monkeypatch.setattr(platega, "configured", lambda: True)
+    async def run():
+        async with database(monkeypatch) as maker:
+            ids = [str(uuid4()), str(uuid4())]
+            async with maker() as s:
+                for i, tx in enumerate(ids):
+                    s.add(PlategaOrder(id=str(i), user_id=501, transaction_id=tx,
+                        status="PENDING", created_at=now()))
+                s.add(PlategaOrder(id="uncertain", user_id=501, status="CREATING", created_at=now()))
+                await s.commit()
+            check = AsyncMock(side_effect=[platega.PaymentError("timeout"), "PENDING"])
+            monkeypatch.setattr(platega, "reconcile", check)
+            await platega.reconcile_pending(None)
+            await platega.reconcile_pending(None)
+            assert check.await_count == 2
+            async with maker() as s:
+                for i in range(2):
+                    assert (await s.get(PlategaOrder, str(i))).checked_at is not None
+                assert (await s.get(PlategaOrder, "uncertain")).checked_at is None
+    asyncio.run(run())
+
+
 def test_real_callback_path_grants_notifies_once_and_preserves_source(monkeypatch):
     monkeypatch.setattr(config, "PLATEGA_MERCHANT_ID", "merchant")
     monkeypatch.setattr(config, "PLATEGA_SECRET", "secret")

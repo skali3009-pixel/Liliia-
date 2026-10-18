@@ -79,7 +79,7 @@ async def main():
                     iso = lambda dt: dt.isoformat() if dt else None
                     print(json.dumps({"order_id": value, "status": order.status,
                         "applied_at": iso(order.applied_at), "applied_via": order.applied_via,
-                        "callback_verified_at": iso(order.callback_verified_at), "ledger_rows": count,
+                        "callback_verified_at": iso(order.callback_verified_at), "checked_at": iso(order.checked_at), "ledger_rows": count,
                         "callbacks": [{"received_at": iso(c.received_at), "result": c.result, "origin": c.origin} for c in callbacks],
                         "notification": {"sent_at": iso(notice.sent_at), "attempts": notice.attempts,
                             "next_attempt_at": iso(notice.next_attempt_at), "last_error": notice.last_error} if notice else None,

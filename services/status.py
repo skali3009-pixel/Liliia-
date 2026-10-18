@@ -41,6 +41,13 @@ def _git_version() -> str:
 
 def _access_mode() -> list[str]:
     """Главный вопрос: пускает бот всех подряд или только по подписке."""
+    from services.platega import enabled
+    if enabled():
+        return [
+            "💳 Покупка подписки: ВКЛЮЧЕНА — Platega, 490 ₽ / 30 дней, без автосписаний",
+            (f"🔒 Проверка доступа включена. Пробный период: {config.TRIAL_DAYS} дн."
+             if config.PAYWALL else "🔓 Проверка срока выключена: бесплатный режим пока сохранён"),
+        ]
     if config.PAYWALL:
         return [
             "🔒 Платный доступ: ВКЛЮЧЁН",
