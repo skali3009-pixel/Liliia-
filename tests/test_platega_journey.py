@@ -74,7 +74,7 @@ def test_real_callback_path_grants_notifies_once_and_preserves_source(monkeypatc
             tx = str(uuid4())
             expiry = now() + timedelta(days=5)
             async with maker() as s:
-                s.add(Subscription(user_id=501, expires_at=expiry))
+                s.add(Subscription(user_id=501, expires_at=expiry, status="active"))
                 s.add(PlategaOrder(id="paid", user_id=501, transaction_id=tx, created_at=now()))
                 await s.commit()
             remote = {"id": tx, "payload": "paid", "status": "CONFIRMED", "paymentDetails": {"amount": 490, "currency": "RUB"}}
@@ -133,7 +133,7 @@ def test_legacy_paid_order_replay_sends_confirmation_without_more_days(monkeypat
         async with database(monkeypatch) as maker:
             tx, applied, expiry = str(uuid4()), now() - timedelta(hours=1), now() + timedelta(days=29)
             async with maker() as s:
-                s.add(Subscription(user_id=501, expires_at=expiry))
+                s.add(Subscription(user_id=501, expires_at=expiry, status="active"))
                 s.add(PlategaOrder(id="legacy", user_id=501, transaction_id=tx, created_at=applied,
                     applied_at=applied, status="CONFIRMED"))
                 s.add(Payment(user_id=501, amount=1, currency="RUB", days=30, charge_id="platega:" + tx))

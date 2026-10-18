@@ -14,7 +14,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import config
@@ -94,7 +94,7 @@ async def ensure_trial(session: AsyncSession, user_id: int) -> Subscription:
 
     subscription = Subscription(
         user_id=user_id,
-        status=SubscriptionStatus.TRIAL,
+        status=SubscriptionStatus.TRIAL if config.TRIAL_DAYS > 0 else SubscriptionStatus.EXPIRED,
         source=SubscriptionSource.TRIAL,
         expires_at=now() + timedelta(days=config.TRIAL_DAYS),
         trial_used=True,
@@ -131,6 +131,8 @@ async def check_access(session: AsyncSession, user_id: int) -> Access:
         )
 
     expires = _aware(subscription.expires_at)
+    if config.TRIAL_DAYS <= 0 and subscription.status == SubscriptionStatus.TRIAL:
+        return Access(False, SubscriptionStatus.EXPIRED, None, 0)
     alive = expires is not None and expires > now()
     status = subscription.status if alive else SubscriptionStatus.EXPIRED
 
@@ -163,7 +165,7 @@ async def activate(
     else:
         current = _aware(subscription.expires_at)
         # Заплатил раньше, чем кончилось, — остаток не сгорает.
-        if current and current > start:
+        if current and current > start and not (config.TRIAL_DAYS <= 0 and subscription.status == SubscriptionStatus.TRIAL):
             start = current
 
     subscription.status = SubscriptionStatus.ACTIVE
@@ -219,6 +221,8 @@ async def expiring_soon(session: AsyncSession, *, days: int = 3) -> list[Subscri
         Subscription.is_recurring.is_(False),
         Subscription.lifetime.is_(False),
     )
+    if config.TRIAL_DAYS <= 0:
+        stmt = stmt.where(Subscription.status != SubscriptionStatus.TRIAL)
     return list((await session.execute(stmt)).scalars())
 
 
@@ -293,9 +297,11 @@ async def stats(session: AsyncSession) -> dict:
         "lifetime": await count(Subscription.lifetime.is_(True)),
         "trial": await count(
             Subscription.status == SubscriptionStatus.TRIAL, Subscription.expires_at > now()
-        ),
+        ) if config.TRIAL_DAYS > 0 else 0,
         "expired": await count(
-            Subscription.expires_at <= now(), Subscription.lifetime.is_(False)
+            or_(Subscription.expires_at <= now(),
+                (Subscription.status == SubscriptionStatus.TRIAL) if config.TRIAL_DAYS <= 0 else False),
+            Subscription.lifetime.is_(False)
         ),
         "recurring": await count(Subscription.is_recurring.is_(True)),
         "payers": payers,

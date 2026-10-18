@@ -42,6 +42,47 @@ async def draft(chat, state, interest="food"):
     assert await state.get_state() == OnboardingStates.summary.state
 
 
+def test_no_trial_profile_finishes_with_purchase(monkeypatch):
+    monkeypatch.setattr(config, "PAYWALL", True)
+    monkeypatch.setattr(config, "TRIAL_DAYS", 0)
+    monkeypatch.setattr(config, "PLATEGA_ENABLED", True)
+    monkeypatch.setattr(config, "PLATEGA_MERCHANT_ID", "merchant")
+    monkeypatch.setattr(config, "PLATEGA_SECRET", "secret")
+    async def scenario():
+        async with database(monkeypatch) as maker:
+            chat, state = [], context()
+            await draft(chat, state)
+            await O.confirm_summary(Button(chat, "onb:confirm"), state)
+            async with maker() as session:
+                assert (await session.get(User, USER_ID)).onboarding_completed
+            assert "490 ₽" in chat[-1][0]
+            assert "platega:buy" in [value for _, value in chat[-1][1]]
+    asyncio.run(scenario())
+
+
+def test_unpaid_onboarding_inputs_pass_but_paid_commands_do_not(monkeypatch):
+    from unittest.mock import AsyncMock
+    from middlewares import access as access_middleware
+    monkeypatch.setattr(config, "PAYWALL", True)
+    monkeypatch.setattr(config, "TRIAL_DAYS", 0)
+    async def scenario():
+        async with database(monkeypatch):
+            monkeypatch.setattr(access_middleware, "get_session", O.get_session)
+            handler = AsyncMock()
+            person = TelegramUser(id=USER_ID, is_bot=False, first_name="Test")
+            data = {"event_from_user": person, "raw_state": OnboardingStates.age.state}
+            event = TelegramMessage(message_id=1, date=datetime.now(timezone.utc),
+                chat=Chat(id=USER_ID, type="private"), from_user=person, text="30")
+            await access_middleware.AccessMiddleware()(handler, event, data)
+            handler.assert_awaited_once()
+            handler.reset_mock()
+            monkeypatch.setattr(TelegramMessage, "answer", AsyncMock())
+            blocked = event.model_copy(update={"text": "/day"})
+            await access_middleware.AccessMiddleware()(handler, blocked, data)
+            handler.assert_not_awaited()
+    asyncio.run(scenario())
+
+
 @pytest.mark.parametrize("interest, expected", [("food", "приёма пищи"), ("move", "тренировки"), ("both", "выбери одно")])
 def test_confirmation_saves_the_person_then_offers_the_selected_action(monkeypatch, interest, expected):
     async def scenario():

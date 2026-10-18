@@ -34,6 +34,13 @@ def test_no_trial_is_promised_while_the_bot_is_free(monkeypatch):
     assert "бесплатно" not in _greeting(monkeypatch, paywall=False)
 
 
+def test_no_trial_mode_explains_paid_access(monkeypatch):
+    monkeypatch.setattr(config, "PAYWALL", True)
+    monkeypatch.setattr(config, "TRIAL_DAYS", 0)
+    assert "Первые" not in trial_line()
+    assert "490 ₽" in trial_line()
+
+
 def test_the_trial_is_named_when_payment_is_actually_on(monkeypatch):
     assert "7 дней — бесплатно" in _greeting(monkeypatch, paywall=True)
 

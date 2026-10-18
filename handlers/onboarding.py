@@ -216,6 +216,8 @@ def trial_line() -> str:
     """
     if not config.PAYWALL:
         return ""
+    if config.TRIAL_DAYS <= 0:
+        return "Анкета бесплатная. Доступ к функциям AURA — после оплаты: 490 ₽ за 30 дней, без автосписаний.\n"
     дней = config.TRIAL_DAYS
     return (f"Первые {дней} {plural(дней, 'день', 'дня', 'дней')} — бесплатно. "
             "Этого хватает, чтобы записывать еду и движение не «когда "
@@ -303,6 +305,10 @@ async def cmd_start(message: Message, state: FSMContext, command: CommandObject)
         )
 
     if completed:
+        if config.PAYWALL and not access.allowed:
+            from handlers.access import send_paywall
+            await send_paywall(message, access)
+            return
         if command.args == "add_food":
             from handlers.food import start_adding_food
             await start_adding_food(message, state)
@@ -902,6 +908,13 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
         norms_text(macros, water_ml),
         reply_markup=main_menu_keyboard(),
     )
+    if config.PAYWALL:
+        async with get_session() as session:
+            access = await check_access(session, кто.id)
+        if not access.allowed:
+            from handlers.access import send_paywall
+            await send_paywall(message, access)
+            return
     # Вторым сообщением — одно действие. Список возможностей в конце анкеты
     # человек не читает: он только что ответил на девять вопросов и ждёт,
     # что теперь. Ответ должен быть один и выполнимый прямо сейчас.

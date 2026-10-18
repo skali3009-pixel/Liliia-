@@ -16,7 +16,7 @@ from aiogram.types import CallbackQuery, Message, TelegramObject
 import config
 from db import get_session
 from handlers.access import CB_BUY, buy_keyboard, paywall_text
-from keyboards.main_menu import MENU_DOCS, MENU_TARIFFS
+from keyboards.main_menu import MENU_DOCS, MENU_TARIFFS, MENU_TEXTS
 from services.subscriptions import check_access
 
 logger = logging.getLogger(__name__)
@@ -72,6 +72,18 @@ class AccessMiddleware(BaseMiddleware):
 
         async with get_session() as session:
             access = await check_access(session, user.id)
+            # Completing an unpaid profile is allowed, using only onboarding
+            # input. Menu actions, media and other commands remain protected.
+            from models import User
+            profile = await session.get(User, user.id)
+            incomplete = profile is not None and not profile.onboarding_completed
+        if incomplete:
+            raw_state = data.get("raw_state") or ""
+            if isinstance(event, CallbackQuery) and (event.data or "").startswith(("onb:", "onb_")):
+                return await handler(event, data)
+            if (isinstance(event, Message) and raw_state.startswith("OnboardingStates:")
+                    and event.text and not event.text.startswith("/") and event.text not in MENU_TEXTS):
+                return await handler(event, data)
 
         if access.allowed:
             return await handler(event, data)

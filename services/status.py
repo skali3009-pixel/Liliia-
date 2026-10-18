@@ -45,7 +45,7 @@ def _access_mode() -> list[str]:
     if enabled():
         return [
             "💳 Покупка подписки: ВКЛЮЧЕНА — Platega, 490 ₽ / 30 дней, без автосписаний",
-            (f"🔒 Проверка доступа включена. Пробный период: {config.TRIAL_DAYS} дн."
+            ((f"🔒 Проверка доступа включена. Пробный период: {config.TRIAL_DAYS} дн." if config.TRIAL_DAYS > 0 else "🔒 Проверка доступа включена. Пробного периода нет.")
              if config.PAYWALL else "🔓 Проверка срока выключена: бесплатный режим пока сохранён"),
         ]
     if config.PAYWALL:

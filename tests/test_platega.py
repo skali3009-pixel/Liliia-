@@ -82,7 +82,7 @@ def test_settlement_replay_amount_owner_and_refund(monkeypatch):
             transaction = str(uuid4())
             expiry = now() + timedelta(days=5)
             async with maker() as s:
-                s.add(Subscription(user_id=501, expires_at=expiry))
+                s.add(Subscription(user_id=501, expires_at=expiry, status="active"))
                 s.add(PlategaOrder(id="order", user_id=501, transaction_id=transaction, created_at=now()))
                 await s.commit()
             data = {"id": transaction, "payload": "order", "status": "CONFIRMED",

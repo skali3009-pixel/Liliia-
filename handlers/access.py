@@ -46,6 +46,11 @@ FOREVER_WORDS = {"навсегда", "вечно", "forever"}
 def paywall_text(access: Access) -> str:
     """Что показать человеку без доступа."""
     if not config.STARS_PAYMENTS_ENABLED:
+        if platega_enabled():
+            return ("Доступ к функциям AURA — по подписке.\n\n"
+                    "30 дней — 490 ₽. Без автосписаний. Твои записи сохраняются.\n"
+                    "После подтверждения оплаты доступ откроется автоматически.\n"
+                    "Условия: /legal. Помощь: /problem.")
         return overview_text()
     if access.status.value == "trial":
         return (

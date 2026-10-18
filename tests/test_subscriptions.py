@@ -23,6 +23,29 @@ from services.subscriptions import (
 USER_ID = 501
 
 
+@pytest.fixture(autouse=True)
+def legacy_trial_configuration(monkeypatch):
+    monkeypatch.setattr(config, "TRIAL_DAYS", 21)
+
+
+def test_no_trial_blocks_new_and_existing_trial_but_keeps_paid(monkeypatch):
+    monkeypatch.setattr(config, "TRIAL_DAYS", 0)
+    async def scenario():
+        async with db() as session:
+            sub = await ensure_trial(session, USER_ID)
+            assert not (await check_access(session, USER_ID)).allowed
+            sub.status = SubscriptionStatus.TRIAL
+            sub.expires_at = now() + timedelta(days=15)
+            await session.commit()
+            assert not (await check_access(session, USER_ID)).allowed
+            assert await expiring_soon(session, days=30) == []
+            assert (await stats(session))["trial"] == 0
+            await activate(session, USER_ID, days=30, source=SubscriptionSource.PLATEGA)
+            access = await check_access(session, USER_ID)
+            assert access.allowed and 29 <= access.days_left <= 30
+    run(scenario)
+
+
 @contextlib.asynccontextmanager
 async def db():
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")

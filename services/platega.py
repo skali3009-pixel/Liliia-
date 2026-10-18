@@ -155,7 +155,8 @@ async def reconcile(transaction_id, *, user_id=None, source="operator", bot=None
                 sub = Subscription(user_id=order.user_id, expires_at=now(), trial_used=True)
                 session.add(sub)
             if not sub.lifetime:
-                sub.expires_at = max(_aware(sub.expires_at), now()) + timedelta(days=order.days)
+                base = now() if config.TRIAL_DAYS <= 0 and sub.status == SubscriptionStatus.TRIAL else max(_aware(sub.expires_at), now())
+                sub.expires_at = base + timedelta(days=order.days)
                 sub.status = SubscriptionStatus.ACTIVE
                 sub.source = SubscriptionSource.PLATEGA
                 sub.is_recurring = False
