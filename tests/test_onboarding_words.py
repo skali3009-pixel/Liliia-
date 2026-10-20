@@ -34,50 +34,11 @@ def test_no_trial_is_promised_while_the_bot_is_free(monkeypatch):
     assert "бесплатно" not in _greeting(monkeypatch, paywall=False)
 
 
-def test_no_trial_mode_explains_paid_access(monkeypatch):
+@pytest.mark.parametrize("days", [0, 7, 21])
+def test_opening_has_no_commercial_pitch(monkeypatch, days):
     monkeypatch.setattr(config, "PAYWALL", True)
-    monkeypatch.setattr(config, "TRIAL_DAYS", 0)
-    assert "Первые" not in trial_line()
-    assert "490 ₽" in trial_line()
-
-
-def test_the_trial_is_named_when_payment_is_actually_on(monkeypatch):
-    assert "7 дней — бесплатно" in _greeting(monkeypatch, paywall=True)
-
-
-def test_the_number_of_days_is_declined_properly(monkeypatch):
-    """«Первые 21 дней» — не по-русски, а срок мы как раз меняем.
-
-    Число в этой строке берётся из настройки, и при 21 обычное «дней»
-    становится ошибкой в первом же сообщении новому человеку.
-    """
-    monkeypatch.setattr(config, "PAYWALL", True)
-    ожидаем = {1: "1 день", 2: "2 дня", 5: "5 дней", 7: "7 дней",
-               11: "11 дней", 21: "21 день", 22: "22 дня", 30: "30 дней"}
-    for дней, строка in ожидаем.items():
-        monkeypatch.setattr(config, "TRIAL_DAYS", дней)
-        assert f"Первые {строка} — бесплатно" in trial_line(), (дней, trial_line())
-
-
-def test_the_trial_says_what_the_time_is_for(monkeypatch):
-    """Срок без объяснения читается как «потом заплати»."""
-    monkeypatch.setattr(config, "PAYWALL", True)
-    monkeypatch.setattr(config, "TRIAL_DAYS", 21)
-    строка = trial_line()
-    assert "каждый день" in строка, строка
-    # И это не обещание результата — те же правила, что у техники и тура.
-    for запрет in ("похуде", "гарантирова", "результат за", "избавит"):
-        assert запрет not in строка.lower(), запрет
-
-
-def test_the_greeting_source_really_checks_the_paywall():
-    """Проверка стоит в коде, а не только в этом тесте."""
-    from pathlib import Path
-
-    source = (Path(__file__).resolve().parent.parent / "handlers" /
-              "onboarding.py").read_text(encoding="utf-8")
-    assert "if not config.PAYWALL:" in source
-    assert source.count("config.PAYWALL") >= 2
+    monkeypatch.setattr(config, "TRIAL_DAYS", days)
+    assert trial_line() == ""
 
 
 # --- Первый экран ----------------------------------------------------------

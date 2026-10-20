@@ -78,6 +78,10 @@ class User(Base):
     full_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     onboarding_interest: Mapped[str | None] = mapped_column(String(20), nullable=True)
 
+    training_place: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    training_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    training_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
     # --- Анкета онбординга ---
     gender: Mapped[GenderEnum | None] = mapped_column(
         Enum(GenderEnum, name="gender_enum"), nullable=True

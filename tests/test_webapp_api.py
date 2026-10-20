@@ -1614,6 +1614,29 @@ def test_reopening_the_screen_does_not_burn_the_advice():
 
 # --- Подбор занятия через HTTP ---------------------------------------------
 
+def test_workout_pick_uses_saved_preferences_and_explicit_override(monkeypatch):
+    from services import workout_picker
+    from unittest.mock import Mock
+    pick = Mock(wraps=workout_picker.pick)
+    monkeypatch.setattr(workout_picker, "pick", pick)
+    async def scenario():
+        async with webapp_client() as (client, _):
+            async with maker_holder["maker"]() as session:
+                user = await session.get(User, USER_ID)
+                user.training_place, user.training_minutes = "gym", 45
+                await session.commit()
+            response = await call(client, "POST", "/api/workouts/pick", json_body={})
+            assert response.status == 200
+            assert pick.call_args.kwargs["location"] == "gym"
+            assert pick.call_args.kwargs["minutes_available"] == 45
+            response = await call(client, "POST", "/api/workouts/pick",
+                                  json_body={"location": "home", "minutes": 15})
+            assert response.status == 200
+            assert pick.call_args.kwargs["location"] == "home"
+            assert pick.call_args.kwargs["minutes_available"] == 15
+    run(scenario)
+
+
 def test_workout_pick_fits_the_time():
     async def scenario():
         async with webapp_client() as (client, _):

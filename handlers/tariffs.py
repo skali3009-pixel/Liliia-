@@ -15,7 +15,7 @@ router = Router(name="tariffs")
 
 def tariff_keyboard(user_id=None):
     builder = InlineKeyboardBuilder()
-    for plan in PLANS:
+    for plan in ([] if platega.enabled(user_id) else PLANS):
         builder.button(text=f"{plan.days} дней · {plan.price_rub:,} ₽".replace(",", " "),
                        callback_data=f"tariff:{plan.id}")
     if platega.enabled(user_id):

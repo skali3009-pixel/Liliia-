@@ -39,6 +39,14 @@ WEEKLY_REPORT_WEEKDAY = 4
 WEEKLY_REPORT_TIME = time(20, 0)
 
 
+async def product_messages_allowed(user_id: int) -> bool:
+    if not config.PAYWALL:
+        return True
+    from services.subscriptions import check_access
+    async with get_session() as session:
+        return (await check_access(session, user_id)).allowed
+
+
 async def send_due_reminders(bot: Bot) -> None:
     try:
         async with get_session() as session:
@@ -48,6 +56,8 @@ async def send_due_reminders(bot: Bot) -> None:
         return
 
     for reminder in reminders:
+        if not await product_messages_allowed(reminder.user_id):
+            continue
         key = (reminder.supplement_id, str(reminder.user_id))
         if key in _already_sent:
             continue
@@ -95,6 +105,8 @@ async def send_smart_nudges(bot: Bot) -> None:
         return
 
     for user, push, day in planned:
+        if not await product_messages_allowed(user.id):
+            continue
         try:
             await bot.send_message(
                 user.id,
@@ -127,6 +139,8 @@ async def send_comebacks(bot: Bot) -> None:
         return
 
     for letter in letters:
+        if not await product_messages_allowed(letter.user_id):
+            continue
         key = (letter.user_id, "comeback")
         if key in _already_sent:
             continue
@@ -148,6 +162,8 @@ async def send_unfinished(bot: Bot) -> None:
         return
 
     for letter in letters:
+        if not await product_messages_allowed(letter.user_id):
+            continue
         key = (letter.user_id, "unfinished")
         if key in _already_sent:
             continue
@@ -169,6 +185,8 @@ async def send_step_results(bot: Bot) -> None:
         return
 
     for result in results:
+        if not await product_messages_allowed(result.user_id):
+            continue
         key = (result.user_id, "step_week")
         if key in _already_sent:
             continue
@@ -194,6 +212,8 @@ async def send_weekly_summaries(bot: Bot) -> None:
         return
 
     for user, summary, goal in summaries:
+        if not await product_messages_allowed(user.id):
+            continue
         key = (user.id, "weekly")
         if key in _already_sent:
             continue
@@ -229,18 +249,9 @@ async def check_subscriptions(bot: Bot) -> None:
                 except Exception:
                     logger.info("Не получилось предупредить %s", subscription.user_id)
 
-            ended = await expire_overdue(session)
-
-        for user_id in ended:
-            try:
-                await bot.send_message(
-                    user_id,
-                    "🔒 Доступ закончился.\n\n"
-                    "Всё записанное сохранено и ждёт тебя — вернуть доступ можно "
-                    "командой /subscription.",
-                )
-            except Exception:
-                logger.info("Не получилось сообщить %s об окончании доступа", user_id)
+            await expire_overdue(session)
+        from services.subscription_end import send_final_reports
+        await send_final_reports(bot)
     except Exception:
         logger.exception("Проверка подписок не удалась")
 
@@ -324,8 +335,8 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     scheduler.add_job(send_step_results, "cron", minute="*", args=[bot],
                       id="step_results")
     scheduler.add_job(clear_sent_marks, "cron", hour=0, minute=1, id="cleanup")
-    # Раз в день утром: предупредить об окончании и закрыть просроченные.
-    scheduler.add_job(check_subscriptions, "cron", hour=6, minute=0, args=[bot],
+    # Раз в минуту: завершить доступ и отправить итог без суточной задержки.
+    scheduler.add_job(check_subscriptions, "interval", minutes=1, args=[bot],
                       id="subscriptions")
     # Сводки владельцу: время местное, поэтому проверяем каждую минуту.
     scheduler.add_job(owner_reports, "cron", minute="*", args=[bot], id="owner_reports")

@@ -1586,7 +1586,9 @@ async def post_workout_pick(request: web.Request) -> web.Response:
                      for item in workout_picker.quick_five(energy=energy, recent=recent, category=category)],
         })
 
-    location = body.get("location") or None
+    location = body.get("location") or (user.training_place if user and user.training_place in ("home", "gym") else None)
+    if not body.get("minutes") and user and user.training_minutes:
+        minutes = user.training_minutes
     picks = workout_picker.pick(minutes_available=minutes, energy=energy,
                                 location=location, recent=recent, category=category)
     if not picks:

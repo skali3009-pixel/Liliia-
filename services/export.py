@@ -175,6 +175,9 @@ def profile_rows(user: User) -> list[list]:
         ["Клетчатка, г", user.daily_fiber_g],
         ["Вода, мл", user.daily_water_ml],
         ["Шаги, цель", user.daily_steps or ""],
+        ["Место тренировок", user.training_place or ""],
+        ["Минут на тренировку", user.training_minutes or ""],
+        ["Тренировок в неделю", user.training_days],
         ["Напоминания", "включены" if user.reminders_enabled else "выключены"],
     ]
 

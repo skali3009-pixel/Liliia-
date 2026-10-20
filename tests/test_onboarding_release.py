@@ -36,6 +36,8 @@ async def draft(chat, state, interest="food"):
     await O.process_activity(Button(chat, "onb_activity:moderate"), state)
     await O.process_goal(Button(chat, "onb_goal:maintain"), state)
     await O.process_diet_type(Button(chat, "onb_diet:regular"), state)
+    await O.process_training_place(Button(chat, "onb_place:home"), state)
+    await O.process_training_pace(Button(chat, "onb_pace:regular"), state)
     # Diet choice must not treat an absent allergy answer as "none".
     assert await state.get_state() == OnboardingStates.allergies.state
     await O.process_allergies(Message(chat, "орехи", Person()), state)
@@ -56,11 +58,10 @@ def test_no_trial_profile_finishes_with_purchase(monkeypatch, interest):
             await O.confirm_summary(Button(chat, "onb:confirm"), state)
             async with maker() as session:
                 assert (await session.get(User, USER_ID)).onboarding_completed
-            assert "Тимур, вот как начнём" in chat[-1][0]
-            assert ("Питание: начни" in chat[-1][0]) == (interest in ("food", "both"))
-            assert ("Движение: открой" in chat[-1][0]) == (interest in ("move", "both"))
-            assert "490 ₽" in chat[-1][0]
-            assert "platega:buy" in [value for _, value in chat[-1][1]]
+            assert "Тимур, твой план на 30 дней" in chat[-1][0]
+            assert "Питание" in chat[-1][0] and "Движение" in chat[-1][0]
+            assert "490" not in chat[-1][0]
+            assert [value for _, value in chat[-1][1]] == ["platega:plan_start"]
     asyncio.run(scenario())
 
 
@@ -103,6 +104,8 @@ def test_confirmation_saves_the_person_then_offers_the_selected_action(monkeypat
                 user = await session.get(User, USER_ID)
                 assert user.onboarding_completed and user.daily_calories > 0
                 assert (user.full_name, user.onboarding_interest, user.allergies) == ("Тимур", interest, "орехи")
+            assert "твой план на 30 дней" in chat[-1][0]
+            await O.start_plan(Button(chat, "platega:plan_start"), state)
             assert expected in chat[-1][0]
             assert await state.get_state() is None
             callbacks = [data for _, data in chat[-1][1]]
@@ -226,6 +229,9 @@ def test_old_drafts_get_a_review_and_keep_their_answers(monkeypatch):
                 current_weight_kg=63.5, activity_level="moderate", goal="maintain", diet_type="regular")
             await state.set_state(OnboardingStates.allergies)
             await O.process_allergies(Message(chat, "нет", Person()), state)
+            assert await state.get_state() == OnboardingStates.training_place.state
+            await O.process_training_place(Button(chat, "onb_place:none"), state)
+            await O.no_allergies(Button(chat, "onb_allergies:none"), state)
             assert await state.get_state() == OnboardingStates.summary.state
             data = await state.get_data()
             assert data["age"] == 31 and data["profile_name"] == "Лилия Скалий"
@@ -266,7 +272,7 @@ def test_review_has_two_actions_and_opens_an_edit_selector(monkeypatch):
             await draft(chat, state)
             assert [data for _, data in chat[-1][1]] == ["onb:confirm", "onb:edit_fields"]
             await O.choose_edit_field(Button(chat, "onb:edit_fields"))
-            assert len(chat[-1][1]) == 11
+            assert len(chat[-1][1]) == len(O.SUMMARY_FIELDS) + 1
             await O.review_again(Button(chat, "onb:review"), state)
             assert "Проверь ответы" in chat[-1][0]
     asyncio.run(scenario())
@@ -352,4 +358,45 @@ def test_first_step_receipt_button_cannot_bypass_paywall():
 
 
 def test_personal_preview_escapes_name():
-    assert "&lt;b&gt;" in O.personal_preview({"profile_name": "<b>", "goal": "maintain"})
+    assert "&lt;b&gt;" in O.personal_preview({"profile_name": "<b>", "goal": "maintain", "diet_type": "regular"})
+
+
+def test_workout_preferences_are_saved_and_plan_has_no_checkout(monkeypatch):
+    monkeypatch.setattr(config, "PAYWALL", True)
+    async def scenario():
+        async with database(monkeypatch) as maker:
+            chat, state = [], context()
+            await draft(chat, state)
+            await O.edit_summary(Button(chat, "onb_edit:training_place"), state)
+            await O.process_training_place(Button(chat, "onb_place:gym"), state)
+            assert await state.get_state() == OnboardingStates.summary.state
+            await O.confirm_summary(Button(chat, "onb:confirm"), state)
+            async with maker() as session:
+                user = await session.get(User, USER_ID)
+                assert (user.training_place, user.training_minutes, user.training_days) == ("gym", 30, 3)
+            assert "30 дней" in chat[-1][0] and "в зале" in chat[-1][0]
+            assert "490" not in chat[-1][0]
+    asyncio.run(scenario())
+
+
+def test_one_checkout_button_for_one_plan(monkeypatch):
+    from handlers import tariffs
+    monkeypatch.setattr(tariffs.platega, "enabled", lambda *args: True)
+    buttons = [b for row in tariffs.tariff_keyboard(USER_ID).inline_keyboard for b in row]
+    assert len(buttons) == 1 and buttons[0].callback_data == "platega:buy"
+
+
+def test_plan_start_shows_terms_without_creating_payment(monkeypatch):
+    from unittest.mock import AsyncMock
+    from services import platega
+    monkeypatch.setattr(config, "PAYWALL", True)
+    monkeypatch.setattr(platega, "create_order", AsyncMock())
+    async def scenario():
+        async with database(monkeypatch):
+            chat, state = [], context()
+            await draft(chat, state)
+            await O.confirm_summary(Button(chat, "onb:confirm"), state)
+            await O.start_plan(Button(chat, "platega:plan_start"), state)
+            platega.create_order.assert_not_awaited()
+            assert chat[-1][1]
+    asyncio.run(scenario())

@@ -14,5 +14,7 @@ class OnboardingStates(StatesGroup):
     activity_level = State()
     goal = State()
     diet_type = State()
+    training_place = State()
+    training_pace = State()
     allergies = State()
     summary = State()

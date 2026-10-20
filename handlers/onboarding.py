@@ -158,20 +158,44 @@ class Шаг:
 # Один список для счётчика, продолжения анкеты и напоминания.
 # Имя и интерес нужны для первого действия; диета и аллергии — до подбора еды.
 # Целевой вес остаётся необязательной настройкой после сохранения профиля.
+TRAINING_PLACES = {"home": "Дома", "gym": "В зале", "none": "Пока без тренировок"}
+TRAINING_PACES = {"gentle": (15, 2, "15 минут · 2 раза в неделю"),
+                  "regular": (30, 3, "30 минут · 3 раза в неделю"),
+                  "long": (45, 3, "45 минут · 3 раза в неделю")}
+
+
+def training_place_keyboard():
+    builder = InlineKeyboardBuilder()
+    for value, label in TRAINING_PLACES.items():
+        builder.button(text=label, callback_data=f"onb_place:{value}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
+def training_pace_keyboard():
+    builder = InlineKeyboardBuilder()
+    for value, (_, _, label) in TRAINING_PACES.items():
+        builder.button(text=label, callback_data=f"onb_pace:{value}")
+    builder.adjust(1)
+    return builder.as_markup()
+
+
 ШАГИ: tuple[Шаг, ...] = (
-    Шаг(OnboardingStates.interest, "Что тебе сейчас полезнее?", interest_keyboard),
-    Шаг(OnboardingStates.name, "Как к тебе обращаться? Напиши имя или оставь предложенное.",
+    Шаг(OnboardingStates.interest, "✨ С чего хочешь начать?", interest_keyboard),
+    Шаг(OnboardingStates.name, "👋 Как тебя называть? Напиши имя или оставь предложенное.",
         name_keyboard),
-    Шаг(OnboardingStates.gender, "Укажи свой пол:", gender_keyboard),
-    Шаг(OnboardingStates.age, "Сколько тебе полных лет?"),
-    Шаг(OnboardingStates.height, "Какой у тебя рост, см? Например: 172"),
-    Шаг(OnboardingStates.current_weight, "Какой у тебя текущий вес, кг? Например: 68.5"),
-    Шаг(OnboardingStates.activity_level, "Какой у тебя уровень активности?",
+    Шаг(OnboardingStates.gender, "🧮 Укажи пол — это нужно для расчёта питания:", gender_keyboard),
+    Шаг(OnboardingStates.age, "🎂 Сколько тебе полных лет?"),
+    Шаг(OnboardingStates.height, "📏 Какой у тебя рост в сантиметрах? Например: 172"),
+    Шаг(OnboardingStates.current_weight, "⚖️ Какой сейчас вес в килограммах? Например: 68.5"),
+    Шаг(OnboardingStates.activity_level, "🚶 Как обычно проходит твой день?",
         activity_keyboard),
-    Шаг(OnboardingStates.goal, "Какая у тебя цель?", goal_keyboard),
-    Шаг(OnboardingStates.diet_type, "Тип питания:", diet_type_keyboard),
+    Шаг(OnboardingStates.goal, "🎯 К чему хочешь прийти?", goal_keyboard),
+    Шаг(OnboardingStates.diet_type, "🥗 Как ты обычно питаешься?", diet_type_keyboard),
+    Шаг(OnboardingStates.training_place, "🏠 Где тебе удобнее тренироваться?", training_place_keyboard),
+    Шаг(OnboardingStates.training_pace, "⏱ Какой ритм тебе подходит на ближайший месяц?", training_pace_keyboard),
     Шаг(OnboardingStates.allergies,
-        "Есть аллергии или непереносимости? Напиши продукты через запятую. "
+        "🧡 Есть аллергии или непереносимости? Напиши продукты через запятую. "
         "Если их нет, нажми кнопку ниже.", allergies_keyboard),
 )
 
@@ -200,28 +224,8 @@ async def спросить(message: Message, шаг: Шаг, *, вступлен
 
 
 def trial_line() -> str:
-    """Строка про пробный период — или пустая, пока оплата выключена.
-
-    Вынесена отдельно нарочно: раньше она собиралась прямо в обработчике, и
-    тест проверял не её, а собственную копию тех же слов. Такой тест
-    проходит и на сломанном коде.
-
-    Пока бот бесплатен для всех, «первые дни бесплатно» — обещание платы,
-    которой нет: человек ждёт, что его вот-вот отключат, и не вкладывается.
-
-    А когда оплата включена, важно не «сколько дано», а «зачем столько».
-    Срок здесь не щедрость: это время, за которое заводится привычка. Без
-    второй фразы три недели читаются как «потом заплати», а не как
-    «попробуй по-настоящему».
-    """
-    if not config.PAYWALL:
-        return ""
-    if config.TRIAL_DAYS <= 0:
-        return "Анкета бесплатная. Доступ к функциям AURA — после оплаты: 490 ₽ за 30 дней, без автосписаний.\n"
-    дней = config.TRIAL_DAYS
-    return (f"Первые {дней} {plural(дней, 'день', 'дня', 'дней')} — бесплатно. "
-            "Этого хватает, чтобы записывать еду и движение не «когда "
-            "вспомнил», а каждый день.\n")
+    """Commercial terms appear only after the personal plan, on request."""
+    return ""
 
 
 @router.message(CommandStart())
@@ -578,6 +582,32 @@ async def process_diet_type(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(diet_type=diet_value)
     await callback.message.edit_text("Тип питания сохранён ✅")
     await callback.answer()
+    await advance(callback.message, state, OnboardingStates.training_place, callback.from_user.id)
+
+
+@router.callback_query(OnboardingStates.training_place, F.data.startswith("onb_place:"))
+async def process_training_place(callback: CallbackQuery, state: FSMContext):
+    value = callback.data.split(":", 1)[1]
+    if value not in TRAINING_PLACES:
+        await callback.answer("Выбери место на кнопке.")
+        return
+    await state.update_data(training_place=value)
+    if value == "none":
+        await state.update_data(training_pace="gentle")
+    await callback.answer()
+    await advance(callback.message, state,
+                  OnboardingStates.allergies if value == "none" else OnboardingStates.training_pace,
+                  callback.from_user.id)
+
+
+@router.callback_query(OnboardingStates.training_pace, F.data.startswith("onb_pace:"))
+async def process_training_pace(callback: CallbackQuery, state: FSMContext):
+    value = callback.data.split(":", 1)[1]
+    if value not in TRAINING_PACES:
+        await callback.answer("Выбери ритм на кнопке.")
+        return
+    await state.update_data(training_pace=value)
+    await callback.answer()
     await advance(callback.message, state, OnboardingStates.allergies, callback.from_user.id)
 
 
@@ -609,6 +639,8 @@ SUMMARY_FIELDS = (
     ("activity_level", "Активность", OnboardingStates.activity_level),
     ("goal", "Цель", OnboardingStates.goal),
     ("diet_type", "Питание", OnboardingStates.diet_type),
+    ("training_place", "Тренировки", OnboardingStates.training_place),
+    ("training_pace", "Ритм", OnboardingStates.training_pace),
     ("allergies", "Аллергии", OnboardingStates.allergies),
 )
 
@@ -636,6 +668,8 @@ async def show_summary(message: Message, state: FSMContext, user_id: int) -> Non
         "height_cm": f"{data['height_cm']:g} см", "current_weight_kg": f"{data['current_weight_kg']:g} кг",
         "activity_level": ACTIVITY_LABELS[ActivityLevel(data["activity_level"])],
         "goal": GOAL_LABELS[Goal(data["goal"])], "diet_type": DIET_LABELS[DietTypeEnum(data["diet_type"])],
+        "training_place": TRAINING_PLACES[data["training_place"]],
+        "training_pace": TRAINING_PACES[data["training_pace"]][2] if data["training_place"] != "none" else "Пока без расписания",
         "allergies": data["allergies"] or "нет — по твоему ответу",
     }
     lines = ["Проверь ответы перед сохранением:\n"]
@@ -708,24 +742,26 @@ def norms_text(macros, water_ml: int) -> str:
 
 
 def personal_preview(data: dict) -> str:
-    """Explain the saved answers using capabilities that exist today."""
-    from keyboards.onboarding import GOAL_LABELS
+    from services.month_plan import render_plan
+    return render_plan(data)
 
-    name = escape(data.get("profile_name") or "")
-    goal = GOAL_LABELS[Goal(data["goal"])]
-    interest = data.get("interest", "both")
-    lines = [f"{name}, вот как начнём в AURA.", f"Твоя цель: {goal}."]
-    if interest in ("food", "both"):
-        lines.append("Питание: начни с одного приёма пищи — фото, голосом или текстом. "
-                     "Проверь распознанный состав и порцию, затем сохрани запись в дневник.")
-        lines.append("Ориентиры выше рассчитаны по твоим параметрам, активности и цели. "
-                     "Тип питания и указанные аллергии сохранены в профиле для подбора еды.")
-    if interest in ("move", "both"):
-        lines.append("Движение: открой тренировки, выбери направление и доступное время. "
-                     "Выполненную активность можно записать и смотреть в прогрессе.")
-    lines.append("Дальше сравнивай записи и изменения в разделе «Прогресс». "
-                 "Питание и тренировки входят в одну подписку; выбранный интерес определяет первый шаг.")
-    return "\n\n".join(lines)
+
+def plan_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.button(text="✨ Начать мой план", callback_data="platega:plan_start")
+    return builder.as_markup()
+
+
+@router.callback_query(F.data == "platega:plan_start")
+async def start_plan(callback: CallbackQuery, state: FSMContext):
+    async with get_session() as session:
+        access = await check_access(session, callback.from_user.id)
+    if not config.PAYWALL or access.allowed:
+        await begin_after_payment(callback, state)
+        return
+    from handlers.access import paywall_text, buy_keyboard
+    await callback.answer()
+    await callback.message.answer(paywall_text(access), reply_markup=buy_keyboard())
 
 
 @router.callback_query(F.data == "first:begin")
@@ -902,6 +938,10 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
         user.username = кто.username
         user.full_name = data.get("profile_name") or кто.full_name
         user.onboarding_interest = data.get("interest", "both")
+        user.training_place = data["training_place"]
+        user.training_minutes, user.training_days, _ = TRAINING_PACES[data["training_pace"]]
+        if user.training_place == "none":
+            user.training_days = 0
         user.gender = GenderEnum(data["gender"])
         user.age = data["age"]
         user.height_cm = data["height_cm"]
@@ -945,40 +985,5 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
         norms_text(macros, water_ml),
         reply_markup=main_menu_keyboard(),
     )
-    if config.PAYWALL:
-        async with get_session() as session:
-            access = await check_access(session, кто.id)
-        if not access.allowed:
-            from handlers.access import buy_keyboard, paywall_text
-            await message.answer(personal_preview(data) + "\n\n" + paywall_text(access),
-                                 reply_markup=buy_keyboard(), parse_mode="HTML")
-            return
-    # Вторым сообщением — одно действие. Список возможностей в конце анкеты
-    # человек не читает: он только что ответил на девять вопросов и ждёт,
-    # что теперь. Ответ должен быть один и выполнимый прямо сейчас.
-    # И кружком — то же самое голосом. Последним, а не первым: кнопка
-    # «Открыть приложение» должна остаться под большим пальцем.
-    await send_circle(message, "ready")
-    # И последним — что приложение не единственный вход. Команды лежат за
-    # синей кнопкой, куда никто не смотрит, а открывать приложение готовы
-    # не все: без этой картинки половина бота для них не существует.
-    await send_slide(message, "in_chat_too")
-
-    # И самым последним — подарок за приглашение, если он есть. Последним
-    # нарочно: человек только что получил одно понятное действие, и
-    # заслонять его хорошей новостью значит менять дело на настроение.
-    await _thank_for_invite(message, кто, пригласила, ей_дней, мне_дней)
-
-    # И только теперь — то, что убрали из анкеты. Человек уже получил норму
-    # и одно понятное действие; отсюда любой его ответ добровольный.
-    await _offer_the_rest(message, нужен_вес=нужен_вес,
-                          нужны_аллергии=нужны_аллергии)
-
-    # Самой последней — карточка второго проекта Лилии. Последней нарочно:
-    # всё, что придёт после, уводит её выше экрана, а прошлый раз она
-    # именно так и пропадала. Ничем не управляет и ничего не задерживает:
-    # не отправилась — анкета всё равно закончена (`services/music.py`).
-    # The first useful action must remain the last message on the screen.
-    # Music stays available through /music and the Profile tab.
-    interest = data.get("interest", "both")
-    await message.answer(first_step_text(interest), reply_markup=first_step_keyboard(interest))
+    await message.answer(personal_preview(data),
+                         reply_markup=plan_keyboard(), parse_mode="HTML")

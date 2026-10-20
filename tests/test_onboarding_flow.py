@@ -128,6 +128,7 @@ async def пройти(чат, st, *, цель="lose_weight", застрять=N
     await O.process_activity(ФейковаяКнопка(чат, "onb_activity:moderate"), st)
     await O.process_goal(ФейковаяКнопка(чат, f"onb_goal:{цель}"), st)
 
+    await st.update_data(training_place="home", training_pace="gentle")
     if застрять == "allergies":
         await st.update_data(diet_type="regular")
         await st.set_state(OnboardingStates.allergies)
@@ -250,12 +251,9 @@ def test_после_нормы_предлагают_то_что_убрали(mon
             чат = []
             await пройти(чат, контекст(), цель="lose_weight")
 
-            текст, кнопки = _предложение(чат)
-            assert [д for _, д in кнопки] == [f"{CB_EDIT}target_weight"]
-            # Предложение стоит после нормы, а не до неё.
-            весь = [т for т, _ in чат]
-            assert весь.index(текст) > next(
-                i for i, т in enumerate(весь) if "Профиль настроен" in т)
+            assert _предложение(чат) is None
+            assert "твой план на 30 дней" in чат[-1][0]
+            assert чат[-1][1] == [("✨ Начать мой план", "platega:plan_start")]
     run(scenario)
 
 
@@ -288,7 +286,7 @@ def test_у_предложения_нет_кнопки_потом(monkeypatch):
         async with стенд(monkeypatch) as maker:
             чат = []
             await пройти(чат, контекст())
-            _, кнопки = _предложение(чат)
+            _, кнопки = чат[-1]
             for подпись, _ in кнопки:
                 assert "потом" not in подпись.lower() and "позже" not in подпись.lower()
     run(scenario)
