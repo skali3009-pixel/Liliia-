@@ -11,6 +11,9 @@ PYTHON="$DIR/.venv/bin/python"
 
 cd "$DIR"
 set -a; [ -f .env ] && . ./.env; set +a
+if [ "${1:-}" = "--bot-migration" ]; then
+  exec "$PYTHON" -m services.bot_migration_ops "${2:-inspect}"
+fi
 
 # Explicit read-only diagnostic; no Telegram delivery or personal content.
 if [ "${1:-}" = "--platega" ]; then

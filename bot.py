@@ -36,6 +36,9 @@ bot = Bot(token=config.BOT_TOKEN)
 # сам раз в полчаса, и с памятью каждый такой перезапуск стирал
 # незаконченные карточки еды и недописанные анкеты.
 dp = Dispatcher(storage=DatabaseStorage(), events_isolation=SimpleEventIsolation())
+from services.bot_migration import MigrationPresence, legacy_bridge
+dp.message.outer_middleware(MigrationPresence())
+dp.callback_query.outer_middleware(MigrationPresence())
 
 # Проверка доступа стоит до всех обработчиков: без подписки бот отвечает
 # только про оплату.
@@ -159,9 +162,13 @@ async def main() -> None:
         # Список команд в меню Telegram: без него о /problem, /steps
         # и /delete знает только тот, кому их назвали вслух.
         await bot_commands.apply(bot)
+        legacy_task = asyncio.create_task(legacy_bridge()) if config.LEGACY_BOT_TOKEN else None
         logger.info("Бот запускается...")
         await dp.start_polling(bot)
     finally:
+        if 'legacy_task' in locals() and legacy_task:
+            legacy_task.cancel()
+            await asyncio.gather(legacy_task, return_exceptions=True)
         artwork_task.cancel()
         circles_task.cancel()
         scheduler.shutdown(wait=False)

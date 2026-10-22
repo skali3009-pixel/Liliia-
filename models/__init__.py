@@ -4,6 +4,7 @@ Base.metadata содержал полную схему БД (users, meals, water
 workout_log, body_measurements, progress_photos, achievements)."""
 
 from models.achievement import Achievement
+from models.bot_migration import BotMigrationContact
 from models.platega import PlategaOrder, PlategaCallback, PlategaNotice
 from models.base import Base
 from models.board import BoardPrefs

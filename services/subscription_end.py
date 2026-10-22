@@ -64,6 +64,9 @@ async def send_final_reports(bot):
             Subscription.lifetime.is_(False),
         ))).all())
     for user_id in ids:
+        from services.bot_migration import reachable
+        if not await reachable(user_id):
+            continue
         # Lock the same subscription row used by payment settlement. Renewals
         # cannot race the access check and final message.
         async with get_session() as session:

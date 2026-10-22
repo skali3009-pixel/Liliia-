@@ -40,6 +40,9 @@ WEEKLY_REPORT_TIME = time(20, 0)
 
 
 async def product_messages_allowed(user_id: int) -> bool:
+    from services.bot_migration import reachable
+    if not await reachable(user_id):
+        return False
     if not config.PAYWALL:
         return True
     from services.subscriptions import check_access

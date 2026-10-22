@@ -97,7 +97,8 @@ async def create_order(user_id, *, one_ruble_test=False):
     data = await api("POST", "/v2/transaction/process", {
         "paymentDetails": {"amount": amount, "currency": "RUB"},
         "description": "AURA — тест оплаты 1 рубль, 30 дней" if one_ruble_test else "AURA — доступ на 30 дней, без автопродления",
-        "return": RETURN_URL, "failedUrl": RETURN_URL,
+        "return": ("https://t.me/" + config.BOT_USERNAME) if config.BOT_USERNAME else RETURN_URL,
+        "failedUrl": ("https://t.me/" + config.BOT_USERNAME) if config.BOT_USERNAME else RETURN_URL,
         "payload": order_id, "metadata": {"userId": str(user_id)},
     })
     try:
@@ -295,6 +296,11 @@ async def notify_order(bot, order_id):
                 await session.commit()
                 return
             user = await session.get(User, order.user_id)
+            from services.bot_migration import reachable
+            if not await reachable(order.user_id):
+                notice.next_attempt_at = now() + timedelta(minutes=5)
+                await session.commit()
+                return
             keyboard = InlineKeyboardBuilder()
             keyboard.button(text="С чего начать", callback_data="first:begin")
             if config.WEBAPP_URL:

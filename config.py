@@ -30,6 +30,7 @@ def _get_required(name: str) -> str:
 
 # Токен Telegram-бота, выданный @BotFather.
 BOT_TOKEN = _get_required("BOT_TOKEN")
+LEGACY_BOT_TOKEN = os.getenv("LEGACY_BOT_TOKEN", "")
 
 # Ключ Anthropic API (console.anthropic.com -> API Keys).
 # Необязателен: без него бот работает, но распознавание еды по фото
