@@ -139,3 +139,46 @@ def test_results_are_only_for_owner_in_private_chat(monkeypatch):
             await handler.results(msg)
             assert 'Ответили: 0' in msg.answer.await_args.args[0]
     asyncio.run(run())
+
+
+def test_legacy_dispatcher_accepts_survey_vote_and_comment_but_redirects_other_messages(monkeypatch):
+    """Real dispatcher routing for a survey sent by the previous bot identity."""
+    from aiogram import Bot
+    from aiogram.types import Update, CallbackQuery, Message, Chat, User as TgUser
+    from aiogram.methods import SendMessage
+    from services.bot_migration import legacy_dispatcher
+
+    async def run():
+        async with database(monkeypatch) as maker:
+            await survey.deliver_one(NS(send_message=AsyncMock(return_value=NS(message_id=100))),1)
+            calls=[]
+            bot=Bot('123456:abcdefghijklmnopqrstuvwxyzABCDE')
+            async def make_request(_bot, method, timeout=None):
+                calls.append(method)
+                if isinstance(method, SendMessage):
+                    return Message(message_id=101, date=datetime.now(timezone.utc),
+                                   chat=Chat(id=1,type='private'), text=method.text)
+                return True
+            monkeypatch.setattr(bot.session,'make_request',make_request)
+            dispatcher=legacy_dispatcher()
+            who=TgUser(id=1,is_bot=False,first_name='Test')
+            chat=Chat(id=1,type='private')
+            old_message=Message(message_id=100,date=datetime.now(timezone.utc),chat=chat,text=survey.TEXT)
+            def callback(data, update_id):
+                return Update(update_id=update_id, callback_query=CallbackQuery(
+                    id=str(update_id),from_user=who,chat_instance='private',message=old_message,data=data))
+            await dispatcher.feed_update(bot,callback('as16:pick:broken',1))
+            await dispatcher.feed_update(bot,callback('as16:comment',2))
+            prompt=Message(message_id=101,date=datetime.now(timezone.utc),chat=chat,
+                           from_user=TgUser(id=bot.id,is_bot=True,first_name='Old'),text=handler.COMMENT_HEADER)
+            reply=Message(message_id=102,date=datetime.now(timezone.utc),chat=chat,from_user=who,
+                          text='Кнопка не работала',reply_to_message=prompt)
+            await dispatcher.feed_update(bot,Update(update_id=3,message=reply))
+            async with maker() as s:
+                row=await s.get(SurveyResponse,(survey.CAMPAIGN,1))
+                assert row.choice=='broken' and row.comment=='Кнопка не работала'
+            normal=Message(message_id=103,date=datetime.now(timezone.utc),chat=chat,from_user=who,text='/start')
+            await dispatcher.feed_update(bot,Update(update_id=4,message=normal))
+            assert any(isinstance(call, SendMessage) and 'переезжает' in call.text for call in calls)
+            await bot.session.close()
+    asyncio.run(run())

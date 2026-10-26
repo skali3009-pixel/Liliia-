@@ -1,7 +1,7 @@
 """Migration bridge. Never launches a broadcast automatically."""
 import asyncio
 from datetime import datetime, timezone
-from aiogram import BaseMiddleware, Bot, Dispatcher
+from aiogram import BaseMiddleware, Bot, Dispatcher, F
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton, MenuButtonCommands
 from sqlalchemy.exc import IntegrityError
 import config
@@ -64,10 +64,17 @@ class MigrationPresence(BaseMiddleware):
         return await handler(event, data)
 
 
-async def legacy_bridge():
-    """Old identity only redirects; no product handlers or scheduler."""
-    old = Bot(config.LEGACY_BOT_TOKEN)
+def legacy_dispatcher():
+    """Keep replies to the previously delivered survey usable on the old bot."""
+    from handlers import survey as survey_handler
+    from services import survey
+
     dispatcher = Dispatcher()
+    # Surveys sent before migration belong to the old Telegram identity.
+    # Route only that campaign and its explicit comment replies, not product
+    # handlers or arbitrary messages, before the generic redirect.
+    dispatcher.callback_query.register(survey_handler.answer, F.data.startswith(survey.PREFIX))
+    dispatcher.message.register(survey_handler.comment, survey_handler.SurveyReply())
     async def message(event):
         if event.chat.type == "private":
             await event.answer(announcement(), reply_markup=keyboard())
@@ -77,6 +84,13 @@ async def legacy_bridge():
             await event.message.answer(announcement(), reply_markup=keyboard())
     dispatcher.message.register(message)
     dispatcher.callback_query.register(callback)
+    return dispatcher
+
+
+async def legacy_bridge():
+    """Old identity redirects and accepts replies to its existing survey."""
+    old = Bot(config.LEGACY_BOT_TOKEN)
+    dispatcher = legacy_dispatcher()
     try:
         await old.set_chat_menu_button(menu_button=MenuButtonCommands())
         await old.delete_my_commands()
