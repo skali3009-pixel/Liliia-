@@ -6,7 +6,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
+from db import get_session
 from keyboards.main_menu import MENU_TARIFFS
+from models import User
 from services.tariffs import PLANS, find_plan, overview_text, plan_text
 from services import platega
 
@@ -84,6 +86,17 @@ async def check_platega(callback: CallbackQuery):
     except platega.PaymentError as error:
         text = str(error)
     await callback.message.answer(text)
+
+
+@router.callback_query(F.data == "platega:nudge_stop")
+async def stop_pay_nudges(callback: CallbackQuery):
+    """«Не напоминать» под письмом про оплату: то же, что /stop_ads."""
+    async with get_session() as session:
+        user = await session.get(User, callback.from_user.id)
+        if user is not None:
+            user.marketing_consent = False
+            await session.commit()
+    await callback.answer("Хорошо, больше не напоминаю.", show_alert=True)
 
 
 @router.callback_query(F.data == "platega:subscription")

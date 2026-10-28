@@ -49,7 +49,7 @@ from datetime import date, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import MarketingEvent, User
+from models import MarketingEvent, Payment, User
 from utils.timeframe import today_in
 
 logger = logging.getLogger(__name__)
@@ -190,6 +190,12 @@ class Report:
     actions_people: dict[str, int] = field(default_factory=dict)
     meals_from_offer: int = 0  # записей еды из подбора (события, не люди)
     meals_undone: int = 0      # отменённых или удалённых записей еды (события)
+    # Воронка по источникам: из пришедших по метке — сколько дошли до конца
+    # анкеты и сколько оплатили. Люди, не платежи; возвращённые платежи не
+    # считаются. Без этих двух строк «пришло 40 человек» ничего не говорит о
+    # том, окупилось ли размещение.
+    sources_done: dict[str, int] = field(default_factory=dict)
+    sources_paid: dict[str, int] = field(default_factory=dict)
 
 
 async def report(session: AsyncSession, *, days: int = 30,
@@ -237,6 +243,22 @@ async def report(session: AsyncSession, *, days: int = 30,
         источники_стмт = источники_стмт.where(User.id.not_in(лишние))
     источники_стмт = источники_стмт.group_by(User.first_source)
 
+    # Дошедшие до конца анкеты и оплатившие — по первому источнику. Оплатой
+    # считается живой платёж: возвращённый (`refunded`) человека не делает
+    # платящим.
+    из_анкеты_стмт = select(User.first_source, func.count()).where(
+        User.first_source.is_not(None), User.onboarding_completed.is_(True)
+    )
+    оплатили_стмт = select(User.first_source,
+                           func.count(func.distinct(Payment.user_id))).join(
+        Payment, Payment.user_id == User.id
+    ).where(User.first_source.is_not(None), Payment.refunded.is_(False))
+    if лишние:
+        из_анкеты_стмт = из_анкеты_стмт.where(User.id.not_in(лишние))
+        оплатили_стмт = оплатили_стмт.where(User.id.not_in(лишние))
+    из_анкеты_стмт = из_анкеты_стмт.group_by(User.first_source)
+    оплатили_стмт = оплатили_стмт.group_by(User.first_source)
+
     async def событий(event: str) -> int:
         stmt = select(func.coalesce(func.sum(MarketingEvent.count), 0)).where(
             MarketingEvent.event == event,
@@ -262,6 +284,10 @@ async def report(session: AsyncSession, *, days: int = 30,
         actions_people={вид: await людей(ACTION_COMPLETED, вид) for вид in ACTIONS},
         meals_from_offer=await событий(MEAL_FROM_OFFER),
         meals_undone=await событий(MEAL_UNDONE),
+        sources_done={метка: int(сколько) for метка, сколько in
+                      (await session.execute(из_анкеты_стмт)).all()},
+        sources_paid={метка: int(сколько) for метка, сколько in
+                      (await session.execute(оплатили_стмт)).all()},
     )
 
 

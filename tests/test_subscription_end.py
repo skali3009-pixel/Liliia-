@@ -68,7 +68,6 @@ def test_never_paid_account_does_not_receive_expiry_message(monkeypatch):
     ("send_due_reminders", "collect_due_reminders"),
     ("send_smart_nudges", "notifications.due"),
     ("send_comebacks", "comeback.due"),
-    ("send_unfinished", "unfinished.due"),
     ("send_step_results", "step_results.due"),
 ])
 def test_every_scheduled_product_path_checks_access(monkeypatch, job, source):

@@ -759,9 +759,14 @@ async def start_plan(callback: CallbackQuery, state: FSMContext):
     if not config.PAYWALL or access.allowed:
         await begin_after_payment(callback, state)
         return
-    from handlers.access import paywall_text, buy_keyboard
+    from handlers.access import buy_keyboard, paywall_text, pitch_text
     await callback.answer()
-    await callback.message.answer(paywall_text(access), reply_markup=buy_keyboard())
+    async with get_session() as session:
+        user = await session.get(User, callback.from_user.id)
+    from services.platega import enabled as platega_enabled
+    sells = not config.STARS_PAYMENTS_ENABLED and platega_enabled(callback.from_user.id)
+    text = pitch_text(user) if sells and user else paywall_text(access)
+    await callback.message.answer(text, reply_markup=buy_keyboard())
 
 
 @router.callback_query(F.data == "first:begin")

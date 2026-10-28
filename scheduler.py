@@ -16,7 +16,7 @@ from keyboards.supplements import reminder_keyboard
 from services.reminders import collect_due_reminders
 from services import fsm_storage
 from services import notifications
-from services import comeback, guard, metrics, unfinished
+from services import comeback, guard, metrics, pay_nudges, unfinished
 from services.gamification import remember_suggestion
 from services import step_results
 from services import owner_reports as owner_reports_text
@@ -48,6 +48,19 @@ async def product_messages_allowed(user_id: int) -> bool:
     from services.subscriptions import check_access
     async with get_session() as session:
         return (await check_access(session, user_id)).allowed
+
+
+async def funnel_messages_allowed(user_id: int) -> bool:
+    """Можно ли писать человеку, который ещё не дошёл до оплаты.
+
+    У тех, кто бросил анкету, доступа нет по определению: подписка заводится
+    сразу истёкшей. Проверка доступа (`product_messages_allowed`) молча
+    отсекала их всех — и письмо «анкета не закончена» не доходило ни до кого,
+    хотя оно как раз и зовёт человека в бота. Здесь проверяется только то,
+    что бот вообще может с ним говорить.
+    """
+    from services.bot_migration import reachable
+    return await reachable(user_id)
 
 
 async def send_due_reminders(bot: Bot) -> None:
@@ -165,7 +178,7 @@ async def send_unfinished(bot: Bot) -> None:
         return
 
     for letter in letters:
-        if not await product_messages_allowed(letter.user_id):
+        if not await funnel_messages_allowed(letter.user_id):
             continue
         key = (letter.user_id, "unfinished")
         if key in _already_sent:
@@ -176,6 +189,38 @@ async def send_unfinished(bot: Bot) -> None:
             _already_sent.add(key)
         except Exception:
             logger.info("Не получилось позвать в анкету %s", letter.user_id)
+
+
+async def send_pay_nudges(bot: Bot) -> None:
+    """Дожим неоплативших и напоминание о брошенной оплате. Правила — в сервисе."""
+    from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError
+    try:
+        async with get_session() as session:
+            nudges = await pay_nudges.due(session)
+    except Exception:
+        logger.exception("Не удалось собрать напоминания об оплате")
+        return
+
+    for nudge in nudges:
+        key = (nudge.user_id, f"pay_{nudge.kind}")
+        if key in _already_sent or not await funnel_messages_allowed(nudge.user_id):
+            continue
+        try:
+            await bot.send_message(nudge.user_id, nudge.text,
+                                   reply_markup=pay_nudges.keyboard(nudge))
+        except (TelegramForbiddenError, TelegramBadRequest):
+            # Заблокировал бота или чат недоступен: повторять незачем.
+            logger.info("Напоминание об оплате не доставлено %s", nudge.user_id)
+        except Exception:
+            logger.info("Не получилось отправить напоминание об оплате %s", nudge.user_id)
+            continue
+        _already_sent.add(key)
+        try:
+            async with get_session() as session:
+                await pay_nudges.mark(session, nudge)
+                await session.commit()
+        except Exception:
+            logger.exception("Напоминание ушло, но не записалось: %s", nudge.user_id)
 
 
 async def send_step_results(bot: Bot) -> None:
@@ -334,6 +379,10 @@ def start_scheduler(bot: Bot) -> AsyncIOScheduler:
     # Письмо застрявшему в анкете: тот же местный полдень, тоже раз в минуту.
     scheduler.add_job(send_unfinished, "cron", minute="*", args=[bot],
                       id="unfinished")
+    # Дожим неоплативших и брошенная оплата: раз в десять минут, окно по
+    # местному времени проверяет сам сервис.
+    scheduler.add_job(send_pay_nudges, "cron", minute="*/10", args=[bot],
+                      id="pay_nudges", max_instances=1, coalesce=True)
     # Итог недели по шагам: понедельник, местное утро — тоже раз в минуту.
     scheduler.add_job(send_step_results, "cron", minute="*", args=[bot],
                       id="step_results")
