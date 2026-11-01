@@ -28,7 +28,7 @@ MSK = timezone(timedelta(hours=3))
 # --- метки каналов ---------------------------------------------------------
 
 def test_every_ad_mark_is_recognised_named_and_fits_the_column():
-    assert len(sources.ADS) == 5
+    assert len(sources.ADS) == 8 and set(sources.ADS_RETIRED) <= set(sources.ADS)
     for метка in sources.ADS:
         assert sources.recognise(метка) == метка
         assert метка in sources.НАЗВАНИЯ
@@ -67,7 +67,13 @@ def test_ad_funnel_lines_show_arrived_done_paid_and_skip_silent_channels():
 def test_ad_links_are_built_by_the_one_door(monkeypatch):
     monkeypatch.setattr("services.identity.config.BOT_USERNAME", "aura_scalia_bot")
     ссылки = dict(sources.ссылки_рекламы())
-    assert ссылки["Реклама: ПП ЛЕГКО И ВКУСНО"] == "https://t.me/aura_scalia_bot?start=tg_pp_legko"
+    assert ссылки["Реклама: Готовим вкусно"] == "https://t.me/aura_scalia_bot?start=tg_gotovim"
+    assert len(ссылки) == 5
+    # Заброшенные каналы: метка понятна, но новых ссылок на неё не выдаём.
+    assert not any("ПП ЛЕГКО" in название or "iHerb" in название or "BonRazione" in название
+                   for название in ссылки)
+    for метка in sources.ADS_RETIRED:
+        assert sources.recognise(метка) == метка
 
 
 def test_report_counts_done_and_paid_per_source_and_ignores_refunds(monkeypatch):

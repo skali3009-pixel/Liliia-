@@ -49,12 +49,21 @@ PLATFORMS: tuple[str, ...] = (
 # размещение окупилось. Список закрытый, как и весь остальной: новый канал —
 # новая строка здесь, а не произвольный параметр в ссылке.
 ADS: tuple[str, ...] = (
-    "tg_pp_legko",
+    "tg_gotovim",
     "tg_recepty_pp",
+    "tg_dietrecepti",
     "tg_hudeem",
+    "tg_foodgiv",
+    # Выпущены 29.10 и оказались заброшенными каналами (последний пост
+    # 5–8 месяцев назад): новых ссылок с ними не выдаём, но распознавать
+    # обязаны — ссылки уже отправлялись.
+    "tg_pp_legko",
     "tg_iherb",
     "tg_bonrazione",
 )
+
+# Метки, которые остаются понятными, но больше не выдаются как ссылки.
+ADS_RETIRED: tuple[str, ...] = ("tg_pp_legko", "tg_iherb", "tg_bonrazione")
 
 # Метки ролики-за-роликом, которые выдавались до 22.09.2026. Новых ссылок с
 # ними не выпускаем, но распознавать обязаны: они уже разосланы, лежат в
@@ -88,9 +97,12 @@ EXISTING = "existing_user"
     "youtube_profile": "YouTube",
     "vk_profile": "VK",
     "telegram_channel": "Telegram-канал",
-    "tg_pp_legko": "Реклама: ПП ЛЕГКО И ВКУСНО",
+    "tg_gotovim": "Реклама: Готовим вкусно",
     "tg_recepty_pp": "Реклама: Рецепты пп",
+    "tg_dietrecepti": "Реклама: Диетические рецепты",
     "tg_hudeem": "Реклама: ХУДЕЕМ БЕЗ ХИМИИ",
+    "tg_foodgiv": "Реклама: Рецепты в картинках",
+    "tg_pp_legko": "Реклама: ПП ЛЕГКО И ВКУСНО",
     "tg_iherb": "Реклама: Здоровое питание | iHerb",
     "tg_bonrazione": "Реклама: BonRazione",
     DIRECT: "Без метки (прямой заход)",
@@ -240,9 +252,9 @@ def ссылки_рекламы() -> list[tuple[str, str]]:
     """
     from services.identity import start_link
 
-    return [(НАЗВАНИЯ[метка], start_link(метка)) for метка in ADS]
+    return [(НАЗВАНИЯ[метка], start_link(метка)) for метка in ADS if метка not in ADS_RETIRED]
 
 
-__all__ = ["ADS", "DIRECT", "EXISTING", "LEGACY", "MARKETING", "НАЗВАНИЯ",
+__all__ = ["ADS", "ADS_RETIRED", "DIRECT", "EXISTING", "LEGACY", "MARKETING", "НАЗВАНИЯ",
            "PLATFORMS", "ПЛОЩАДКА_LEGACY", "apply", "recognise", "ссылки",
            "воронка_рекламы", "ссылки_рекламы", "свод"]
