@@ -151,7 +151,7 @@ async def purge_legacy_test_profile() -> None:
     возьмёт тот же username. После первого запуска профиля нет — повторный
     проход ничего не делает.
     """
-    cutoff = datetime(2026, 11, 4, tzinfo=timezone.utc)
+    cutoff = datetime(2026, 11, 3, tzinfo=timezone.utc)
     async with get_session() as session:
         user = (await session.execute(
             select(User).where(
