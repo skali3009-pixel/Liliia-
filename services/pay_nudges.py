@@ -35,7 +35,7 @@ from datetime import date, datetime, time, timedelta, timezone
 
 from aiogram.types import InlineKeyboardMarkup
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import config
@@ -245,5 +245,39 @@ async def mark(session: AsyncSession, nudge: Nudge, *, day: date | None = None) 
     ))
 
 
+async def report(session: AsyncSession) -> dict[str, object]:
+    """Сколько людей вообще можно дожимать и что уже отправлено.
+
+    Без этого блока «согласие на новости» остаётся неизвестным: письма
+    уходят только согласившимся, и охват дожима нельзя отличить от нуля
+    отправок.
+    """
+    finished = (await session.execute(
+        select(MarketingEvent.user_id)
+        .where(MarketingEvent.event == analytics.PROFILE_COMPLETED,
+               MarketingEvent.day >= START_DATE)
+        .distinct()
+    )).scalars().all()
+
+    consented = 0
+    if finished:
+        consented = int((await session.execute(
+            select(func.count()).select_from(User)
+            .where(User.id.in_(finished), User.marketing_consent.is_(True))
+        )).scalar_one())
+
+    sent = {"d1": 0, "d3": 0, "d7": 0, "cart": 0}
+    rows = await session.execute(
+        select(MarketingEvent.kind, func.sum(MarketingEvent.count))
+        .where(MarketingEvent.event == EVENT, MarketingEvent.day >= START_DATE)
+        .group_by(MarketingEvent.kind)
+    )
+    for kind, count in rows.all():
+        if kind in sent:
+            sent[kind] = int(count or 0)
+
+    return {"finished": len(finished), "consented": consented, "sent": sent}
+
+
 __all__ = ["CART", "CB_STOP", "EVENT", "LATE_DAYS", "Nudge", "START_DATE",
-           "STEPS", "due", "keyboard", "mark", "render"]
+           "STEPS", "due", "keyboard", "mark", "render", "report"]

@@ -19,11 +19,12 @@ from aiogram.types import (
     PreCheckoutQuery,
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from sqlalchemy import func, select
 
 import config
 from db import get_session
-from models import SubscriptionSource
-from services import analytics, friends, referrals, sources
+from models import SubscriptionSource, User
+from services import analytics, deletion, friends, pay_nudges, referrals, sources
 from services.step_sync import plural
 from services.subscriptions import Access, activate, check_access, grant_lifetime, stats
 from handlers.tariffs import send_tariffs, tariff_keyboard
@@ -41,6 +42,11 @@ MONTH_SECONDS = 30 * 24 * 60 * 60
 
 # Как владелец может написать «без срока» в команде /grant.
 FOREVER_WORDS = {"навсегда", "вечно", "forever"}
+
+# Тестовые профили, которые владелец может удалить целиком и начать заново.
+# Список закрытый: команда не должна стать способом стереть живого человека.
+PURGE_TEST_USERNAMES = {"only_selfish_official"}
+CB_PURGE_TEST = "admin:purge_test"
 
 
 def paywall_text(access: Access) -> str:
@@ -333,6 +339,115 @@ async def show_my_id(message: Message) -> None:
     await message.answer("\n".join(lines), parse_mode="Markdown")
 
 
+@router.message(Command("purge_test_user"))
+async def ask_purge_test_user(message: Message) -> None:
+    """Сухой отчёт по тестовому профилю и кнопка полного удаления.
+
+    Только владелец и только имя из закрытого списка. Живого человека эта
+    команда стереть не может даже при ошибке в наборе.
+    """
+    if message.from_user.id not in config.ADMIN_IDS:
+        return
+
+    parts = (message.text or "").split(maxsplit=1)
+    target = parts[1].lstrip("@").strip().lower() if len(parts) > 1 else ""
+    if not target:
+        await message.answer(
+            "Укажи тестовый профиль: /purge_test_user @username или ID."
+        )
+        return
+    if not target.isdigit() and target not in PURGE_TEST_USERNAMES:
+        await message.answer(
+            "Так можно удалить только тестовый профиль из списка: "
+            + ", ".join("@" + name for name in sorted(PURGE_TEST_USERNAMES))
+        )
+        return
+
+    async with get_session() as session:
+        if target.isdigit():
+            user = await session.get(User, int(target))
+        else:
+            user = (await session.execute(
+                select(User).where(func.lower(User.username) == target)
+            )).scalar_one_or_none()
+        if user is None:
+            await message.answer(f"Профиль {target} в базе не найден.")
+            return
+        username = (user.username or "").lower()
+        if username not in PURGE_TEST_USERNAMES:
+            await message.answer("Это не тестовый профиль из закрытого списка.")
+            return
+        if user.id in config.ADMIN_IDS:
+            await message.answer("Этот профиль — администратор, удалять его нельзя.")
+            return
+        data = await deletion.inventory(session, user.id)
+        uid = user.id
+        completed = bool(user.onboarding_completed)
+        created = user.created_at.strftime("%d.%m.%Y") if user.created_at else "неизвестно"
+
+    было = "\n".join([
+        f"👤 @{username} · ID `{uid}`",
+        f"Создан: {created}",
+        f"Анкета: {'завершена' if completed else 'не завершена'}",
+        "",
+        "Будет удалено:",
+        f"• еда: {data['meals']} · вода: {data['water']} · тренировки: {data['workouts']}",
+        f"• замеры: {data['measurements']} · фото: {data['photos']} · шаги: {data['steps']}",
+        f"• счета Platega: {data['orders']}",
+        f"• незаконченные состояния: {data['states']}",
+    ])
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Да, удалить профиль", callback_data=f"{CB_PURGE_TEST}:{uid}")
+    builder.button(text="Отмена", callback_data=f"{CB_PURGE_TEST}:0")
+
+    await message.answer(
+        было + "\n\nПосле удаления /start создаст профиль с нуля. "
+        "Действие необратимо.",
+        reply_markup=builder.as_markup(),
+        parse_mode="Markdown",
+    )
+
+
+@router.callback_query(F.data.startswith(CB_PURGE_TEST + ":"))
+async def do_purge_test_user(callback: CallbackQuery) -> None:
+    if callback.from_user.id not in config.ADMIN_IDS:
+        await callback.answer("Нет доступа", show_alert=True)
+        return
+
+    raw = (callback.data or "").rsplit(":", 1)[-1]
+    if not raw.isdigit() or int(raw) == 0:
+        await callback.message.edit_text("Хорошо, ничего не удаляю.")
+        await callback.answer()
+        return
+
+    user_id = int(raw)
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        if user is None:
+            await callback.message.edit_text("Профиль уже удалён.")
+            await callback.answer()
+            return
+        if (user.username or "").lower() not in PURGE_TEST_USERNAMES:
+            await callback.message.edit_text(
+                "Имя профиля изменилось — удаление отменено. "
+                "Проверь @username и повтори команду.")
+            await callback.answer()
+            return
+        if user_id in config.ADMIN_IDS:
+            await callback.message.edit_text("Администратора удалять нельзя.")
+            await callback.answer()
+            return
+        await deletion.purge(session, user_id)
+
+    await callback.message.edit_text(
+        "Готово. Профиль удалён полностью: анкета, записи, подписка, "
+        "счета, состояния и фото.\n\n"
+        "С этого аккаунта можно нажать /start — бот начнёт с чистого листа."
+    )
+    await callback.answer("Удалено")
+
+
 @router.message(Command("circles"))
 async def preview_circles(message: Message) -> None:
     """Показать владелице оба кружка знакомства — по требованию.
@@ -563,6 +678,7 @@ async def marketing_report(message: Message) -> None:
         итог = await analytics.report(session, days=дней,
                                       exclude=set(config.ADMIN_IDS))
         недели = await analytics.cohorts(session, exclude=set(config.ADMIN_IDS))
+        дожим = await pay_nudges.report(session)
 
     строки = [
         f"📈 Воронка за {дней} дн. ({итог.since:%d.%m} — {итог.until:%d.%m}, "
@@ -600,6 +716,17 @@ async def marketing_report(message: Message) -> None:
     строки += ["", "💳 Платная реклама по каналам (люди, за всё время)"]
     строки += sources.воронка_рекламы(итог.sources, итог.sources_done,
                                       итог.sources_paid)
+
+    отправлено = дожим["sent"]
+    строки += ["", "✉️ Дожим неоплативших (анкеты с 29.10)"]
+    if дожим["finished"]:
+        строки += [
+            f"   Анкет: {дожим['finished']} · согласие на новости: {дожим['consented']}",
+            f"   Отправлено: 1-й день {отправлено['d1']} · 3-й {отправлено['d3']}"
+            f" · 7-й {отправлено['d7']} · брошенная оплата {отправлено['cart']}",
+        ]
+    else:
+        строки.append("   пока никого")
 
     строки += ["", "🗓 Первая неделя — по неделе прихода (люди)"]
     строки += первая_неделя(недели)

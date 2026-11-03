@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 # Команды, которые работают всегда — иначе из закрытого бота не выбраться.
 OPEN_COMMANDS = {
     "/start", "/subscription", "/tariffs", "/admin", "/grant", "/help",
+    # Служебные, но должны доходить до обработчика даже без оплаты: сам
+    # обработчик проверит ADMIN_IDS.
+    "/purge_test_user",
     # Документы, отзыв согласия и отказ от рекламы должны работать всегда:
     # закон не спрашивает, оплачена ли подписка.
     "/legal", "/delete", "/stop_ads", "/problem",
@@ -49,7 +52,8 @@ def _is_open(event: TelegramObject) -> bool:
 
     if isinstance(event, CallbackQuery):
         data = event.data or ""
-        return data.startswith(CB_BUY) or data.startswith(("legal:", "tariff:", "platega:"))
+        return data.startswith(CB_BUY) or data.startswith(
+            ("legal:", "tariff:", "platega:", "admin:purge_test"))
 
     return False
 

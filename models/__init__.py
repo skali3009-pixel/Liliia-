@@ -46,6 +46,7 @@ from models.workout import LevelEnum, LocationEnum, Workout, WorkoutLog, Workout
 __all__ = [
     "Base",
     "BoardPrefs",
+    "BotMigrationContact",
     "CycleLog",
     "ButtonPress",
     "FsmState",
@@ -92,4 +93,6 @@ __all__ = [
     "Prep",
     "PrepComponent",
     "ApiUsage",
+    "PlategaOrder",
+    "PlategaNotice",
 ]

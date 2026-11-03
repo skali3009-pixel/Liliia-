@@ -27,11 +27,15 @@
 from __future__ import annotations
 
 import logging
+import shutil
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import BoardPrefs, Friendship, Referral, Team, TeamMember, User
+from models import (BoardPrefs, BotMigrationContact, BodyMeasurement,
+                    Friendship, FsmState, Meal, PlategaNotice, PlategaOrder,
+                    ProgressPhoto, Referral, StepLog, Team, TeamMember, User,
+                    WaterLog, WorkoutLog)
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +89,60 @@ async def _leave_team(session: AsyncSession, user_id: int) -> None:
         team.owner_id = int(left[0])
 
 
+async def _forget_payments(session: AsyncSession, user_id: int) -> int:
+    """Убрать счета и уведомления Platega: без этого внешний ключ не пустит."""
+    orders = select(PlategaOrder.id).where(PlategaOrder.user_id == user_id)
+    await session.execute(delete(PlategaNotice).where(PlategaNotice.order_id.in_(orders)))
+    result = await session.execute(delete(PlategaOrder).where(PlategaOrder.user_id == user_id))
+    return result.rowcount or 0
+
+
+async def _forget_service_rows(session: AsyncSession, user_id: int) -> None:
+    """Служебные строки без каскада: состояния и переезд бота.
+
+    `api_usage` не трогаем: он обезличивается через SET NULL и нужен для
+    дневного потолка расходов. Персональных данных в нём нет.
+    """
+    await session.execute(delete(FsmState).where(FsmState.key.like(f"%:{user_id}:%")))
+    await session.execute(
+        delete(BotMigrationContact).where(BotMigrationContact.user_id == user_id))
+
+
+def _remove_photo_dir(user_id: int) -> None:
+    """Файлы фото прогресса живут мимо базы — их надо убрать отдельно."""
+    try:
+        from services.progress import photos_dir
+        shutil.rmtree(photos_dir(user_id), ignore_errors=True)
+    except Exception:                      # файл не должен ломать удаление строки
+        logger.exception("Не удалось удалить каталог фото пользователя %s", user_id)
+
+
+async def inventory(session: AsyncSession, user_id: int) -> dict[str, int]:
+    """Что именно будет удалено. Нужно для сухого отчёта перед действием."""
+    user = await session.get(User, user_id)
+    if user is None:
+        return {}
+
+    async def count(model) -> int:
+        return int((await session.execute(
+            select(func.count()).select_from(model).where(model.user_id == user_id)
+        )).scalar_one())
+
+    return {
+        "meals": await count(Meal),
+        "water": await count(WaterLog),
+        "workouts": await count(WorkoutLog),
+        "measurements": await count(BodyMeasurement),
+        "photos": await count(ProgressPhoto),
+        "steps": await count(StepLog),
+        "orders": await count(PlategaOrder),
+        "states": int((await session.execute(
+            select(func.count()).select_from(FsmState)
+            .where(FsmState.key.like(f"%:{user_id}:%"))
+        )).scalar_one()),
+    }
+
+
 async def purge(session: AsyncSession, user_id: int) -> bool:
     """Удалить человека и всё, что о нём осталось. False — если его уже нет."""
     user = await session.get(User, user_id)
@@ -94,14 +152,17 @@ async def purge(session: AsyncSession, user_id: int) -> bool:
     forgotten = await _forget_friendships(session, user_id)
     invites = await _forget_invites(session, user_id)
     await _leave_team(session, user_id)
+    orders = await _forget_payments(session, user_id)
+    await _forget_service_rows(session, user_id)
     # Как человек был виден в таблице — тоже его данные; каскаду в SQLite
     # не верим по той же причине, что и выше.
     await session.execute(delete(BoardPrefs).where(BoardPrefs.user_id == user_id))
 
     await session.delete(user)
     await session.commit()
-    logger.info("Удалён пользователь %s (обратных дружб: %d, приглашений: %d)",
-                user_id, forgotten, invites)
+    _remove_photo_dir(user_id)
+    logger.info("Удалён пользователь %s (обратных дружб: %d, приглашений: %d, "
+                "счетов Platega: %d)", user_id, forgotten, invites, orders)
     return True
 
 
@@ -113,4 +174,4 @@ async def orphan_friendships(session: AsyncSession) -> int:
     )).scalar_one())
 
 
-__all__ = ["orphan_friendships", "purge"]
+__all__ = ["inventory", "orphan_friendships", "purge"]

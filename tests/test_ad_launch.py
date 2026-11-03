@@ -398,3 +398,27 @@ def test_pitch_after_the_questionnaire_uses_the_persons_own_numbers():
     assert "автосписаний нет" in text.lower()
     bare = pitch_text(SimpleNamespace(full_name=None, daily_calories=None, daily_water_ml=None))
     assert bare.startswith("✨ Твой план") and "ккал" not in bare
+
+
+def test_dunning_report_shows_consent_and_sent(monkeypatch):
+    """Без этого блока нельзя отличить «нет согласия» от «писем не было»."""
+    async def scenario():
+        async with database(monkeypatch) as maker:
+            async with maker() as session:
+                user = await session.get(User, UID)
+                user.marketing_consent = True
+                session.add(MarketingEvent(
+                    user_id=UID, event=analytics.PROFILE_COMPLETED, kind="",
+                    day=pay_nudges.START_DATE, count=1))
+                session.add(MarketingEvent(
+                    user_id=UID, event=pay_nudges.EVENT, kind="d1",
+                    day=pay_nudges.START_DATE, count=1))
+                await session.commit()
+
+                data = await pay_nudges.report(session)
+
+                assert data["finished"] == 1
+                assert data["consented"] == 1
+                assert data["sent"]["d1"] == 1
+                assert data["sent"]["d7"] == 0
+    asyncio.run(scenario())

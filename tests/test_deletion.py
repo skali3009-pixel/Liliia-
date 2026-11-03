@@ -8,13 +8,15 @@
 
 import asyncio
 import contextlib
+from datetime import datetime, timezone
 
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from models import (ActivityLevelEnum, Base, Friendship, GenderEnum, GoalEnum, Meal,
-                    MealSourceEnum, MealTypeEnum, StepLog, Team, TeamMember, User)
+from models import (ActivityLevelEnum, ApiUsage, Base, BotMigrationContact, Friendship,
+                    FsmState, GenderEnum, GoalEnum, Meal, MealSourceEnum, MealTypeEnum,
+                    PlategaOrder, StepLog, Team, TeamMember, User)
 from services import deletion, friends, steps as step_service, teams
 
 
@@ -53,6 +55,10 @@ def test_every_table_with_the_persons_data_is_wired_to_cascade():
         # Расход на модель обезличивается, а не удаляется: он нужен для учёта
         # денег, и без него дневной потолок считался бы неверно.
         ("api_usage", "user_id"),
+        # Переезд бота и счета Platega удаляются руками в services/deletion.py:
+        # у первого нет внешнего ключа, у второго он без каскада.
+        ("bot_migration_contacts", "user_id"),
+        ("platega_orders", "user_id"),
         # Не внешние ключи по устройству: команда переживает своего создателя,
         # обратная дружба убирается руками в services/deletion.py.
         ("teams", "owner_id"),
@@ -166,6 +172,49 @@ def test_deleting_someone_who_is_already_gone_is_not_an_error():
     async def scenario():
         async with db() as session:
             assert await deletion.purge(session, 999) is False
+    run(scenario)
+
+
+def test_service_rows_without_cascade_go_away_too():
+    """Состояния, счета Platega, расход и переезд бота пережили бы каскад."""
+    async def scenario():
+        async with db() as session:
+            session.add(FsmState(key="8803066420:1:1:0::default", state="Onboarding:age"))
+            session.add(ApiUsage(user_id=1, kind="photo", model="claude-sonnet-5",
+                                 day=datetime.now(timezone.utc).date()))
+            session.add(BotMigrationContact(bot_id=8803066420, user_id=1,
+                                            delivery="sent"))
+            session.add(PlategaOrder(id="order-1", user_id=1, amount=490, days=30,
+                                     created_at=datetime.now(timezone.utc)))
+            await session.commit()
+
+            assert await deletion.purge(session, 1) is True
+
+            for model in (FsmState, BotMigrationContact, PlategaOrder):
+                assert (await session.execute(select(model))).first() is None
+            usage = (await session.execute(select(ApiUsage))).scalar_one()
+            assert usage.user_id is None      # расход обезличен, а не потерян
+    run(scenario)
+
+
+def test_inventory_shows_what_is_about_to_disappear():
+    async def scenario():
+        async with db() as session:
+            session.add(Meal(user_id=1, meal_type=MealTypeEnum.BREAKFAST,
+                             name="Овсянка", weight_g=200, calories=250,
+                             protein_g=8, fat_g=5, carbs_g=40,
+                             source=MealSourceEnum.TEXT))
+            session.add(FsmState(key="8803066420:1:1:0::default", state="Onboarding:age"))
+            session.add(PlategaOrder(id="order-1", user_id=1, amount=490, days=30,
+                                     created_at=datetime.now(timezone.utc)))
+            await session.commit()
+
+            data = await deletion.inventory(session, 1)
+
+            assert data["meals"] == 1
+            assert data["orders"] == 1
+            assert data["states"] == 1
+            assert await deletion.inventory(session, 999) == {}
     run(scenario)
 
 

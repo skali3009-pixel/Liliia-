@@ -67,6 +67,9 @@ controlled payment and concurrent PostgreSQL settlement verification remain open
 Pre-release backup: /root/nutrition-backups/aura-20261017-2017.tar.gz;
 backup script also sent its normal owner notification/archive and reported an
 unbound WEEKS variable in retention cleanup. Archive creation succeeded.
+Fixed 2026-11-03: retention no longer uses the WEEKS array; `--local-only` is
+accepted as an alias of `--local`; `--prune-dry-run` shows what would be removed;
+`--prune` is required for actual deletion (nightly backup only reports candidates).
 Stars stay disabled. No recurring mandates. PAYWALL remains a separate switch;
 enabling checkout must not silently remove existing beta or lifetime access.
 

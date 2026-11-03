@@ -12,7 +12,16 @@
 set -uo pipefail
 umask 077
 LOCAL_ONLY=0
-[ "${1:-}" = "--local" ] && LOCAL_ONLY=1
+PRUNE_DRY=0
+PRUNE=0
+case "${1:-}" in
+  "") ;;
+  --now) ;;
+  --local|--local-only) LOCAL_ONLY=1 ;;
+  --prune-dry-run) PRUNE_DRY=1 ;;
+  --prune) PRUNE=1 ;;
+  *) echo "Неизвестный аргумент: $1" >&2; exit 2 ;;
+esac
 
 APP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKUP_DIR="${BACKUP_DIR:-/root/nutrition-backups}"
@@ -24,6 +33,36 @@ cd "$APP_DIR"
 [ -f .env ] && set -a && . ./.env && set +a
 
 log() { printf '%s %s\n' "$(date '+%d.%m %H:%M:%S')" "$*"; }
+
+# Ротация: 7 последних + по одной в неделю. Без ассоциативных массивов:
+# на старом bash пустой WEEKS давал «unbound variable» и ротация падала.
+rotation() {
+  local mode="$1" kept=0 weeks=0 seen=" " file week
+  mapfile -t ALL < <(ls -1t "$BACKUP_DIR"/aura-*.tar.gz 2>/dev/null)
+  for file in "${ALL[@]}"; do
+    kept=$((kept + 1))
+    [ "$kept" -le "$KEEP_DAILY" ] && continue
+    week="$(date -r "$file" '+%G-%V')"
+    if [[ "$seen" != *" $week "* ]] && [ "$weeks" -lt "$KEEP_WEEKLY" ]; then
+      seen+="$week "
+      weeks=$((weeks + 1))
+      continue
+    fi
+    case "$mode" in
+      dry)   printf 'удалить: %s\n' "$file" ;;
+      apply) rm -f "$file" ;;
+      *)     printf 'кандидат на удаление (не трогаю): %s\n' "$file" ;;
+    esac
+  done
+  if [ "$mode" != "apply" ]; then
+    printf 'Всего архивов: %s\n' "${#ALL[@]}"
+  fi
+}
+
+if [ "$PRUNE_DRY" -eq 1 ]; then
+  rotation dry
+  exit 0
+fi
 
 # Сказать владельцу напрямую через Телеграм, минуя бота: копия делается по
 # расписанию ночью, и молча провалившийся бэкап обнаруживается ровно тогда,
@@ -121,18 +160,11 @@ fi
 
 # --- Ротация ---------------------------------------------------------------
 # Оставляем последние копии за неделю и по одной в неделю за два месяца.
-mapfile -t ALL < <(ls -1t "$BACKUP_DIR"/aura-*.tar.gz 2>/dev/null)
-KEPT=0
-declare -A WEEKS
-for file in "${ALL[@]}"; do
-  KEPT=$((KEPT + 1))
-  [ "$KEPT" -le "$KEEP_DAILY" ] && continue
-  WEEK="$(date -r "$file" '+%G-%V')"
-  if [ -z "${WEEKS[$WEEK]:-}" ] && [ "${#WEEKS[@]}" -lt "$KEEP_WEEKLY" ]; then
-    WEEKS[$WEEK]=1
-    continue
-  fi
-  rm -f "$file"
-done
+# Без --prune только показываем кандидатов: старые копии не удаляются молча.
+if [ "$PRUNE" -eq 1 ]; then
+  rotation apply
+else
+  rotation report
+fi
 
 log "На диске копий: $(ls -1 "$BACKUP_DIR"/aura-*.tar.gz 2>/dev/null | wc -l)"
