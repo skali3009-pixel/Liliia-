@@ -6,12 +6,16 @@
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import MenuButtonWebApp, WebAppInfo
+from sqlalchemy import func, select
 
 import config
-from db import init_models
+from db import get_session, init_models
+from models import User
+from services import deletion
 from services.artwork import ensure_artwork
 from services.video_notes import ensure_circles
 from services.fsm_storage import DatabaseStorage
@@ -140,10 +144,32 @@ def warn_about_setup() -> None:
         )
 
 
+async def purge_legacy_test_profile() -> None:
+    """Одноразовая уборка старого тестового профиля.
+
+    Порог по дате создания не даёт удалить нового человека, который когда-то
+    возьмёт тот же username. После первого запуска профиля нет — повторный
+    проход ничего не делает.
+    """
+    cutoff = datetime(2026, 11, 4, tzinfo=timezone.utc)
+    async with get_session() as session:
+        user = (await session.execute(
+            select(User).where(
+                func.lower(User.username) == "only_selfish_official",
+                User.created_at < cutoff,
+            )
+        )).scalar_one_or_none()
+        if user is None:
+            return
+        await deletion.purge(session, user.id)
+        logger.info("Удалён устаревший тестовый профиль @only_selfish_official")
+
+
 async def main() -> None:
     warn_about_setup()
     logger.info("Инициализация базы данных...")
     await init_models()
+    await purge_legacy_test_profile()
 
     # Картинки качаются фоном: без них приложение работает, а ждать их
     # на старте незачем. Ссылку держим, чтобы задачу не собрал сборщик.
