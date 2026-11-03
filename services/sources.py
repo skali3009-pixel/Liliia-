@@ -49,6 +49,19 @@ PLATFORMS: tuple[str, ...] = (
 # размещение окупилось. Список закрытый, как и весь остальной: новый канал —
 # новая строка здесь, а не произвольный параметр в ссылке.
 ADS: tuple[str, ...] = (
+    # Утверждённый список 03.11.2026: 10 каналов, по одной метке на канал.
+    "tg_hudeem_vmeste",
+    "tg_min_sahara",
+    "tg_zdorovie_praktika",
+    "tg_formula_zdorovya",
+    "tg_zozh_stress",
+    "tg_gid_zozh",
+    "tg_dukan",
+    "tg_nutri_rekomenduet",
+    "tg_zdorovex",
+    "tg_zozh_mania",
+    # Прошлая волна 29.10: новых ссылок не выдаём, но распознавать обязаны —
+    # ссылки уже отправлялись.
     "tg_gotovim",
     "tg_recepty_pp",
     "tg_dietrecepti",
@@ -63,7 +76,16 @@ ADS: tuple[str, ...] = (
 )
 
 # Метки, которые остаются понятными, но больше не выдаются как ссылки.
-ADS_RETIRED: tuple[str, ...] = ("tg_pp_legko", "tg_iherb", "tg_bonrazione")
+ADS_RETIRED: tuple[str, ...] = (
+    "tg_gotovim",
+    "tg_recepty_pp",
+    "tg_dietrecepti",
+    "tg_hudeem",
+    "tg_foodgiv",
+    "tg_pp_legko",
+    "tg_iherb",
+    "tg_bonrazione",
+)
 
 # Метки ролики-за-роликом, которые выдавались до 22.09.2026. Новых ссылок с
 # ними не выпускаем, но распознавать обязаны: они уже разосланы, лежат в
@@ -97,6 +119,16 @@ EXISTING = "existing_user"
     "youtube_profile": "YouTube",
     "vk_profile": "VK",
     "telegram_channel": "Telegram-канал",
+    "tg_hudeem_vmeste": "Реклама: Худеем вместе",
+    "tg_min_sahara": "Реклама: Минимум сахара",
+    "tg_zdorovie_praktika": "Реклама: Здоровье на практике",
+    "tg_formula_zdorovya": "Реклама: Формула здоровья",
+    "tg_zozh_stress": "Реклама: ЗОЖ без стресса",
+    "tg_gid_zozh": "Реклама: Гид по ЗОЖ",
+    "tg_dukan": "Реклама: Диета Дюкана",
+    "tg_nutri_rekomenduet": "Реклама: Нутрициолог рекомендует",
+    "tg_zdorovex": "Реклама: Секреты здоровья",
+    "tg_zozh_mania": "Реклама: ЗОЖ-мания",
     "tg_gotovim": "Реклама: Готовим вкусно",
     "tg_recepty_pp": "Реклама: Рецепты пп",
     "tg_dietrecepti": "Реклама: Диетические рецепты",

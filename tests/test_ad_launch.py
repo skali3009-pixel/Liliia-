@@ -28,12 +28,31 @@ MSK = timezone(timedelta(hours=3))
 # --- метки каналов ---------------------------------------------------------
 
 def test_every_ad_mark_is_recognised_named_and_fits_the_column():
-    assert len(sources.ADS) == 8 and set(sources.ADS_RETIRED) <= set(sources.ADS)
+    assert len(sources.ADS) == 18 and set(sources.ADS_RETIRED) <= set(sources.ADS)
     for метка in sources.ADS:
         assert sources.recognise(метка) == метка
         assert метка in sources.НАЗВАНИЯ
         assert len(метка) <= 32          # колонка first_source — 32 знака
         assert метка not in sources.PLATFORMS and метка not in sources.LEGACY
+
+
+def test_the_approved_ten_have_their_own_links_and_names():
+    approved = {
+        "tg_hudeem_vmeste": "Реклама: Худеем вместе",
+        "tg_min_sahara": "Реклама: Минимум сахара",
+        "tg_zdorovie_praktika": "Реклама: Здоровье на практике",
+        "tg_formula_zdorovya": "Реклама: Формула здоровья",
+        "tg_zozh_stress": "Реклама: ЗОЖ без стресса",
+        "tg_gid_zozh": "Реклама: Гид по ЗОЖ",
+        "tg_dukan": "Реклама: Диета Дюкана",
+        "tg_nutri_rekomenduet": "Реклама: Нутрициолог рекомендует",
+        "tg_zdorovex": "Реклама: Секреты здоровья",
+        "tg_zozh_mania": "Реклама: ЗОЖ-мания",
+    }
+    assert set(approved) <= set(sources.ADS)
+    assert not set(approved) & set(sources.ADS_RETIRED)
+    for метка, название in approved.items():
+        assert sources.НАЗВАНИЯ[метка] == название
 
 
 def test_unknown_channel_mark_is_still_not_a_source():
@@ -67,10 +86,12 @@ def test_ad_funnel_lines_show_arrived_done_paid_and_skip_silent_channels():
 def test_ad_links_are_built_by_the_one_door(monkeypatch):
     monkeypatch.setattr("services.identity.config.BOT_USERNAME", "aura_scalia_bot")
     ссылки = dict(sources.ссылки_рекламы())
-    assert ссылки["Реклама: Готовим вкусно"] == "https://t.me/aura_scalia_bot?start=tg_gotovim"
-    assert len(ссылки) == 5
-    # Заброшенные каналы: метка понятна, но новых ссылок на неё не выдаём.
-    assert not any("ПП ЛЕГКО" in название or "iHerb" in название or "BonRazione" in название
+    assert ссылки["Реклама: Худеем вместе"] == "https://t.me/aura_scalia_bot?start=tg_hudeem_vmeste"
+    assert ссылки["Реклама: Секреты здоровья"] == "https://t.me/aura_scalia_bot?start=tg_zdorovex"
+    assert len(ссылки) == 10
+    # Прошлая волна и заброшенные каналы: метки понятны, но новых ссылок нет.
+    assert not any("Готовим вкусно" in название or "ПП ЛЕГКО" in название
+                   or "iHerb" in название or "BonRazione" in название
                    for название in ссылки)
     for метка in sources.ADS_RETIRED:
         assert sources.recognise(метка) == метка
