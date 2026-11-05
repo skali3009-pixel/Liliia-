@@ -42,6 +42,14 @@ async def collect() -> dict:
                 .group_by(User.first_source)
             )).all()
         }
+        orders = {
+            mark: int(count) for mark, count in (await session.execute(
+                select(User.first_source, func.count(func.distinct(User.id)))
+                .join(PlategaOrder, PlategaOrder.user_id == User.id)
+                .where(User.first_source.is_not(None))
+                .group_by(User.first_source)
+            )).all()
+        }
         paid_legacy = {
             mark: int(count) for mark, count in (await session.execute(
                 select(User.first_source, func.count(func.distinct(User.id)))
@@ -59,6 +67,7 @@ async def collect() -> dict:
             "name": sources.НАЗВАНИЯ.get(mark, mark),
             "starts": starts.get(mark, 0),
             "done": done.get(mark, 0),
+            "orders": orders.get(mark, 0),
             "paid": max(paid_platega.get(mark, 0), paid_legacy.get(mark, 0)),
         })
 
