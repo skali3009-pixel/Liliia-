@@ -978,6 +978,14 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
                              once="once_ever")
         await session.commit()
 
+        # Экран после анкеты: короткий оффер с ценой, а не длинный план с
+        # кнопкой внизу. Считаем доступ здесь, пока сессия открыта.
+        access = await check_access(session, user.id)
+        offer = None
+        if config.PAYWALL and not access.allowed:
+            from handlers.access import pitch_text
+            offer = pitch_text(user)
+
         # Чего человеку ещё не хватает — считаем здесь, пока сессия открыта.
         # Снаружи это обращение к отсоединённому объекту: сегодня оно живо
         # только потому, что сессии заведены с expire_on_commit=False, а это
@@ -991,4 +999,8 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
         reply_markup=main_menu_keyboard(),
     )
     await message.answer(personal_preview(data),
-                         reply_markup=plan_keyboard(), parse_mode="HTML")
+                         reply_markup=None if offer else plan_keyboard(),
+                         parse_mode="HTML")
+    if offer:
+        from handlers.access import buy_keyboard
+        await message.answer(offer, reply_markup=buy_keyboard())

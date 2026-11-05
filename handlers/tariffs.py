@@ -1,5 +1,7 @@
 """Clickable tariff descriptions; no invoices or access changes."""
 
+import logging
+
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -11,6 +13,8 @@ from keyboards.main_menu import MENU_TARIFFS
 from models import User
 from services.tariffs import PLANS, find_plan, overview_text, plan_text
 from services import platega
+
+logger = logging.getLogger(__name__)
 
 router = Router(name="tariffs")
 
@@ -54,9 +58,12 @@ async def show_plan(callback: CallbackQuery):
 @router.callback_query(F.data == "platega:buy")
 async def buy_platega(callback: CallbackQuery):
     await callback.answer()
+    logger.info("Клик оплаты Platega: user=%s", callback.from_user.id)
     try:
         order = await platega.create_order(callback.from_user.id)
     except platega.PaymentError as error:
+        logger.warning("Счёт Platega не создан: user=%s: %s",
+                       callback.from_user.id, error)
         await callback.message.answer(str(error))
         return
     builder = InlineKeyboardBuilder()

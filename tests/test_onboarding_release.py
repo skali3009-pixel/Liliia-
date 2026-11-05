@@ -58,10 +58,11 @@ def test_no_trial_profile_finishes_with_purchase(monkeypatch, interest):
             await O.confirm_summary(Button(chat, "onb:confirm"), state)
             async with maker() as session:
                 assert (await session.get(User, USER_ID)).onboarding_completed
-            assert "Тимур, твой план на 30 дней" in chat[-1][0]
-            assert "Питание" in chat[-1][0] and "Движение" in chat[-1][0]
-            assert "490" not in chat[-1][0]
-            assert [value for _, value in chat[-1][1]] == ["platega:plan_start"]
+            assert "Тимур, твой план на 30 дней" in chat[-2][0]
+            assert "Питание" in chat[-2][0] and "Движение" in chat[-2][0]
+            assert "490" not in chat[-2][0]
+            assert "490" in chat[-1][0] and "Автосписаний нет" in chat[-1][0]
+            assert [value for _, value in chat[-1][1]] == ["platega:buy"]
     asyncio.run(scenario())
 
 
@@ -374,8 +375,9 @@ def test_workout_preferences_are_saved_and_plan_has_no_checkout(monkeypatch):
             async with maker() as session:
                 user = await session.get(User, USER_ID)
                 assert (user.training_place, user.training_minutes, user.training_days) == ("gym", 30, 3)
-            assert "30 дней" in chat[-1][0] and "в зале" in chat[-1][0]
-            assert "490" not in chat[-1][0]
+            assert "30 дней" in chat[-2][0] and "в зале" in chat[-2][0]
+            assert "490" not in chat[-2][0]
+            assert "490" in chat[-1][0] and "Автосписаний нет" in chat[-1][0]
     asyncio.run(scenario())
 
 
