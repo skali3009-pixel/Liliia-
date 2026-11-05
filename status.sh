@@ -31,6 +31,9 @@ fi
 if [ "${1:-}" = "--activity-json" ]; then
   exec "$PYTHON" -m services.activity_audit
 fi
+if [ "${1:-}" = "--ads-json" ]; then
+  exec "$PYTHON" -m services.ads_report
+fi
 
 # No inference, Telegram messages, DB writes, or secret output.
 if [ "${1:-}" = "--check-ai" ]; then
