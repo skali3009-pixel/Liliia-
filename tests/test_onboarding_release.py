@@ -58,9 +58,13 @@ def test_no_trial_profile_finishes_with_purchase(monkeypatch, interest):
             await O.confirm_summary(Button(chat, "onb:confirm"), state)
             async with maker() as session:
                 assert (await session.get(User, USER_ID)).onboarding_completed
-            assert "Тимур, твой план на 30 дней" in chat[-2][0]
-            assert "Питание" in chat[-2][0] and "Движение" in chat[-2][0]
-            assert "490" not in chat[-2][0]
+            assert "Профиль настроен" in chat[-1][0]
+            assert [value for _, value in chat[-1][1]] == ["onb:show_plan"]
+            await O.show_plan_preview(Button(chat, "onb:show_plan"), state)
+            assert "план на 30 дней готов" in chat[-1][0]
+            assert "490" not in chat[-1][0]
+            assert [value for _, value in chat[-1][1]] == ["onb:full_offer"]
+            await O.show_full_plan_offer(Button(chat, "onb:full_offer"), state)
             assert "490" in chat[-1][0] and "Автосписаний нет" in chat[-1][0]
             assert [value for _, value in chat[-1][1]] == ["platega:buy"]
     asyncio.run(scenario())
@@ -105,7 +109,7 @@ def test_confirmation_saves_the_person_then_offers_the_selected_action(monkeypat
                 user = await session.get(User, USER_ID)
                 assert user.onboarding_completed and user.daily_calories > 0
                 assert (user.full_name, user.onboarding_interest, user.allergies) == ("Тимур", interest, "орехи")
-            assert "твой план на 30 дней" in chat[-1][0]
+            assert "Профиль настроен" in chat[-1][0]
             await O.start_plan(Button(chat, "platega:plan_start"), state)
             assert expected in chat[-1][0]
             assert await state.get_state() is None
@@ -358,6 +362,16 @@ def test_first_step_receipt_button_cannot_bypass_paywall():
     assert not _is_open(event)
 
 
+def test_plan_preview_steps_stay_open_before_payment():
+    """Иначе PAYWALL перехватит кнопки «Показать план» и «Получить полный план»."""
+    from middlewares.access import _is_open
+    from aiogram.types import CallbackQuery
+    for data in ("onb:show_plan", "onb:full_offer"):
+        event = CallbackQuery(id=data, from_user=TelegramUser(id=USER_ID,
+            is_bot=False, first_name="Test"), chat_instance="test", data=data)
+        assert _is_open(event)
+
+
 def test_personal_preview_escapes_name():
     assert "&lt;b&gt;" in O.personal_preview({"profile_name": "<b>", "goal": "maintain", "diet_type": "regular"})
 
@@ -375,8 +389,11 @@ def test_workout_preferences_are_saved_and_plan_has_no_checkout(monkeypatch):
             async with maker() as session:
                 user = await session.get(User, USER_ID)
                 assert (user.training_place, user.training_minutes, user.training_days) == ("gym", 30, 3)
-            assert "30 дней" in chat[-2][0] and "в зале" in chat[-2][0]
-            assert "490" not in chat[-2][0]
+            assert "Профиль настроен" in chat[-1][0]
+            await O.show_plan_preview(Button(chat, "onb:show_plan"), state)
+            assert "3 занятия" in chat[-1][0] and "30 минут" in chat[-1][0]
+            assert "490" not in chat[-1][0]
+            await O.show_full_plan_offer(Button(chat, "onb:full_offer"), state)
             assert "490" in chat[-1][0] and "Автосписаний нет" in chat[-1][0]
     asyncio.run(scenario())
 

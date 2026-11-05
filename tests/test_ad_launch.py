@@ -415,10 +415,11 @@ def test_pitch_after_the_questionnaire_uses_the_persons_own_numbers():
     from handlers.access import pitch_text
     user = SimpleNamespace(full_name="Анна Иванова", daily_calories=1800, daily_water_ml=2000)
     text = pitch_text(user)
-    assert text.startswith("✨ Анна, твой план") and "1800 ккал" in text and "490 ₽" in text
-    assert "автосписаний нет" in text.lower()
+    assert text.startswith("✨ Анна, твой полный план")
+    assert "Что внутри" in text and "17 программ" in text
+    assert "490 ₽" in text and "Автосписаний нет" in text
     bare = pitch_text(SimpleNamespace(full_name=None, daily_calories=None, daily_water_ml=None))
-    assert bare.startswith("✨ Твой план") and "ккал" not in bare
+    assert bare.startswith("✨ Твой полный план")
 
 
 def test_dunning_report_shows_consent_and_sent(monkeypatch):

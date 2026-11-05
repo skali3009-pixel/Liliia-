@@ -252,8 +252,8 @@ def test_после_нормы_предлагают_то_что_убрали(mon
             await пройти(чат, контекст(), цель="lose_weight")
 
             assert _предложение(чат) is None
-            assert "твой план на 30 дней" in чат[-1][0]
-            assert чат[-1][1] == [("✨ Начать мой план", "platega:plan_start")]
+            assert "Профиль настроен" in чат[-1][0]
+            assert чат[-1][1] == [("Показать план", "onb:show_plan")]
     run(scenario)
 
 

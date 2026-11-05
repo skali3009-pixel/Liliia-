@@ -53,7 +53,8 @@ def _is_open(event: TelegramObject) -> bool:
     if isinstance(event, CallbackQuery):
         data = event.data or ""
         return data.startswith(CB_BUY) or data.startswith(
-            ("legal:", "tariff:", "platega:", "admin:purge_test"))
+            ("legal:", "tariff:", "platega:", "admin:purge_test",
+             "onb:show_plan", "onb:full_offer"))
 
     return False
 

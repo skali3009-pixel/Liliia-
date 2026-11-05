@@ -309,10 +309,18 @@ async def notify_order(bot, order_id):
             keyboard.adjust(1)
             notice.attempts += 1
             try:
-                await bot.send_message(order.user_id,
+                try:
+                    from services.month_plan import render_plan_for_user
+                    plan = render_plan_for_user(user)
+                except Exception:
+                    logger.exception("Не удалось собрать план для %s", order.user_id)
+                    plan = ""
+                text = (plan + "\n\n" if plan else "") + (
                     f"✅ Оплата подтверждена. За этот платёж начислено {order.days} дней доступа к AURA.\n"
-                    + expiry_text(notice.expires_at, user.timezone) + "\nАвтосписаний нет. Помощь: /problem.",
-                    reply_markup=keyboard.as_markup(), request_timeout=15)
+                    + expiry_text(notice.expires_at, user.timezone) + "\nАвтосписаний нет. Помощь: /problem.")
+                await bot.send_message(order.user_id, text,
+                    reply_markup=keyboard.as_markup(), parse_mode="HTML",
+                    request_timeout=15)
             except Exception as error:
                 notice.last_error = type(error).__name__
                 delay = max(60, error.retry_after) if isinstance(error, TelegramRetryAfter) else min(3600, 60 * 2 ** notice.attempts)

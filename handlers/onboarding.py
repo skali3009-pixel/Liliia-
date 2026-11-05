@@ -746,10 +746,57 @@ def personal_preview(data: dict) -> str:
     return render_plan(data)
 
 
-def plan_keyboard():
+def plan_intro_keyboard():
     builder = InlineKeyboardBuilder()
-    builder.button(text="✨ Начать мой план", callback_data="platega:plan_start")
+    builder.button(text="Показать план", callback_data="onb:show_plan")
     return builder.as_markup()
+
+
+def preview_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Получить полный план", callback_data="onb:full_offer")
+    return builder.as_markup()
+
+
+def start_keyboard():
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Начать", callback_data="first:begin")
+    return builder.as_markup()
+
+
+@router.callback_query(F.data == "onb:show_plan")
+async def show_plan_preview(callback: CallbackQuery, state: FSMContext):
+    """Первый шаг: короткий план без цены."""
+    await callback.answer()
+    async with get_session() as session:
+        user = await session.get(User, callback.from_user.id)
+        if user is None:
+            return
+        access = await check_access(session, user.id)
+    from services.month_plan import preview_for_user, render_plan_for_user
+    if not config.PAYWALL or access.allowed:
+        text, markup, mode = render_plan_for_user(user), start_keyboard(), "HTML"
+    else:
+        text, markup, mode = preview_for_user(user), preview_keyboard(), "HTML"
+    await callback.message.answer(text, reply_markup=markup, parse_mode=mode)
+
+
+@router.callback_query(F.data == "onb:full_offer")
+async def show_full_plan_offer(callback: CallbackQuery, state: FSMContext):
+    """Второй шаг: полный план или оффер с ценой."""
+    await callback.answer()
+    async with get_session() as session:
+        user = await session.get(User, callback.from_user.id)
+        if user is None:
+            return
+        access = await check_access(session, user.id)
+    from services.month_plan import render_plan_for_user
+    if not config.PAYWALL or access.allowed:
+        await callback.message.answer(render_plan_for_user(user),
+                                      reply_markup=start_keyboard(), parse_mode="HTML")
+        return
+    from handlers.access import buy_keyboard, pitch_text
+    await callback.message.answer(pitch_text(user), reply_markup=buy_keyboard())
 
 
 @router.callback_query(F.data == "platega:plan_start")
@@ -978,14 +1025,6 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
                              once="once_ever")
         await session.commit()
 
-        # Экран после анкеты: короткий оффер с ценой, а не длинный план с
-        # кнопкой внизу. Считаем доступ здесь, пока сессия открыта.
-        access = await check_access(session, user.id)
-        offer = None
-        if config.PAYWALL and not access.allowed:
-            from handlers.access import pitch_text
-            offer = pitch_text(user)
-
         # Чего человеку ещё не хватает — считаем здесь, пока сессия открыта.
         # Снаружи это обращение к отсоединённому объекту: сегодня оно живо
         # только потому, что сессии заведены с expire_on_commit=False, а это
@@ -996,11 +1035,5 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
     await state.clear()
     await message.answer(
         norms_text(macros, water_ml),
-        reply_markup=main_menu_keyboard(),
+        reply_markup=plan_intro_keyboard(),
     )
-    await message.answer(personal_preview(data),
-                         reply_markup=None if offer else plan_keyboard(),
-                         parse_mode="HTML")
-    if offer:
-        from handlers.access import buy_keyboard
-        await message.answer(offer, reply_markup=buy_keyboard())
