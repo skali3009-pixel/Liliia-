@@ -14,7 +14,10 @@ async def main():
         action, value = sys.argv[1:3]
         if action == "inspect":
             async with get_session() as session:
-                user = (await session.execute(select(User).where(func.lower(User.username) == value.lstrip("@").lower()))).scalar_one_or_none()
+                if value.strip().isdigit():
+                    user = await session.get(User, int(value))
+                else:
+                    user = (await session.execute(select(User).where(func.lower(User.username) == value.lstrip("@").lower()))).scalar_one_or_none()
                 if not user:
                     print(json.dumps({"found": False})); return
                 sub = (await session.execute(select(Subscription).where(Subscription.user_id == user.id))).scalar_one_or_none()
