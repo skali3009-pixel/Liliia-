@@ -768,6 +768,7 @@ def start_keyboard():
 async def show_plan_preview(callback: CallbackQuery, state: FSMContext):
     """Первый шаг: короткий план без цены."""
     await callback.answer()
+    logger.info("План: нажата кнопка показа user=%s", callback.from_user.id)
     async with get_session() as session:
         user = await session.get(User, callback.from_user.id)
         if user is None:
@@ -785,6 +786,7 @@ async def show_plan_preview(callback: CallbackQuery, state: FSMContext):
 async def show_full_plan_offer(callback: CallbackQuery, state: FSMContext):
     """Второй шаг: полный план или оффер с ценой."""
     await callback.answer()
+    logger.info("План: нажата кнопка полного плана user=%s", callback.from_user.id)
     async with get_session() as session:
         user = await session.get(User, callback.from_user.id)
         if user is None:
