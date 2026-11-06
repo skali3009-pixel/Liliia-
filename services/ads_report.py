@@ -58,6 +58,13 @@ async def collect() -> dict:
                 .group_by(User.first_source)
             )).all()
         }
+        order_rows = (await session.execute(
+            select(PlategaOrder.id, PlategaOrder.status,
+                   PlategaOrder.created_at, PlategaOrder.applied_at,
+                   User.first_source)
+            .join(User, User.id == PlategaOrder.user_id)
+            .order_by(PlategaOrder.created_at.desc()).limit(20)
+        )).all()
 
     marks = list(sources.ADS) + [sources.DIRECT, sources.EXISTING]
     rows = []
@@ -75,6 +82,16 @@ async def collect() -> dict:
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_users": sum(starts.values()),
         "rows": rows,
+        "orders": [
+            {
+                "id": order_id,
+                "status": status,
+                "source": source,
+                "created_at": created_at.isoformat() if created_at else None,
+                "applied_at": applied_at.isoformat() if applied_at else None,
+            }
+            for order_id, status, created_at, applied_at, source in order_rows
+        ],
     }
 
 
