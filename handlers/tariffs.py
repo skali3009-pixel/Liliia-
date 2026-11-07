@@ -80,7 +80,7 @@ async def buy_platega(callback: CallbackQuery):
     )
 
 
-@router.callback_query(F.data == "platega:promo290")
+@router.callback_query(F.data.in_({"platega:promo290", "platega:promo299"}))
 async def buy_promo(callback: CallbackQuery):
     await callback.answer()
     logger.info("Клик промо 290: user=%s", callback.from_user.id)
