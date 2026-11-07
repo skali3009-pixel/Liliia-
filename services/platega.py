@@ -15,12 +15,12 @@ from sqlalchemy import select, or_
 
 import config
 from db import get_session
-from models import (MarketingEvent, Payment, PlategaOrder, PlategaNotice,
+from models import (Payment, PlategaOrder, PlategaNotice,
                     Subscription, SubscriptionSource, SubscriptionStatus, User)
 from services.subscriptions import _aware, now
 
 PRICE = 490
-PROMO_PRICE = 299
+PROMO_PRICE = 290
 DAYS = 30
 RETURN_URL = "https://t.me/Scalia_fit_food_bot"
 logger = logging.getLogger(__name__)
@@ -95,15 +95,10 @@ async def create_order(user_id, *, one_ruble_test=False, promo=False):
             )).first()
             if paid_before:
                 raise PaymentError("Промо только для первого месяца: оплата уже была.")
-            offer = (await session.execute(
-                select(MarketingEvent.id).where(
-                    MarketingEvent.user_id == user_id,
-                    MarketingEvent.event == "pay_nudge",
-                    MarketingEvent.kind == "promo",
-                ).limit(1)
-            )).first()
-            if offer is None:
-                raise PaymentError("Это предложение больше не действует. Открой /tariffs.")
+            started = _aware(user.promo_started_at)
+            if (not started or user.promo_step < 1
+                    or now() >= started + timedelta(days=3)):
+                raise PaymentError("Скидка действует 3 дня с момента анкеты. Открой /tariffs.")
             open_order = (await session.execute(
                 select(PlategaOrder.id).where(
                     PlategaOrder.user_id == user_id,
@@ -130,7 +125,7 @@ async def create_order(user_id, *, one_ruble_test=False, promo=False):
     data = await api("POST", "/v2/transaction/process", {
         "paymentDetails": {"amount": amount, "currency": "RUB"},
         "description": ("AURA — тест оплаты 1 рубль, 30 дней" if one_ruble_test else
-                        "AURA — первый месяц 299 ₽, 30 дней, без автопродления" if promo else
+                        "AURA — первый месяц 290 ₽, 30 дней, без автопродления" if promo else
                         "AURA — доступ на 30 дней, без автопродления"),
         "return": ("https://t.me/" + config.BOT_USERNAME) if config.BOT_USERNAME else RETURN_URL,
         "failedUrl": ("https://t.me/" + config.BOT_USERNAME) if config.BOT_USERNAME else RETURN_URL,

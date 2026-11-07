@@ -133,6 +133,10 @@ async def _unpaid(maker, *, consent=True, completed=DAY0, uid=UID):
         user.age = 30
         user.timezone = "Europe/Moscow"
         user.daily_calories, user.daily_water_ml = 1650, 2100
+        if completed and completed >= pay_nudges.START_DATE:
+            user.promo_started_at = _at(completed, 12)
+            user.promo_step = 0
+            user.promo_last_at = None
         s.add(Subscription(user_id=uid, status=SubscriptionStatus.EXPIRED,
                            source=SubscriptionSource.TRIAL, expires_at=datetime.now(timezone.utc)))
         if completed:
@@ -153,49 +157,48 @@ async def _due(maker, moment):
         return await pay_nudges.due(s, now_utc=moment)
 
 
-def test_sequence_goes_day1_day3_day7_once_each_and_then_stops(monkeypatch):
+def test_sequence_goes_three_promotions_every_sixteen_hours(monkeypatch):
     async def scenario():
         async with database(monkeypatch) as maker:
             await _unpaid(maker)
-            plan = [(date(2026, 10, 31), "promo"), (date(2026, 11, 2), "d3"), (date(2026, 11, 6), "d7")]
-            for day, kind in plan:
-                got = await _due(maker, _at(day, 13))
-                assert [n.kind for n in got] == [kind], day
-                if kind == "promo":
-                    assert "299" in got[0].text and "490" in got[0].text
-                elif kind == "d3":
-                    assert "490" in got[0].text
+            plan = [(_at(date(2026, 10, 31), 4), "promo1"),
+                    (_at(date(2026, 11, 1), 4), "promo2"),
+                    (_at(date(2026, 11, 2), 4), "promo3")]
+            for moment, kind in plan:
+                got = await _due(maker, moment)
+                assert [n.kind for n in got] == [kind], moment
+                assert "290" in got[0].text and "490" in got[0].text
                 async with maker() as s:
-                    await pay_nudges.mark(s, got[0], day=day)
+                    await pay_nudges.mark(s, got[0], day=moment.date(), now_utc=moment)
                     await s.commit()
-                assert await _due(maker, _at(day, 15)) == []          # в тот же день — ничего
-            assert await _due(maker, _at(date(2026, 11, 20), 13)) == []  # дальше писем нет
+                assert await _due(maker, moment + timedelta(hours=2)) == []  # раньше 16 часов — ничего
+            assert await _due(maker, _at(date(2026, 11, 3), 13)) == []  # окно 3 дня закончилось
     asyncio.run(scenario())
 
 
-def test_no_letters_outside_the_afternoon_window_or_without_consent(monkeypatch):
+def test_promo_goes_out_without_consent_and_ignores_daytime_window(monkeypatch):
     async def scenario():
         async with database(monkeypatch) as maker:
             await _unpaid(maker, consent=False)
             got = await _due(maker, _at(date(2026, 10, 31), 13))
-            assert [n.kind for n in got] == ["promo"]   # дожим не зависит от согласия на новости
+            assert [n.kind for n in got] == ["promo1"]   # дожим не зависит от согласия на новости
     asyncio.run(scenario())
 
     async def night():
         async with database(monkeypatch) as maker:
             await _unpaid(maker)
             assert await _due(maker, _at(date(2026, 10, 31), 3)) == []
-            assert await _due(maker, _at(date(2026, 10, 31), 22)) == []
+            assert [n.kind for n in await _due(maker, _at(date(2026, 10, 31), 22))] == ["promo1"]
     asyncio.run(night())
 
 
-def test_late_letter_expires_instead_of_arriving_stale(monkeypatch):
+def test_promotions_stop_after_the_three_day_window(monkeypatch):
     async def scenario():
         async with database(monkeypatch) as maker:
             await _unpaid(maker)
-            # День 4 — опоздание на сутки, письмо ещё уходит; день 5 — уже поздно.
-            assert [n.kind for n in await _due(maker, _at(date(2026, 11, 3), 13))] == ["d3"]
-            assert await _due(maker, _at(date(2026, 11, 4), 13)) == []
+            # Первое письмо можно догнать в окне, но после третьих суток — уже нет.
+            assert [n.kind for n in await _due(maker, _at(date(2026, 11, 2), 11))] == ["promo1"]
+            assert await _due(maker, _at(date(2026, 11, 2), 13)) == []
     asyncio.run(scenario())
 
 
@@ -296,8 +299,8 @@ def test_texts_do_not_guess_gender_or_invent_urgency():
         for bad in ("сама", "готова", "должна", "последний день", "скидк", "успей",
                     "осталось мест", "только сегодня"):
             assert bad not in text, (kind, bad)
-    promo = pay_nudges.render("promo", user).lower()
-    assert "299" in promo and "490" in promo
+    promo = pay_nudges.render("promo1", user).lower()
+    assert "290" in promo and "490" in promo
     assert "последний день" not in promo and "успей" not in promo
     assert "1650 ккал" in pay_nudges.render("d1", user)
     assert pay_nudges.render("d1", SimpleNamespace(full_name=None, daily_calories=None,
@@ -305,11 +308,11 @@ def test_texts_do_not_guess_gender_or_invent_urgency():
 
 
 def test_every_letter_has_its_own_action_without_stop_button():
-    for kind in ("promo", "d1", "d3", "d7"):
+    for kind in ("promo1", "d1", "d3", "d7"):
         data = [b.callback_data for row in
                 pay_nudges.keyboard(pay_nudges.Nudge(1, kind, "")).inline_keyboard for b in row]
         assert pay_nudges.CB_STOP not in data
-        expected = "platega:promo299" if kind == "promo" else "platega:buy"
+        expected = "platega:promo290" if kind == "promo1" else "platega:buy"
         assert expected in data
 
 
@@ -331,7 +334,7 @@ def test_stop_ads_only_withdraws_marketing_consent(monkeypatch):
             async with maker() as s:
                 assert (await s.get(User, UID)).marketing_consent is False
             assert answers
-            assert [n.kind for n in await _due(maker, _at(date(2026, 10, 31), 13))] == ["promo"]
+            assert [n.kind for n in await _due(maker, _at(date(2026, 10, 31), 13))] == ["promo1"]
     asyncio.run(scenario())
 
 
@@ -374,7 +377,7 @@ def test_scheduler_sends_each_letter_once_and_remembers_across_restart(monkeypat
             async with maker() as s:
                 rows = (await s.execute(select(MarketingEvent).where(
                     MarketingEvent.event == pay_nudges.EVENT))).scalars().all()
-            assert [(r.user_id, r.kind) for r in rows] == [(UID, "promo")]
+            assert [(r.user_id, r.kind) for r in rows] == [(UID, "promo1")]
     asyncio.run(scenario())
 
 
@@ -441,7 +444,7 @@ def test_dunning_report_shows_consent_and_sent(monkeypatch):
                     user_id=UID, event=analytics.PROFILE_COMPLETED, kind="",
                     day=pay_nudges.START_DATE, count=1))
                 session.add(MarketingEvent(
-                    user_id=UID, event=pay_nudges.EVENT, kind="d1",
+                    user_id=UID, event=pay_nudges.EVENT, kind="promo1",
                     day=pay_nudges.START_DATE, count=1))
                 await session.commit()
 
@@ -449,6 +452,6 @@ def test_dunning_report_shows_consent_and_sent(monkeypatch):
 
                 assert data["finished"] == 1
                 assert data["consented"] == 1
-                assert data["sent"]["d1"] == 1
-                assert data["sent"]["d7"] == 0
+                assert data["sent"]["promo1"] == 1
+                assert data["sent"]["promo3"] == 0
     asyncio.run(scenario())

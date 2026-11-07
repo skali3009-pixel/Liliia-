@@ -30,6 +30,11 @@ logger = logging.getLogger(__name__)
 CLEANUPS: list[tuple[str, str, str]] = [
     ("meals", "photo_file_id",
      "UPDATE meals SET photo_file_id = NULL WHERE photo_file_id IS NOT NULL"),
+    # Промо-дожим для уже завершивших анкету: окно начинается с первого
+    # запуска новой версии; старым до 29.10 ничего не отправляем.
+    ("users", "promo_started_at",
+     "UPDATE users SET promo_started_at = CURRENT_TIMESTAMP "
+     "WHERE onboarding_completed = TRUE AND promo_started_at IS NULL"),
 ]
 
 COLUMN_WIDENINGS: list[tuple[str, str, str]] = [
@@ -94,6 +99,9 @@ COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
     ("users", "tours_seen", "VARCHAR(120) NOT NULL DEFAULT ''"),
     ("users", "first_source", "VARCHAR(32)"),
     ("users", "last_source", "VARCHAR(32)"),
+    ("users", "promo_started_at", "TIMESTAMP WITH TIME ZONE"),
+    ("users", "promo_last_at", "TIMESTAMP WITH TIME ZONE"),
+    ("users", "promo_step", "INTEGER NOT NULL DEFAULT 0"),
 ]
 
 

@@ -112,6 +112,15 @@ class User(Base):
     # и жить она должна там же, где остальной профиль.
     tours_seen: Mapped[str] = mapped_column(String(120), default="", nullable=False)
 
+    # Промо-дожим: трёхдневное окно после анкеты, последняя отправка и шаг.
+    promo_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    promo_last_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    promo_step: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
     # Часовой пояс в формате IANA («Europe/Moscow»): по нему считаются сутки
     # в дневнике и время напоминаний.
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/Moscow", nullable=False)

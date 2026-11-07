@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime, timezone
 from html import escape
 from dataclasses import dataclass
 from typing import Callable
@@ -1024,6 +1025,9 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
         user.daily_fiber_g = macros.fiber_g
         user.daily_water_ml = water_ml
         user.onboarding_completed = True
+        user.promo_started_at = datetime.now(timezone.utc)
+        user.promo_last_at = None
+        user.promo_step = 0
 
         await session.commit()
 
