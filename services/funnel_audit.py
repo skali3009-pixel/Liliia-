@@ -128,10 +128,13 @@ async def collect() -> dict:
                 by_day[day]["paid"] += 1
 
     event_stats = defaultdict(lambda: {"count": 0, "people": set()})
+    nudge_kinds = Counter()
     for uid, event, kind, day, count in events:
         key = EVENT_LABELS.get(event, event)
         event_stats[key]["count"] += int(count or 0)
         event_stats[key]["people"].add(uid)
+        if event == "pay_nudge":
+            nudge_kinds[kind] += int(count or 0)
 
     button_stats = defaultdict(lambda: {"presses": 0, "people": set()})
     for uid, button, day, count in buttons:
@@ -184,6 +187,7 @@ async def collect() -> dict:
             for event, data in sorted(event_stats.items(),
                                       key=lambda item: -item[1]["count"])
         ],
+        "nudge_kinds": dict(nudge_kinds),
         "buttons": [
             {"button": button, "presses": data["presses"],
              "people": len(data["people"])}
