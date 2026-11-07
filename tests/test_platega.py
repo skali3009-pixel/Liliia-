@@ -54,6 +54,34 @@ def test_ruble_is_isolated_from_normal_orders(monkeypatch):
     asyncio.run(run())
 
 
+def test_promo_is_299_and_only_for_the_first_month(monkeypatch):
+    from datetime import date
+    from models import MarketingEvent
+    monkeypatch.setattr(platega, "enabled", lambda *args: True)
+    async def run():
+        async with database(monkeypatch) as maker:
+            async with maker() as s:
+                s.add(MarketingEvent(user_id=501, event="pay_nudge", kind="promo",
+                                     day=date.today(), count=1))
+                await s.commit()
+            request = AsyncMock(side_effect=lambda *a: {
+                "transactionId": str(uuid4()),
+                "url": "https://pay.platega.io/p/promo"})
+            monkeypatch.setattr(platega, "api", request)
+            order = await platega.create_order(501, promo=True)
+            assert order.amount == 299 and order.days == 30
+            assert request.call_args.args[2]["paymentDetails"]["amount"] == 299
+            assert (await platega.create_order(501, promo=True)).id == order.id
+            async with maker() as s:
+                saved = await s.get(PlategaOrder, order.id)
+                saved.status = "CONFIRMED"
+                saved.applied_at = now()
+                await s.commit()
+            with pytest.raises(platega.PaymentError):
+                await platega.create_order(501, promo=True)
+    asyncio.run(run())
+
+
 @asynccontextmanager
 async def database(monkeypatch):
     engine = create_async_engine("sqlite+aiosqlite:///:memory:")

@@ -80,6 +80,31 @@ async def buy_platega(callback: CallbackQuery):
     )
 
 
+@router.callback_query(F.data == "platega:promo299")
+async def buy_promo(callback: CallbackQuery):
+    await callback.answer()
+    logger.info("Клик промо 299: user=%s", callback.from_user.id)
+    try:
+        order = await platega.create_order(callback.from_user.id, promo=True)
+    except platega.PaymentError as error:
+        logger.warning("Промо-счёт не создан: user=%s: %s",
+                       callback.from_user.id, error)
+        await callback.message.answer(str(error))
+        return
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Оплатить 299 ₽", url=order.url)
+    builder.button(text="Проверить оплату", callback_data=f"platega:check:{order.id}")
+    builder.adjust(1)
+    await callback.message.answer(
+        "Первый месяц AURA — 299 ₽. Дальше 490 ₽ за 30 дней, автосписаний нет.\n"
+        "После оплаты доступ откроется на 30 дней; записи сохраняются. "
+        "Если сообщение задержалось, нажми «Проверить оплату».\n"
+        "Комиссия способа оплаты, если есть, показана на странице Platega до оплаты.\n"
+        "Условия покупки и возврата: /legal. Помощь: /problem.",
+        reply_markup=builder.as_markup(),
+    )
+
+
 @router.callback_query(F.data.startswith("platega:check:"))
 async def check_platega(callback: CallbackQuery):
     await callback.answer()

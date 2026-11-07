@@ -19,7 +19,8 @@
   отправляется не позже чем через день после срока, потом пропадает: поздний
   «вчерашний» дожим хуже тишины.
 - **Без выдуманной срочности.** Никаких таймеров, «последний день скидки» и
-  «осталось мест»: скидки нет. Только то, что человек получит, и цена.
+  «осталось мест». Скидка 299 ₽ — настоящая, только в промо-письме на первый
+  месяц; таймера у неё нет.
 - **Только новые.** Анкеты, закрытые до `START_DATE`, не получают ничего:
   старым пользователям никто не обещал рассылки продаж, и разослать её
   внезапно значит сделать то, о чём не договаривались.
@@ -54,7 +55,9 @@ EVENT = "pay_nudge"
 START_DATE = date(2026, 10, 29)
 
 # Что за письмо и через сколько дней после анкеты. Порядок важен.
-STEPS = (("d1", 1), ("d3", 3), ("d7", 7))
+PROMO = "promo"
+PROMO_PRICE = 299
+STEPS = ((PROMO, 1), ("d3", 3), ("d7", 7))
 CART = "cart"
 
 # Опоздавшее письмо уходит не позже чем через столько дней после срока.
@@ -97,6 +100,24 @@ def _norms(user: User) -> str:
 
 def render(kind: str, user: User) -> str:
     """Текст письма. Человек видит своё, а не общий призыв."""
+    if kind == PROMO:
+        return (
+            f"🐆 {_greet(user)}анкета заполнена — норма и план готовы.\n\n"
+            "Дальше начинается рутина, на которой обычно всё останавливается: "
+            "считать калории, вспоминать, что уже съедено, искать тренировку, "
+            "когда нет сил. AURA убирает именно эту рутину.\n\n"
+            "Представь обычный день:\n"
+            "📷 фото тарелки — и еда уже в дневнике, калории и БЖУ посчитаны;\n"
+            "🍽 бот подсказывает блюдо под остаток нормы, а не запрещает есть;\n"
+            "🏃 тренировка на 15 минут — и понятно, что именно делать;\n"
+            "💧 вечером одна картина: еда, вода, шаги, вес и замеры.\n\n"
+            "Это не про «начать с понедельника» и не про запреты. Это про "
+            "ясность: видно, что происходит, и можно спокойно поправить, а не "
+            "гадать. Меньше считать в голове — больше видеть, что меняется.\n\n"
+            "Первый месяц — 299 ₽ вместо 490. Дальше 490 ₽ за 30 дней, без "
+            "автосписаний: продлеваешь сам.\n"
+            "Доступ откроется сразу после оплаты. Записи сохраняются."
+        )
     if kind == "d1":
         return (
             f"🐆 {_greet(user)}твой план на 30 дней готов и ждёт.\n\n"
@@ -139,6 +160,10 @@ def keyboard(nudge: Nudge) -> InlineKeyboardMarkup:
         if nudge.order_id:
             builder.button(text="Проверить оплату",
                            callback_data=f"platega:check:{nudge.order_id}")
+    elif nudge.kind == PROMO:
+        builder.button(text="Забрать первый месяц · 299 ₽",
+                       callback_data="platega:promo299")
+        builder.button(text="Не напоминать", callback_data=CB_STOP)
     elif nudge.kind == "d7":
         builder.button(text="Открыть тарифы", callback_data="platega:buy")
         builder.button(text="Не напоминать", callback_data=CB_STOP)
@@ -266,7 +291,7 @@ async def report(session: AsyncSession) -> dict[str, object]:
             .where(User.id.in_(finished), User.marketing_consent.is_(True))
         )).scalar_one())
 
-    sent = {"d1": 0, "d3": 0, "d7": 0, "cart": 0}
+    sent = {"promo": 0, "d1": 0, "d3": 0, "d7": 0, "cart": 0}
     rows = await session.execute(
         select(MarketingEvent.kind, func.sum(MarketingEvent.count))
         .where(MarketingEvent.event == EVENT, MarketingEvent.day >= START_DATE)
@@ -279,5 +304,6 @@ async def report(session: AsyncSession) -> dict[str, object]:
     return {"finished": len(finished), "consented": consented, "sent": sent}
 
 
-__all__ = ["CART", "CB_STOP", "EVENT", "LATE_DAYS", "Nudge", "START_DATE",
-           "STEPS", "due", "keyboard", "mark", "render", "report"]
+__all__ = ["CART", "CB_STOP", "EVENT", "LATE_DAYS", "Nudge", "PROMO",
+           "PROMO_PRICE", "START_DATE", "STEPS", "due", "keyboard", "mark",
+           "render", "report"]

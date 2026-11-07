@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from html import escape
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from typing import Callable
 import config
 from services.step_sync import plural
 from aiogram import F, Router
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State
@@ -220,7 +222,17 @@ async def спросить(message: Message, шаг: Шаг, *, вступлен
     шапка = f"Вопрос {номер_шага(шаг)} из {ВСЕГО_ШАГОВ}"
     текст = f"{вступление}{шапка}\n{шаг.текст}"
     клавиатура = шаг.клавиатура() if шаг.клавиатура else None
-    await message.answer(текст, reply_markup=клавиатура, parse_mode="HTML")
+    # Сетевой сброс Telegram — не повод оставлять человека без вопроса:
+    # три короткие попытки, затем обычный обработчик ошибок.
+    for attempt in range(3):
+        try:
+            await message.answer(текст, reply_markup=клавиатура, parse_mode="HTML")
+            return
+        except TelegramNetworkError:
+            if attempt == 2:
+                raise
+            logger.warning("Сеть Telegram при отправке вопроса: попытка %s", attempt + 1)
+            await asyncio.sleep(1 + attempt)
 
 
 def trial_line() -> str:

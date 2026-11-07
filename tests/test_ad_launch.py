@@ -157,11 +157,13 @@ def test_sequence_goes_day1_day3_day7_once_each_and_then_stops(monkeypatch):
     async def scenario():
         async with database(monkeypatch) as maker:
             await _unpaid(maker)
-            plan = [(date(2026, 10, 31), "d1"), (date(2026, 11, 2), "d3"), (date(2026, 11, 6), "d7")]
+            plan = [(date(2026, 10, 31), "promo"), (date(2026, 11, 2), "d3"), (date(2026, 11, 6), "d7")]
             for day, kind in plan:
                 got = await _due(maker, _at(day, 13))
                 assert [n.kind for n in got] == [kind], day
-                if kind != "d7":       # последнее письмо без цены: просто прощание
+                if kind == "promo":
+                    assert "299" in got[0].text and "490" in got[0].text
+                elif kind == "d3":
                     assert "490" in got[0].text
                 async with maker() as s:
                     await pay_nudges.mark(s, got[0], day=day)
@@ -293,16 +295,20 @@ def test_texts_do_not_guess_gender_or_invent_urgency():
         for bad in ("сама", "готова", "должна", "последний день", "скидк", "успей",
                     "осталось мест", "только сегодня"):
             assert bad not in text, (kind, bad)
+    promo = pay_nudges.render("promo", user).lower()
+    assert "299" in promo and "490" in promo
+    assert "последний день" not in promo and "успей" not in promo
     assert "1650 ккал" in pay_nudges.render("d1", user)
     assert pay_nudges.render("d1", SimpleNamespace(full_name=None, daily_calories=None,
                                                    daily_water_ml=None)).startswith("🐆 твой план")
 
 
 def test_every_letter_has_a_way_out_except_the_cart_reminder():
-    for kind in ("d1", "d3", "d7"):
+    for kind in ("promo", "d1", "d3", "d7"):
         data = [b.callback_data for row in
                 pay_nudges.keyboard(pay_nudges.Nudge(1, kind, "")).inline_keyboard for b in row]
-        assert pay_nudges.CB_STOP in data and "platega:buy" in data
+        assert pay_nudges.CB_STOP in data
+        assert "platega:promo299" in data if kind == "promo" else "platega:buy" in data
 
 
 def test_stop_button_withdraws_marketing_consent(monkeypatch):
@@ -366,7 +372,7 @@ def test_scheduler_sends_each_letter_once_and_remembers_across_restart(monkeypat
             async with maker() as s:
                 rows = (await s.execute(select(MarketingEvent).where(
                     MarketingEvent.event == pay_nudges.EVENT))).scalars().all()
-            assert [(r.user_id, r.kind) for r in rows] == [(UID, "d1")]
+            assert [(r.user_id, r.kind) for r in rows] == [(UID, "promo")]
     asyncio.run(scenario())
 
 

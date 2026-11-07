@@ -15,10 +15,12 @@ from sqlalchemy import select, or_
 
 import config
 from db import get_session
-from models import Payment, PlategaOrder, PlategaNotice, Subscription, SubscriptionSource, SubscriptionStatus, User
+from models import (MarketingEvent, Payment, PlategaOrder, PlategaNotice,
+                    Subscription, SubscriptionSource, SubscriptionStatus, User)
 from services.subscriptions import _aware, now
 
 PRICE = 490
+PROMO_PRICE = 299
 DAYS = 30
 RETURN_URL = "https://t.me/Scalia_fit_food_bot"
 logger = logging.getLogger(__name__)
@@ -64,10 +66,12 @@ async def api(method, path, body=None):
         raise PaymentError("Не удалось получить ответ платёжного сервиса.") from None
 
 
-async def create_order(user_id, *, one_ruble_test=False):
+async def create_order(user_id, *, one_ruble_test=False, promo=False):
     if one_ruble_test and user_id not in config.PLATEGA_TEST_USER_IDS:
         raise PaymentError("Тестовый платёж недоступен для этого аккаунта.")
-    amount = 1 if one_ruble_test else PRICE
+    if one_ruble_test and promo:
+        raise PaymentError("Нельзя совместить тестовый платёж и промо.")
+    amount = 1 if one_ruble_test else (PROMO_PRICE if promo else PRICE)
     if not enabled(user_id):
         raise PaymentError("Оплата пока не подключена.")
     async with get_session() as session:
@@ -80,6 +84,35 @@ async def create_order(user_id, *, one_ruble_test=False):
         sub = (await session.execute(select(Subscription).where(Subscription.user_id == user_id))).scalar_one_or_none()
         if sub and sub.lifetime:
             raise PaymentError("У тебя бессрочный доступ — платить не нужно.")
+        if promo:
+            if sub and sub.status == SubscriptionStatus.ACTIVE and _aware(sub.expires_at) > now():
+                raise PaymentError("Промо только для первого месяца: доступ уже активен.")
+            paid_before = (await session.execute(
+                select(PlategaOrder.id).where(
+                    PlategaOrder.user_id == user_id,
+                    PlategaOrder.applied_at.is_not(None),
+                ).limit(1)
+            )).first()
+            if paid_before:
+                raise PaymentError("Промо только для первого месяца: оплата уже была.")
+            offer = (await session.execute(
+                select(MarketingEvent.id).where(
+                    MarketingEvent.user_id == user_id,
+                    MarketingEvent.event == "pay_nudge",
+                    MarketingEvent.kind == "promo",
+                ).limit(1)
+            )).first()
+            if offer is None:
+                raise PaymentError("Это предложение больше не действует. Открой /tariffs.")
+            open_order = (await session.execute(
+                select(PlategaOrder.id).where(
+                    PlategaOrder.user_id == user_id,
+                    PlategaOrder.status.in_(["CREATING", "PENDING"]),
+                    PlategaOrder.amount != amount,
+                ).limit(1)
+            )).first()
+            if open_order:
+                raise PaymentError("Уже есть открытый счёт. Оплати его или дождись проверки.")
         order = (await session.execute(select(PlategaOrder).where(
             PlategaOrder.user_id == user_id,
             PlategaOrder.amount == amount,
@@ -96,7 +129,9 @@ async def create_order(user_id, *, one_ruble_test=False):
     # No retry on POST: an uncertain response can already mean a real order.
     data = await api("POST", "/v2/transaction/process", {
         "paymentDetails": {"amount": amount, "currency": "RUB"},
-        "description": "AURA — тест оплаты 1 рубль, 30 дней" if one_ruble_test else "AURA — доступ на 30 дней, без автопродления",
+        "description": ("AURA — тест оплаты 1 рубль, 30 дней" if one_ruble_test else
+                        "AURA — первый месяц 299 ₽, 30 дней, без автопродления" if promo else
+                        "AURA — доступ на 30 дней, без автопродления"),
         "return": ("https://t.me/" + config.BOT_USERNAME) if config.BOT_USERNAME else RETURN_URL,
         "failedUrl": ("https://t.me/" + config.BOT_USERNAME) if config.BOT_USERNAME else RETURN_URL,
         "payload": order_id, "metadata": {"userId": str(user_id)},
