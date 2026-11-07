@@ -177,7 +177,8 @@ def test_no_letters_outside_the_afternoon_window_or_without_consent(monkeypatch)
     async def scenario():
         async with database(monkeypatch) as maker:
             await _unpaid(maker, consent=False)
-            assert await _due(maker, _at(date(2026, 10, 31), 13)) == []
+            got = await _due(maker, _at(date(2026, 10, 31), 13))
+            assert [n.kind for n in got] == ["promo"]   # дожим не зависит от согласия на новости
     asyncio.run(scenario())
 
     async def night():
@@ -303,15 +304,16 @@ def test_texts_do_not_guess_gender_or_invent_urgency():
                                                    daily_water_ml=None)).startswith("🐆 твой план")
 
 
-def test_every_letter_has_a_way_out_except_the_cart_reminder():
+def test_every_letter_has_its_own_action_without_stop_button():
     for kind in ("promo", "d1", "d3", "d7"):
         data = [b.callback_data for row in
                 pay_nudges.keyboard(pay_nudges.Nudge(1, kind, "")).inline_keyboard for b in row]
-        assert pay_nudges.CB_STOP in data
-        assert "platega:promo299" in data if kind == "promo" else "platega:buy" in data
+        assert pay_nudges.CB_STOP not in data
+        expected = "platega:promo299" if kind == "promo" else "platega:buy"
+        assert expected in data
 
 
-def test_stop_button_withdraws_marketing_consent(monkeypatch):
+def test_stop_ads_only_withdraws_marketing_consent(monkeypatch):
     async def scenario():
         async with database(monkeypatch) as maker:
             await _unpaid(maker)
@@ -329,7 +331,7 @@ def test_stop_button_withdraws_marketing_consent(monkeypatch):
             async with maker() as s:
                 assert (await s.get(User, UID)).marketing_consent is False
             assert answers
-            assert await _due(maker, _at(date(2026, 10, 31), 13)) == []
+            assert [n.kind for n in await _due(maker, _at(date(2026, 10, 31), 13))] == ["promo"]
     asyncio.run(scenario())
 
 

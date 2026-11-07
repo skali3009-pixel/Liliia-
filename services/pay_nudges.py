@@ -9,9 +9,11 @@
 
 Правила жёсткие, и они важнее текста.
 
-- **Только тем, кто разрешил новости.** Звать оплатить — это реклама, а не
-  служебное сообщение. Согласие `marketing_consent` спрашивают отдельным
-  вопросом при знакомстве, и его отзывает `/stop_ads` и кнопка в самом письме.
+- **Дожим об оплате — сервисное сообщение.** Он отправляется завершившим
+  анкету независимо от согласия на новости: человек уже начал платный путь,
+  и напоминание относится к доступу, а не к рекламной рассылке. Общий
+  выключатель `reminders_enabled` продолжает работать; `/stop_ads` выключает
+  только рекламные новости.
 - **Брошенная оплата — исключение.** Человек сам открыл счёт; напомнить, что
   он остался, — не реклама. Одно сообщение на человека, без согласия.
 - **Не больше трёх писем и ни одного после недели.** На 1-й, 3-й и 7-й день
@@ -163,13 +165,10 @@ def keyboard(nudge: Nudge) -> InlineKeyboardMarkup:
     elif nudge.kind == PROMO:
         builder.button(text="Забрать первый месяц · 299 ₽",
                        callback_data="platega:promo299")
-        builder.button(text="Не напоминать", callback_data=CB_STOP)
     elif nudge.kind == "d7":
         builder.button(text="Открыть тарифы", callback_data="platega:buy")
-        builder.button(text="Не напоминать", callback_data=CB_STOP)
     else:
         builder.button(text="Открыть доступ · 490 ₽", callback_data="platega:buy")
-        builder.button(text="Не напоминать", callback_data=CB_STOP)
     builder.adjust(1)
     return builder.as_markup()
 
@@ -242,7 +241,7 @@ async def due(session: AsyncSession, *, now_utc: datetime | None = None) -> list
         wants_cart = (order is not None and CART not in done
                       and _in_window(moment, zone, CART_FROM, CART_TO))
         step = None
-        if not wants_cart and user.marketing_consent and uid in finished \
+        if not wants_cart and uid in finished \
                 and _in_window(moment, zone, SEND_FROM, SEND_TO):
             age = (today - finished[uid]).days
             for kind, days in STEPS:
