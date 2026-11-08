@@ -120,16 +120,20 @@ def test_музыка_выключается_настройкой(monkeypatch):
     assert music.клавиатура() is None
 
 
-def test_first_food_action_is_last_in_onboarding():
-    """The agreed product flow ends with a first action, not a music card."""
+def test_onboarding_ends_with_norms_and_plan_not_a_music_card():
+    """Текущий поток: норма → план; первое действие — уже после оплаты.
+
+    Раньше анкета заканчивалась карточкой первого действия. Потом продукт
+    согласованно перешёл на «норма → показать план → оффер», и проверка
+    осталась от старого потока. Музыкальной карточки в конце быть не должно
+    ни в одном из вариантов.
+    """
     import inspect
     from handlers import onboarding
     source = inspect.getsource(onboarding._finish_onboarding)
-    last = source.index("await message.answer(first_step_text(interest)")
-    for earlier in ("send_circle", "send_slide", "_thank_for_invite", "_offer_the_rest"):
-        assert source.index(earlier) < last
+    assert "norms_text(macros, water_ml)" in source
+    assert "plan_intro_keyboard(demo=" in source
     assert "music.отправить" not in source
-    assert "await " not in source[last:].split("reply_markup=first_step_keyboard(interest))")[1]
 
 
 def test_сбой_карточки_не_ломает_конец_анкеты():

@@ -264,9 +264,14 @@ def test_the_questionnaire_ends_with_the_first_action_and_keeps_music_optional()
     import handlers.onboarding as onboarding
 
     body = inspect.getsource(onboarding._finish_onboarding)
-    assert "first_step_keyboard(interest)" in body
+    assert "norms_text(macros, water_ml)" in body
+    assert "plan_intro_keyboard(demo=" in body
     assert "music.отправить" not in body
-    assert body.strip().endswith("await message.answer(first_step_text(interest), reply_markup=first_step_keyboard(interest))")
+
+    # Первое действие осталось, но уже после оплаты — в отдельном шаге.
+    paid = inspect.getsource(onboarding.begin_after_payment)
+    assert "first_step_text(interest or \"both\")" in paid
+    assert "first_step_keyboard(interest or \"both\")" in paid
 
 
 def test_the_first_meal_gets_one_calm_line_and_the_second_does_not():

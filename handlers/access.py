@@ -23,7 +23,7 @@ from sqlalchemy import func, select
 
 import config
 from db import get_session
-from models import SubscriptionSource, User
+from models import MarketingEvent, SubscriptionSource, User
 from services import analytics, deletion, friends, pay_nudges, referrals, sources
 from services.step_sync import plural
 from services.subscriptions import Access, activate, check_access, grant_lifetime, stats
@@ -689,6 +689,14 @@ async def marketing_report(message: Message) -> None:
                                       exclude=set(config.ADMIN_IDS))
         недели = await analytics.cohorts(session, exclude=set(config.ADMIN_IDS))
         дожим = await pay_nudges.report(session)
+        примерка = {
+            "начали": (await session.execute(
+                select(func.count()).select_from(MarketingEvent).where(
+                    MarketingEvent.event == analytics.DEMO_STARTED))).scalar_one(),
+            "разбор": (await session.execute(
+                select(func.count()).select_from(MarketingEvent).where(
+                    MarketingEvent.event == analytics.DEMO_DONE))).scalar_one(),
+        }
 
     строки = [
         f"📈 Воронка за {дней} дн. ({итог.since:%d.%m} — {итог.until:%d.%m}, "
@@ -728,6 +736,9 @@ async def marketing_report(message: Message) -> None:
                                       итог.sources_paid)
 
     отправлено = дожим["sent"]
+    строки += ["", "📷 Примерка еды до оплаты"]
+    строки.append(
+        f"   Начали: {примерка['начали']} · получили разбор: {примерка['разбор']}")
     строки += ["", "✉️ Дожим неоплативших (анкеты с 29.10)"]
     if дожим["finished"]:
         строки += [
