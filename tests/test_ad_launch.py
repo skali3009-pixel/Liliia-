@@ -179,6 +179,33 @@ def test_sequence_goes_six_promotions_every_twelve_hours(monkeypatch):
     asyncio.run(scenario())
 
 
+def test_late_first_message_moves_the_series_instead_of_losing_the_last_one(monkeypatch):
+    async def scenario():
+        async with database(monkeypatch) as maker:
+            await _unpaid(maker)
+            # Старая версия отправила первое письмо с опозданием: через 16 часов.
+            async with maker() as s:
+                user = await s.get(User, UID)
+                user.promo_step = 1
+                user.promo_last_at = _at(date(2026, 10, 31), 4)
+                await s.commit()
+            # Сетка сдвигается к факту отправки: иначе шестое письмо вышло бы
+            # на 76-м часу и уже не попало в окно.
+            plan = [(_at(date(2026, 10, 31), 16), "promo2"),
+                    (_at(date(2026, 11, 1), 4), "promo3"),
+                    (_at(date(2026, 11, 1), 16), "promo4"),
+                    (_at(date(2026, 11, 2), 4), "promo5"),
+                    (_at(date(2026, 11, 2), 16), "promo6")]
+            for moment, kind in plan:
+                got = await _due(maker, moment)
+                assert [n.kind for n in got] == [kind], moment
+                async with maker() as s:
+                    await pay_nudges.mark(s, got[0], day=moment.date(), now_utc=moment)
+                    await s.commit()
+            assert await _due(maker, _at(date(2026, 11, 2), 18)) == []
+    asyncio.run(scenario())
+
+
 def test_promo_goes_out_without_consent_and_ignores_daytime_window(monkeypatch):
     async def scenario():
         async with database(monkeypatch) as maker:

@@ -95,7 +95,8 @@ async def create_order(user_id, *, one_ruble_test=False, promo=False):
             )).first()
             if paid_before:
                 raise PaymentError("Промо только для первого месяца: оплата уже была.")
-            started = _aware(user.promo_started_at)
+            from services.pay_nudges import series_start
+            started = series_start(user)
             legacy_offer = None
             if user.promo_step < 1:
                 legacy_offer = (await session.execute(

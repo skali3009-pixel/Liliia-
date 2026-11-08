@@ -90,6 +90,23 @@ def _greet(user: User) -> str:
     return f"{name}, " if name else ""
 
 
+def series_start(user: User) -> datetime | None:
+    """Начало сетки промо-серии.
+
+    Если первое письмо ушло с опозданием (например, старая версия писала
+    через 16 часов вместо 12), сдвигаем сетку к фактической отправке: иначе
+    задержка копится и последнее письмо не успевает в трёхдневное окно.
+    """
+    started = _aware(user.promo_started_at)
+    last = _aware(user.promo_last_at)
+    if not started or not last or user.promo_step < 1:
+        return started
+    expected = started + PROMO_INTERVAL * user.promo_step
+    if last <= expected:
+        return started
+    return last - PROMO_INTERVAL * user.promo_step
+
+
 def _norms(user: User) -> str:
     if user.daily_calories and user.daily_water_ml:
         return f"{user.daily_calories} ккал и {user.daily_water_ml} мл воды в день"
@@ -290,7 +307,7 @@ async def due(session: AsyncSession, *, now_utc: datetime | None = None) -> list
                 result.append(Nudge(uid, CART, render(CART, user), order.id))
             continue
 
-        started = _aware(user.promo_started_at)
+        started = series_start(user)
         if not started or user.promo_step >= PROMO_MESSAGES:
             continue
         if moment >= started + PROMO_WINDOW:
