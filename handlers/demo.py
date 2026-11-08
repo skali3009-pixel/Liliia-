@@ -34,6 +34,7 @@ from services.food_vision import (
 from services.subscriptions import check_access
 from services.transcription import TranscriptionError, VoiceNotConfigured, transcribe
 from states.demo import DemoStates
+from utils.disk import usage as disk_usage
 
 logger = logging.getLogger(__name__)
 router = Router(name="demo")
@@ -138,11 +139,18 @@ async def _ensure_available(message: Message, state: FSMContext) -> bool:
         user = await session.get(User, message.from_user.id)
         access = await check_access(session, message.from_user.id)
         available = demo_service.available(user, allowed=access.allowed)
-    if available:
-        return True
-    await state.clear()
-    await message.answer(paywall_text(access), reply_markup=buy_keyboard())
-    return False
+        over_budget = await usage.over_budget(session) if available else False
+    if not available:
+        await state.clear()
+        await message.answer(paywall_text(access), reply_markup=buy_keyboard())
+        return False
+    if over_budget:
+        await message.answer(
+            "Распознавание сегодня недоступно — исчерпан дневной лимит на "
+            "обработку. Попробуй позже: примерка не потратится."
+        )
+        return False
+    return True
 
 
 async def _record_spend(user_id: int, kind: str, spent: list) -> None:
@@ -208,6 +216,12 @@ async def demo_photo(message: Message, state: FSMContext) -> None:
     photo = message.photo[-1]
     if photo.file_size and photo.file_size > MAX_IMAGE_BYTES:
         await message.answer("Фото слишком большое. Пришли его как фото (не файлом).")
+        return
+    if disk_usage().full:
+        await message.answer(
+            "Сейчас не могу принять фото — на сервере кончается место. "
+            "Опиши блюдо словами, это работает так же точно."
+        )
         return
 
     status = await message.answer("🔍 Распознаю блюдо…")
