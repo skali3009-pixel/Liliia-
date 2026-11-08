@@ -60,7 +60,12 @@ ADS: tuple[str, ...] = (
     "tg_nutri_rekomenduet",
     "tg_zdorovex",
     "tg_zozh_mania",
-    # Прошлая волна 29.10: новых ссылок не выдаём, но распознавать обязаны —
+    # Новая волна 08.11.2026.
+    "tg_miniterminator",
+    "tg_nuda_hudeyu",
+    "tg_ventusflorem",
+    "tg_hello_kattee",
+    # Прошлая волна 29.10: новых ссылок не выдаём, но распознавать обязаны -
     # ссылки уже отправлялись.
     "tg_gotovim",
     "tg_recepty_pp",
@@ -129,6 +134,10 @@ EXISTING = "existing_user"
     "tg_nutri_rekomenduet": "Реклама: Нутрициолог рекомендует",
     "tg_zdorovex": "Реклама: Секреты здоровья",
     "tg_zozh_mania": "Реклама: ЗОЖ-мания",
+    "tg_miniterminator": "Реклама: Тренер взрослых девочек",
+    "tg_nuda_hudeyu": "Реклама: Ну да, худею",
+    "tg_ventusflorem": "Реклама: жизнь ventus__florem",
+    "tg_hello_kattee": "Реклама: hello.kate",
     "tg_gotovim": "Реклама: Готовим вкусно",
     "tg_recepty_pp": "Реклама: Рецепты пп",
     "tg_dietrecepti": "Реклама: Диетические рецепты",
