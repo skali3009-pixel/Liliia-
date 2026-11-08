@@ -28,7 +28,7 @@ MSK = timezone(timedelta(hours=3))
 # --- метки каналов ---------------------------------------------------------
 
 def test_every_ad_mark_is_recognised_named_and_fits_the_column():
-    assert len(sources.ADS) == 22 and set(sources.ADS_RETIRED) <= set(sources.ADS)
+    assert len(sources.ADS) == 25 and set(sources.ADS_RETIRED) <= set(sources.ADS)
     for метка in sources.ADS:
         assert sources.recognise(метка) == метка
         assert метка in sources.НАЗВАНИЯ
@@ -88,7 +88,7 @@ def test_ad_links_are_built_by_the_one_door(monkeypatch):
     ссылки = dict(sources.ссылки_рекламы())
     assert ссылки["Реклама: Худеем вместе"] == "https://t.me/aura_scalia_bot?start=tg_hudeem_vmeste"
     assert ссылки["Реклама: Секреты здоровья"] == "https://t.me/aura_scalia_bot?start=tg_zdorovex"
-    assert len(ссылки) == 14
+    assert len(ссылки) == 17
     # Прошлая волна и заброшенные каналы: метки понятны, но новых ссылок нет.
     assert not any("Готовим вкусно" in название or "ПП ЛЕГКО" in название
                    or "iHerb" in название or "BonRazione" in название
