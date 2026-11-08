@@ -30,11 +30,6 @@ logger = logging.getLogger(__name__)
 CLEANUPS: list[tuple[str, str, str]] = [
     ("meals", "photo_file_id",
      "UPDATE meals SET photo_file_id = NULL WHERE photo_file_id IS NOT NULL"),
-    # Промо-дожим для уже завершивших анкету: окно начинается с первого
-    # запуска новой версии; старым до 29.10 ничего не отправляем.
-    ("users", "promo_started_at",
-     "UPDATE users SET promo_started_at = CURRENT_TIMESTAMP "
-     "WHERE onboarding_completed = TRUE AND promo_started_at IS NULL"),
 ]
 
 COLUMN_WIDENINGS: list[tuple[str, str, str]] = [
@@ -102,6 +97,7 @@ COLUMN_ADDITIONS: list[tuple[str, str, str]] = [
     ("users", "promo_started_at", "TIMESTAMP WITH TIME ZONE"),
     ("users", "promo_last_at", "TIMESTAMP WITH TIME ZONE"),
     ("users", "promo_step", "INTEGER NOT NULL DEFAULT 0"),
+    ("users", "demo_food_at", "TIMESTAMP WITH TIME ZONE"),
 ]
 
 
@@ -131,7 +127,27 @@ async def apply_column_additions(connection: AsyncConnection) -> list[str]:
     applied += await _widen_columns(connection)
     applied += await _create_indexes(connection)
     applied += await _run_cleanups(connection)
+    applied += await _backfill_promo_started_at(connection)
     return applied
+
+
+async def _backfill_promo_started_at(connection: AsyncConnection) -> list[str]:
+    """Начать промо-окно для уже завершивших анкету.
+
+    Уборка отдельная, потому что ей нужны две колонки сразу:
+    `onboarding_completed` и `promo_started_at`. У старой минимальной схемы
+    может не быть `onboarding_completed`, и общий `_run_cleanups` упал бы на ней.
+    """
+    columns = await connection.run_sync(_describe, "users")
+    if columns is None or not {"onboarding_completed", "promo_started_at"} <= columns:
+        return []
+    result = await connection.execute(text(
+        "UPDATE users SET promo_started_at = CURRENT_TIMESTAMP "
+        "WHERE onboarding_completed = TRUE AND promo_started_at IS NULL"))
+    if not result.rowcount:
+        return []
+    logger.info("Промо: окно начато для %s анкет", result.rowcount)
+    return [f"users: промо {result.rowcount}"]
 
 
 async def _run_cleanups(connection: AsyncConnection) -> list[str]:

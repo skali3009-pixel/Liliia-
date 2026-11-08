@@ -59,14 +59,14 @@ def test_no_trial_profile_finishes_with_purchase(monkeypatch, interest):
             async with maker() as session:
                 assert (await session.get(User, USER_ID)).onboarding_completed
             assert "Профиль настроен" in chat[-1][0]
-            assert [value for _, value in chat[-1][1]] == ["onb:show_plan"]
+            assert [value for _, value in chat[-1][1]] == ["demo:food", "onb:show_plan"]
             await O.show_plan_preview(Button(chat, "onb:show_plan"), state)
             assert "план на 30 дней готов" in chat[-1][0]
             assert "490" not in chat[-1][0]
-            assert [value for _, value in chat[-1][1]] == ["onb:full_offer"]
+            assert [value for _, value in chat[-1][1]] == ["demo:food", "onb:full_offer"]
             await O.show_full_plan_offer(Button(chat, "onb:full_offer"), state)
             assert "490" in chat[-1][0] and "Автосписаний нет" in chat[-1][0]
-            assert [value for _, value in chat[-1][1]] == ["platega:buy"]
+            assert [value for _, value in chat[-1][1]] == ["demo:food", "platega:buy"]
     asyncio.run(scenario())
 
 

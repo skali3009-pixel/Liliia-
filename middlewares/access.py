@@ -18,6 +18,7 @@ from db import get_session
 from handlers.access import CB_BUY, buy_keyboard, paywall_text
 from keyboards.main_menu import MENU_DOCS, MENU_TARIFFS, MENU_TEXTS
 from services.subscriptions import check_access
+from services import demo as demo_service
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ def _is_open(event: TelegramObject) -> bool:
         data = event.data or ""
         return data.startswith(CB_BUY) or data.startswith(
             ("legal:", "tariff:", "platega:", "admin:purge_test",
-             "onb:show_plan", "onb:full_offer"))
+             "onb:show_plan", "onb:full_offer", "demo:"))
 
     return False
 
@@ -89,6 +90,14 @@ class AccessMiddleware(BaseMiddleware):
             if (isinstance(event, Message) and raw_state.startswith("OnboardingStates:")
                     and event.text and not event.text.startswith("/") and event.text not in MENU_TEXTS):
                 return await handler(event, data)
+
+        # Примерка еды — единственное, что открыто неоплатившему после анкеты,
+        # и только внутри своего состояния. Меню, дневник и тренировки остаются
+        # закрытыми: человек пробует ровно одну вещь.
+        if (isinstance(event, Message)
+                and demo_service.message_allowed(
+                    profile, data.get("raw_state") or "", allowed=access.allowed)):
+            return await handler(event, data)
 
         if access.allowed:
             return await handler(event, data)

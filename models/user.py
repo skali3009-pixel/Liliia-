@@ -121,6 +121,11 @@ class User(Base):
     )
     promo_step: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
+    # Одна бесплатная примерка еды до оплаты: когда разбор уже был использован.
+    demo_food_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
     # Часовой пояс в формате IANA («Europe/Moscow»): по нему считаются сутки
     # в дневнике и время напоминаний.
     timezone: Mapped[str] = mapped_column(String(64), default="Europe/Moscow", nullable=False)

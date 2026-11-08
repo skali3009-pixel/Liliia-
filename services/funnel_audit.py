@@ -39,6 +39,8 @@ EVENT_LABELS = {
     "first_action_completed": "Первое полезное действие",
     "action_completed": "Полезное действие",
     "active_day": "Активный день",
+    "demo_started": "Примерка еды: начало",
+    "demo_done": "Примерка еды: разбор",
 }
 
 

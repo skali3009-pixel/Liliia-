@@ -22,7 +22,7 @@ from services.fsm_storage import DatabaseStorage
 from aiogram.fsm.storage.memory import SimpleEventIsolation
 from services import commands as bot_commands
 from services import identity
-from handlers import (access, diary, errors, fallback, feedback, food, legal,
+from handlers import (access, demo, diary, errors, fallback, feedback, food, legal,
                       music, notifications, onboarding, profile, progress,
                       steps, suggestions, supplements, survey, tariffs, turn, water, workouts)
 from middlewares.access import AccessMiddleware
@@ -65,6 +65,9 @@ dp.include_router(access.router)
 dp.include_router(tariffs.router)
 dp.include_router(survey.router)
 dp.include_router(onboarding.router)
+# Примерка еды — раньше еды: фото и голос в этом состоянии должны уйти в
+# демо-обработчик, а не в обычный дневник.
+dp.include_router(demo.router)
 # Профиль раньше еды: он снимает состояние правки, когда человек уходит из
 # незаконченного ответа в другую кнопку меню.
 dp.include_router(profile.router)

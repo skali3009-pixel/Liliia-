@@ -16,8 +16,8 @@ from aiogram.exceptions import TelegramNetworkError
 from aiogram.filters import CommandStart, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State
-from aiogram.types import (CallbackQuery, InlineKeyboardMarkup, Message,
-                           WebAppInfo)
+from aiogram.types import (CallbackQuery, InlineKeyboardButton,
+                           InlineKeyboardMarkup, Message, WebAppInfo)
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from db import get_session
@@ -38,7 +38,7 @@ from services.profile import (
     MIN_HEIGHT_CM,
     MIN_WEIGHT_KG,
 )
-from services import analytics, music, referrals, sources
+from services import analytics, demo as demo_service, music, referrals, sources
 from services import age as age_rules
 from services.age import ADULT_AGE
 from services.subscriptions import check_access, ensure_trial
@@ -759,15 +759,23 @@ def personal_preview(data: dict) -> str:
     return render_plan(data)
 
 
-def plan_intro_keyboard():
+def plan_intro_keyboard(*, demo: bool = False):
     builder = InlineKeyboardBuilder()
+    if demo:
+        builder.button(text="📷 Попробовать на еде — бесплатно",
+                       callback_data="demo:food")
     builder.button(text="Показать план", callback_data="onb:show_plan")
+    builder.adjust(1)
     return builder.as_markup()
 
 
-def preview_keyboard():
+def preview_keyboard(*, demo: bool = False):
     builder = InlineKeyboardBuilder()
+    if demo:
+        builder.button(text="📷 Попробовать на еде — бесплатно",
+                       callback_data="demo:food")
     builder.button(text="Получить полный план", callback_data="onb:full_offer")
+    builder.adjust(1)
     return builder.as_markup()
 
 
@@ -791,7 +799,11 @@ async def show_plan_preview(callback: CallbackQuery, state: FSMContext):
     if not config.PAYWALL or access.allowed:
         text, markup, mode = render_plan_for_user(user), start_keyboard(), "HTML"
     else:
-        text, markup, mode = preview_for_user(user), preview_keyboard(), "HTML"
+        text, markup, mode = (preview_for_user(user),
+                              preview_keyboard(
+                                  demo=demo_service.available(
+                                      user, allowed=access.allowed)),
+                              "HTML")
     await callback.message.answer(text, reply_markup=markup, parse_mode=mode)
 
 
@@ -811,7 +823,18 @@ async def show_full_plan_offer(callback: CallbackQuery, state: FSMContext):
                                       reply_markup=start_keyboard(), parse_mode="HTML")
         return
     from handlers.access import buy_keyboard, pitch_text
-    await callback.message.answer(pitch_text(user), reply_markup=buy_keyboard())
+    demo_ok = demo_service.available(user, allowed=access.allowed)
+    markup = buy_keyboard()
+    text = pitch_text(user)
+    if demo_ok:
+        text += ("\n\n📷 Не готов платить вслепую? Пришли одно фото еды — "
+                 "посчитаю калории и БЖУ бесплатно.")
+        markup = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="📷 Попробовать на еде — бесплатно",
+                                  callback_data="demo:food")],
+            *markup.inline_keyboard,
+        ])
+    await callback.message.answer(text, reply_markup=markup)
 
 
 @router.callback_query(F.data == "platega:plan_start")
@@ -1029,6 +1052,9 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
         user.promo_last_at = None
         user.promo_step = 0
 
+        access = await check_access(session, user.id)
+        demo_ok = demo_service.available(user, allowed=access.allowed)
+
         await session.commit()
 
         # Анкета дошла до конца — значит, пришёл человек, а не нажатие.
@@ -1051,7 +1077,13 @@ async def _finish_onboarding(message: Message, state: FSMContext, кто) -> Non
         нужны_аллергии = "allergies" not in data
 
     await state.clear()
+    текст_нормы = norms_text(macros, water_ml)
+    if demo_ok:
+        текст_нормы += (
+            "\n\n📷 Хочешь проверить, как я считаю еду? Пришли фото тарелки — "
+            "один разбор бесплатно."
+        )
     await message.answer(
-        norms_text(macros, water_ml),
-        reply_markup=plan_intro_keyboard(),
+        текст_нормы,
+        reply_markup=plan_intro_keyboard(demo=demo_ok),
     )
