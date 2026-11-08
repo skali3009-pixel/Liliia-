@@ -106,7 +106,7 @@ async def create_order(user_id, *, one_ruble_test=False, promo=False):
                     ).limit(1)
                 )).first()
             if (not started or (user.promo_step < 1 and legacy_offer is None)
-                    or now() >= started + timedelta(days=3)):
+                    or now() >= started + timedelta(days=3, hours=2)):
                 raise PaymentError("Скидка действует 3 дня с момента анкеты. Открой /tariffs.")
             open_order = (await session.execute(
                 select(PlategaOrder.id).where(

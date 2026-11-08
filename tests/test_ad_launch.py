@@ -157,13 +157,16 @@ async def _due(maker, moment):
         return await pay_nudges.due(s, now_utc=moment)
 
 
-def test_sequence_goes_three_promotions_every_sixteen_hours(monkeypatch):
+def test_sequence_goes_six_promotions_every_twelve_hours(monkeypatch):
     async def scenario():
         async with database(monkeypatch) as maker:
             await _unpaid(maker)
-            plan = [(_at(date(2026, 10, 31), 4), "promo1"),
-                    (_at(date(2026, 11, 1), 4), "promo2"),
-                    (_at(date(2026, 11, 2), 4), "promo3")]
+            plan = [(_at(date(2026, 10, 31), 0), "promo1"),
+                    (_at(date(2026, 10, 31), 12), "promo2"),
+                    (_at(date(2026, 11, 1), 0), "promo3"),
+                    (_at(date(2026, 11, 1), 12), "promo4"),
+                    (_at(date(2026, 11, 2), 0), "promo5"),
+                    (_at(date(2026, 11, 2), 12), "promo6")]
             for moment, kind in plan:
                 got = await _due(maker, moment)
                 assert [n.kind for n in got] == [kind], moment
@@ -171,7 +174,7 @@ def test_sequence_goes_three_promotions_every_sixteen_hours(monkeypatch):
                 async with maker() as s:
                     await pay_nudges.mark(s, got[0], day=moment.date(), now_utc=moment)
                     await s.commit()
-                assert await _due(maker, moment + timedelta(hours=2)) == []  # раньше 16 часов — ничего
+                assert await _due(maker, moment + timedelta(hours=2)) == []  # раньше 12 часов — ничего
             assert await _due(maker, _at(date(2026, 11, 3), 13)) == []  # окно 3 дня закончилось
     asyncio.run(scenario())
 
@@ -180,25 +183,18 @@ def test_promo_goes_out_without_consent_and_ignores_daytime_window(monkeypatch):
     async def scenario():
         async with database(monkeypatch) as maker:
             await _unpaid(maker, consent=False)
-            got = await _due(maker, _at(date(2026, 10, 31), 13))
-            assert [n.kind for n in got] == ["promo1"]   # дожим не зависит от согласия на новости
+            got = await _due(maker, _at(date(2026, 10, 31), 3))
+            assert [n.kind for n in got] == ["promo1"]   # ни согласие, ни время не фильтруют
     asyncio.run(scenario())
-
-    async def night():
-        async with database(monkeypatch) as maker:
-            await _unpaid(maker)
-            assert await _due(maker, _at(date(2026, 10, 31), 3)) == []
-            assert [n.kind for n in await _due(maker, _at(date(2026, 10, 31), 22))] == ["promo1"]
-    asyncio.run(night())
 
 
 def test_promotions_stop_after_the_three_day_window(monkeypatch):
     async def scenario():
         async with database(monkeypatch) as maker:
             await _unpaid(maker)
-            # Первое письмо можно догнать в окне, но после третьих суток — уже нет.
+            # Первое письмо можно догнать в окне, но после трёх суток с запасом — уже нет.
             assert [n.kind for n in await _due(maker, _at(date(2026, 11, 2), 11))] == ["promo1"]
-            assert await _due(maker, _at(date(2026, 11, 2), 13)) == []
+            assert await _due(maker, _at(date(2026, 11, 2), 14)) == []
     asyncio.run(scenario())
 
 
