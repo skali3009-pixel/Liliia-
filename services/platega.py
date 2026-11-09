@@ -15,7 +15,7 @@ from sqlalchemy import select, or_
 
 import config
 from db import get_session
-from models import (MarketingEvent, Payment, PlategaOrder, PlategaNotice,
+from models import (Payment, PlategaOrder, PlategaNotice,
                     Subscription, SubscriptionSource, SubscriptionStatus, User)
 from services.subscriptions import _aware, now
 
@@ -97,16 +97,7 @@ async def create_order(user_id, *, one_ruble_test=False, promo=False):
                 raise PaymentError("Промо только для первого месяца: оплата уже была.")
             from services.pay_nudges import series_start
             started = series_start(user)
-            legacy_offer = None
-            if user.promo_step < 1:
-                legacy_offer = (await session.execute(
-                    select(MarketingEvent.id).where(
-                        MarketingEvent.user_id == user_id,
-                        MarketingEvent.event == "pay_nudge",
-                        MarketingEvent.kind == "promo",
-                    ).limit(1)
-                )).first()
-            if (not started or (user.promo_step < 1 and legacy_offer is None)
+            if (not started
                     or now() >= started + timedelta(days=3, hours=2)):
                 raise PaymentError("Скидка действует 3 дня с момента анкеты. Открой /tariffs.")
             open_order = (await session.execute(

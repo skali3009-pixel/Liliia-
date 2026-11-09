@@ -81,6 +81,31 @@ def test_promo_is_290_and_only_for_the_first_month(monkeypatch):
     asyncio.run(run())
 
 
+def test_new_user_can_buy_at_290_before_the_first_promo_letter(monkeypatch):
+    """Демо предлагает 290 сразу после анкеты, до первого письма серии.
+
+    Раньше заказ требовал promo_step >= 1, и кнопка из примерки отвечала
+    «Скидка действует 3 дня» вместо счёта.
+    """
+    monkeypatch.setattr(platega, "enabled", lambda *args: True)
+
+    async def run():
+        async with database(monkeypatch) as maker:
+            async with maker() as s:
+                user = await s.get(User, 501)
+                user.promo_started_at = now()
+                user.promo_step = 0
+                user.promo_last_at = None
+                await s.commit()
+            request = AsyncMock(side_effect=lambda *a: {
+                "transactionId": str(uuid4()),
+                "url": "https://pay.platega.io/p/promo"})
+            monkeypatch.setattr(platega, "api", request)
+            order = await platega.create_order(501, promo=True)
+            assert order.amount == 290
+    asyncio.run(run())
+
+
 def test_late_first_promo_message_moves_the_discount_deadline(monkeypatch):
     """Старая когорта получила первое письмо через 16 часов, не через 12.
 
