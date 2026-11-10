@@ -349,6 +349,38 @@ async def show_my_id(message: Message) -> None:
     await message.answer("\n".join(lines), parse_mode="Markdown")
 
 
+@router.message(Command("whois"))
+async def whois(message: Message) -> None:
+    """Найти человека по ID: имя, Telegram, источник и доступ. Только владельцу."""
+    if message.from_user.id not in config.ADMIN_IDS:
+        return
+
+    parts = (message.text or "").split()
+    if len(parts) != 2 or not parts[1].isdigit():
+        await message.answer("Формат: /whois ID\nНапример: /whois 1089125542")
+        return
+
+    user_id = int(parts[1])
+    async with get_session() as session:
+        user = await session.get(User, user_id)
+        if user is None:
+            await message.answer(f"Пользователь {user_id} не найден.")
+            return
+        access = await check_access(session, user_id)
+
+    telegram = f"@{user.username}" if user.username else "username не указан"
+    source = sources.НАЗВАНИЯ.get(user.first_source or "",
+                                   user.first_source or "—")
+    await message.answer(
+        f"ID: {user_id}\n"
+        f"Имя: {user.full_name or '—'}\n"
+        f"Telegram: {telegram}\n"
+        f"Источник: {source}\n"
+        f"Анкета: {'заполнена' if user.onboarding_completed else 'не заполнена'}\n"
+        f"Доступ: {'открыт' if access.allowed else 'закрыт'}"
+    )
+
+
 @router.message(Command("purge_test_user"))
 async def ask_purge_test_user(message: Message) -> None:
     """Сухой отчёт по тестовому профилю и кнопка полного удаления.
