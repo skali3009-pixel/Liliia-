@@ -57,6 +57,8 @@ fi
 
 # --- Собственно проверка ---------------------------------------------------
 PROBLEM=""
+# Keep the latest observed restart count, including inactive checks.
+RESTARTS="${PREV_RESTARTS:-0}"
 
 if ! systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
   PROBLEM="служба $SERVICE не работает"
@@ -90,7 +92,7 @@ fi
 
 FAILS=$((FAILS + 1))
 printf 'FAILS=%s\nLAST_ALERT=%s\nPREV_RESTARTS=%s\n' \
-  "$FAILS" "$LAST_ALERT" "${PREV_RESTARTS:-0}" > "$STATE"
+  "$FAILS" "$LAST_ALERT" "$RESTARTS" > "$STATE"
 
 if [ "$FAILS" -lt "$FAILS_BEFORE_ALERT" ]; then
   exit 0   # первая неудача — скорее всего, обычный перезапуск
@@ -108,4 +110,4 @@ $LOG
 На сервере: systemctl status $SERVICE"
 
 printf 'FAILS=%s\nLAST_ALERT=%s\nPREV_RESTARTS=%s\n' \
-  "$FAILS" "$NOW" "${PREV_RESTARTS:-0}" > "$STATE"
+  "$FAILS" "$NOW" "$RESTARTS" > "$STATE"
