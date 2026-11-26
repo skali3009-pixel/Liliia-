@@ -23,11 +23,27 @@ PRICE = 490
 PROMO_PRICE = 290
 DAYS = 30
 RETURN_URL = "https://t.me/Scalia_fit_food_bot"
+CHECKOUT_HOSTS = {"pay.platega.io", "payment.platega.com"}
 logger = logging.getLogger(__name__)
 
 
 class PaymentError(Exception):
     pass
+
+
+def _checkout_url(value):
+    if (not isinstance(value, str) or len(value) > 2048 or "\\" in value
+            or any(ord(char) < 33 or ord(char) == 127 for char in value)):
+        return None
+    try:
+        parsed = urlsplit(value)
+        if (parsed.scheme == "https" and parsed.hostname in CHECKOUT_HOSTS
+                and parsed.port in (None, 443) and parsed.username is None
+                and parsed.password is None):
+            return value
+    except ValueError:
+        pass
+    return None
 
 
 def configured():
@@ -134,22 +150,23 @@ async def create_order(user_id, *, one_ruble_test=False, promo=False):
     })
     try:
         transaction_id = str(UUID(data["transactionId"]))
-        url = data["url"]
-        parsed = urlsplit(url)
-        if parsed.scheme != "https" or parsed.hostname != "pay.platega.io" or parsed.username or parsed.password:
-            raise ValueError()
-    except (KeyError, ValueError, TypeError):
+    except (KeyError, ValueError, TypeError, AttributeError):
         raise PaymentError("Не удалось проверить платёжную ссылку. Напиши /problem.") from None
+    url = _checkout_url(data.get("url"))
     async with get_session() as session:
         order = (await session.execute(select(PlategaOrder).where(PlategaOrder.id == order_id).with_for_update())).scalar_one()
         if order.transaction_id and order.transaction_id != transaction_id:
             raise PaymentError("Номер платежа не совпал.")
         order.transaction_id = transaction_id
-        order.url = url
-        if order.status == "CREATING":
-            order.status = "PENDING"
+        if url:
+            order.url = url
+            if order.status == "CREATING":
+                order.status = "PENDING"
         await session.commit()
-        return order
+    if not url:
+        logger.warning("Platega checkout URL rejected for transaction %s", transaction_id)
+        raise PaymentError("Не удалось проверить платёжную ссылку. Напиши /problem.")
+    return order
 
 
 async def reconcile(transaction_id, *, user_id=None, source="operator", bot=None):
